@@ -1,0 +1,119 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import argparse
+import json
+import gzip
+import re
+import traceback
+import urlparse
+
+try:
+    import requests
+except ImportError:
+    print "Please Install the requests library"
+    print ">>> pip install requests"
+    sys.exit(1)
+
+try:
+    import synapseclient
+    from synapseclient import File, Folder, Project
+    from synapseclient import Evaluation, Submission, SubmissionStatus
+except ImportError:
+    print "Please Install Synapse Client Library"
+    print ">>> pip install synapseclient"
+    sys.exit(1)
+
+try:
+    import vcf
+except ImportError:
+    vcf = None
+
+#Some of the evaluation interface methods require an up-to-date copy of the Synapse client
+try:
+    from distutils.version import StrictVersion
+    if StrictVersion(re.sub(r'\.dev\d+', '', synapseclient.__version__)) < StrictVersion('0.5.1'):
+        print "Please Upgrade Synapse Client Library"
+        print ">>> pip install -U synapseclient"
+        sys.exit(1)
+except ImportError:
+    pass
+
+
+def main_submit(args, syn):
+    """
+    This method takes an existing VCF file, uploads it to a personal project folder, and then
+    submits it to the Dream Mutation calling Challenge
+    """
+
+    if args.name is None or args.team_name is None or args.project_id is None:
+        print """Usage:
+dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission" --team-name "Team Name" --project-id syn12345
+"""
+        if args.name is None:
+            print "Please add --name"
+        if args.project_id is None:
+            print "Please add --project-id"
+        if args.team_name is None:
+            print "Please add --team-name"
+        sys.exit(0)
+
+    if not args.galaxy.startswith("http://") or args.galaxy.startswith("https://"):
+        print "Please provide URL to Galaxy Workflow"
+
+    #if there provided the URL for the share page add a '/json' to the end
+    if not args.galaxy.endswith("/json"):
+        args.galaxy = args.galaxy + "/json"
+
+    galaxy_url = urlparse.urlparse(args.galaxy)
+
+    #Download the Workflow JSON
+    print "Downloading Workflow", args.galaxy
+    workflow = requests.get(args.galaxy).json()
+    with open("workflow.ga", "w") as handle:
+        handle.write( json.dumps(workflow, indent=4) )
+
+    api_base = "%s://%s/api/" % (galaxy_url.scheme, galaxy_url.netloc)
+    for step_id, step in workflow['steps'].items():
+        if step['type'] == 'tool'"":
+            tool_id = step['tool_id']
+            requests.get(api_base + "tools/%s" % (tool_id)).text
+            tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, args.apikey)
+            print "Downloading Tool:", tool_id, tool_url
+            r = requests.get(tool_url, stream=True)
+            if r.status_code == 200:
+                with open(tool_id + ".tar.gz", "wb") as f:
+                    for chunk in r.iter_content():
+                        f.write(chunk)
+            else:
+                print "Skipping Tool", tool_id, r.status_code
+
+
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Submit Files to the DREAM mutation calling challenge. Please see https://www.synapse.org/#!Synapse:syn312572/wiki/60703 for usage instructions.')
+    #Stack.addJobTreeOptions(parser)
+    parser.add_argument("--user", help="Synapse UserName", default=None)
+    parser.add_argument("--password", help="Synapse Password", default=None)
+    parser.add_argument("board", choices=['snv', 'sv', 'indel'])
+    parser.add_argument("galaxy", help="Galaxy Workflow Address")
+    parser.add_argument("apikey", help="Galaxy API Key")
+
+    parser.add_argument("--name", required=True, help="Name of the submission")
+    parser.add_argument("--team-name", required=True, help="Name Team")
+    parser.add_argument("--project-id", default=None, help="The SYN id of your personal private working directory")
+
+    args = parser.parse_args()
+    syn = synapseclient.Synapse()
+    if args.user is not None and args.password is not None:
+        syn.login(args.user, args.password)
+    else:
+        if 'SYNAPSE_APIKEY' in os.environ and 'SYNAPSE_EMAIL' in os.environ:
+            syn.login(email=os.environ['SYNAPSE_EMAIL'], apiKey=os.environ['SYNAPSE_APIKEY'])
+        else:
+            syn.login()
+
+    sys.exit(main_submit(args, syn))
