@@ -41,36 +41,26 @@ except ImportError:
     pass
 
 
-def main_submit(args, syn):
-    """
-    This method takes an existing VCF file, uploads it to a personal project folder, and then
-    submits it to the Dream Mutation calling Challenge
-    """
-
-    if args.name is None or args.team_name is None or args.project_id is None:
-        print """Usage:
-dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission" --team-name "Team Name" --project-id syn12345
-"""
-        if args.name is None:
-            print "Please add --name"
-        if args.project_id is None:
-            print "Please add --project-id"
-        if args.team_name is None:
-            print "Please add --team-name"
-        sys.exit(0)
-
-    if not args.galaxy.startswith("http://") or args.galaxy.startswith("https://"):
+def main_sync(args, syn):
+    if not args.workflow.startswith("http://") or args.workflow.startswith("https://"):
         print "Please provide URL to Galaxy Workflow"
 
     #if there provided the URL for the share page add a '/json' to the end
-    if not args.galaxy.endswith("/json"):
-        args.galaxy = args.galaxy + "/json"
+    if not args.workflow.endswith("/json"):
+        args.workflow = args.workflow + "/json"
 
-    galaxy_url = urlparse.urlparse(args.galaxy)
+    galaxy_url = urlparse.urlparse(args.workflow)
 
     #Download the Workflow JSON
-    print "Downloading Workflow", args.galaxy
-    workflow = requests.get(args.galaxy).json()
+    print "Downloading Workflow", args.workflow
+    #try:
+    req = requests.get(args.workflow)
+    print req.text
+    workflow = req.json()
+    #except ValueError:
+    #    sys.stderr.write("Unexpected Value: %s" % (req.text))
+    #    raise Exception("Unable to download workflow")
+
     with open("workflow.ga", "w") as handle:
         handle.write( json.dumps(workflow, indent=4) )
 
@@ -91,6 +81,26 @@ dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission"
 
 
 
+def main_submit(args, syn):
+    """
+    This method takes an existing VCF file, uploads it to a personal project folder, and then
+    submits it to the Dream Mutation calling Challenge
+    """
+
+    if args.name is None or args.team_name is None or args.project_id is None:
+        print """Usage:
+dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission" --team-name "Team Name" --project-id syn12345
+"""
+        if args.name is None:
+            print "Please add --name"
+        if args.project_id is None:
+            print "Please add --project-id"
+        if args.team_name is None:
+            print "Please add --team-name"
+        sys.exit(0)
+
+    main_sync(args, syn)
+
 
 if __name__ == "__main__":
 
@@ -98,13 +108,14 @@ if __name__ == "__main__":
     #Stack.addJobTreeOptions(parser)
     parser.add_argument("--user", help="Synapse UserName", default=None)
     parser.add_argument("--password", help="Synapse Password", default=None)
-    parser.add_argument("board", choices=['snv', 'sv', 'indel'])
-    parser.add_argument("galaxy", help="Galaxy Workflow Address")
-    parser.add_argument("apikey", help="Galaxy API Key")
+    parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address, example ")
+    parser.add_argument("--apikey", required=True, help="Galaxy API Key")
 
-    parser.add_argument("--name", required=True, help="Name of the submission")
-    parser.add_argument("--team-name", required=True, help="Name Team")
-    parser.add_argument("--project-id", default=None, help="The SYN id of your personal private working directory")
+    parser.add_argument("--name", help="Name of the submission")
+    parser.add_argument("--team-name", help="Name Team")
+    parser.add_argument("--project-id", required=True, help="The SYN id of your personal private working directory")
+
+    parser.add_argument("--submit", action="store_true", default=False)
 
     args = parser.parse_args()
     syn = synapseclient.Synapse()
@@ -116,4 +127,7 @@ if __name__ == "__main__":
         else:
             syn.login()
 
-    sys.exit(main_submit(args, syn))
+    if args.submit:
+        sys.exit(main_submit(args, syn))
+    else:
+        sys.exit(main_sync(args, syn))
