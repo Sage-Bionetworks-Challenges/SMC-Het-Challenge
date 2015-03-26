@@ -55,7 +55,6 @@ def main_sync(args, syn):
     print "Downloading Workflow", args.workflow
     #try:
     req = requests.get(args.workflow)
-    print req.text
     workflow = req.json()
     #except ValueError:
     #    sys.stderr.write("Unexpected Value: %s" % (req.text))
@@ -68,12 +67,13 @@ def main_sync(args, syn):
     for step_id, step in workflow['steps'].items():
         if step['type'] == 'tool'"":
             tool_id = step['tool_id']
+            tool_version = step['tool_version']
             requests.get(api_base + "tools/%s" % (tool_id)).text
             tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, args.apikey)
             print "Downloading Tool:", tool_id, tool_url
             r = requests.get(tool_url, stream=True)
             if r.status_code == 200:
-                with open(tool_id + ".tar.gz", "wb") as f:
+                with open(tool_id + "." + tool_version + ".tar.gz", "wb") as f:
                     for chunk in r.iter_content():
                         f.write(chunk)
             else:
