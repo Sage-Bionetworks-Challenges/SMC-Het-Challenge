@@ -1,0 +1,236 @@
+##fileformat=VCFv4.1
+##FILTER=<ID=PASS,Description="Accept as a confident somatic mutation">
+##FORMAT=<ID=AD,Number=.,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##FORMAT=<ID=BQ,Number=A,Type=Float,Description="Average base quality for reads supporting alleles">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth (reads with MQ=255 or with bad mates are filtered)">
+##FORMAT=<ID=FA,Number=A,Type=Float,Description="Allele fraction of the alternate allele with regard to reference">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification">
+##FORMAT=<ID=SS,Number=1,Type=Integer,Description="Variant status relative to non-adjacent Normal,0=wildtype,1=germline,2=somatic,3=LOH,4=post-transcriptional modification,5=unknown">
+##INFO=<ID=DB,Number=0,Type=Flag,Description="dbSNP Membership">
+##INFO=<ID=MQ0,Number=1,Type=Integer,Description="Total Mapping Quality Zero Reads">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic event">
+##INFO=<ID=VT,Number=1,Type=String,Description="Variant type, can be SNP, INS or DEL">
+##MuTect="analysis_type=MuTect input_file=[/.mounts/labs/DREAM/DREAM_SMC_DATA/simulated/sample3/normal/chrbam/synthetic.challenge.set3.normal.rmoq.21.bam, /.mounts/labs/DREAM/DREAM_SMC_DATA/simulated/sample3/tumour/chrbam/synthetic.challenge.set3.tumor.rmoq.21.bam] read_buffer_size=null phone_home=STANDARD gatk_key=null tag=NA read_filter=[] intervals=[9:1-47071143] excludeIntervals=null interval_set_rule=UNION interval_merging=ALL interval_padding=0 reference_sequence=/.mounts/labs/DREAM/DREAM_SMC_DATA/simulated/assembly/Homo_sapiens_assembly19_fromBroad.fasta nonDeterministicRandomSeed=false disableRandomization=false maxRuntime=-1 maxRuntimeUnits=MINUTES downsampling_type=BY_SAMPLE downsample_to_fraction=null downsample_to_coverage=1000 enable_experimental_downsampling=false baq=OFF baqGapOpenPenalty=40.0 performanceLog=null useOriginalQualities=false BQSR=null quantize_quals=0 disable_indel_quals=false emit_original_quals=false preserve_qscores_less_than=6 defaultBaseQualities=-1 validation_strictness=SILENT remove_program_records=false keep_program_records=false unsafe=null num_threads=1 num_cpu_threads_per_data_thread=1 num_io_threads=0 monitorThreadEfficiency=false num_bam_file_handles=null read_group_black_list=null pedigree=[] pedigreeString=[] pedigreeValidationType=STRICT allow_intervals_with_unindexed_bam=false generateShadowBCF=false logging_level=INFO log_to_file=null help=false noop=false enable_extended_output=false artifact_detection_mode=false tumor_sample_name=IS3.snv.indel.sv bam_tumor_sample_name=null normal_sample_name=G15512.prenormal.sorted force_output=false force_alleles=false only_passing_calls=false initial_tumor_lod=4.0 tumor_lod=6.3 fraction_contamination=0.02 minimum_mutation_cell_fraction=0.0 normal_lod=2.2 normal_artifact_lod=1.0 strand_artifact_lod=2.0 strand_artifact_power_threshold=0.9 dbsnp_normal_lod=5.5 somatic_classification_normal_power_threshold=0.95 minimum_normal_allele_fraction=0.0 tumor_f_pretest=0.0050 min_qscore=5 gap_events_threshold=3 heavily_clipped_read_fraction=0.3 clipping_bias_pvalue_threshold=0.05 fraction_mapq0_threshold=0.5 pir_median_threshold=10.0 pir_mad_threshold=3.0 required_maximum_alt_allele_mapping_quality_score=20 max_alt_alleles_in_normal_count=2 max_alt_alleles_in_normal_qscore_sum=20 max_alt_allele_in_normal_fraction=0.03 power_constant_qscore=30 absolute_copy_number_data=null power_constant_af=0.30000001192092896 vcf=org.broadinstitute.sting.gatk.io.stubs.VariantContextWriterStub no_cmdline_in_header=org.broadinstitute.sting.gatk.io.stubs.VariantContextWriterStub sites_only=org.broadinstitute.sting.gatk.io.stubs.VariantContextWriterStub bcf=org.broadinstitute.sting.gatk.io.stubs.VariantContextWriterStub dbsnp=[(RodBinding name=dbsnp source=/.mounts/labs/boutroslab/private/Resources/Sequencing/gatkBundle/2.8/b37/dbsnp_138.b37.vcf)] cosmic=[(RodBinding name=cosmic source=/oicr/data/reference/genomes/homo_sapiens_mc/Cosmic/v66/Cosmic_All_v66_20130725_modified_b37.vcf)] normal_panel=[] coverage_20_q20_file=null power_file=null tumor_depth_file=null normal_depth_file=null filter_mismatching_base_and_quals=false"
+##contig=<ID=1,length=249250621>
+##contig=<ID=2,length=243199373>
+##contig=<ID=3,length=198022430>
+##contig=<ID=4,length=191154276>
+##contig=<ID=5,length=180915260>
+##contig=<ID=6,length=171115067>
+##contig=<ID=7,length=159138663>
+##contig=<ID=8,length=146364022>
+##contig=<ID=9,length=141213431>
+##contig=<ID=10,length=135534747>
+##contig=<ID=11,length=135006516>
+##contig=<ID=12,length=133851895>
+##contig=<ID=13,length=115169878>
+##contig=<ID=14,length=107349540>
+##contig=<ID=15,length=102531392>
+##contig=<ID=16,length=90354753>
+##contig=<ID=17,length=81195210>
+##contig=<ID=18,length=78077248>
+##contig=<ID=19,length=59128983>
+##contig=<ID=20,length=63025520>
+##contig=<ID=21,length=48129895>
+##contig=<ID=22,length=51304566>
+##contig=<ID=X,length=155270560>
+##contig=<ID=Y,length=59373566>
+##contig=<ID=MT,length=16569>
+##contig=<ID=GL000207.1,length=4262>
+##contig=<ID=GL000226.1,length=15008>
+##contig=<ID=GL000229.1,length=19913>
+##contig=<ID=GL000231.1,length=27386>
+##contig=<ID=GL000210.1,length=27682>
+##contig=<ID=GL000239.1,length=33824>
+##contig=<ID=GL000235.1,length=34474>
+##contig=<ID=GL000201.1,length=36148>
+##contig=<ID=GL000247.1,length=36422>
+##contig=<ID=GL000245.1,length=36651>
+##contig=<ID=GL000197.1,length=37175>
+##contig=<ID=GL000203.1,length=37498>
+##contig=<ID=GL000246.1,length=38154>
+##contig=<ID=GL000249.1,length=38502>
+##contig=<ID=GL000196.1,length=38914>
+##contig=<ID=GL000248.1,length=39786>
+##contig=<ID=GL000244.1,length=39929>
+##contig=<ID=GL000238.1,length=39939>
+##contig=<ID=GL000202.1,length=40103>
+##contig=<ID=GL000234.1,length=40531>
+##contig=<ID=GL000232.1,length=40652>
+##contig=<ID=GL000206.1,length=41001>
+##contig=<ID=GL000240.1,length=41933>
+##contig=<ID=GL000236.1,length=41934>
+##contig=<ID=GL000241.1,length=42152>
+##contig=<ID=GL000243.1,length=43341>
+##contig=<ID=GL000242.1,length=43523>
+##contig=<ID=GL000230.1,length=43691>
+##contig=<ID=GL000237.1,length=45867>
+##contig=<ID=GL000233.1,length=45941>
+##contig=<ID=GL000204.1,length=81310>
+##contig=<ID=GL000198.1,length=90085>
+##contig=<ID=GL000208.1,length=92689>
+##contig=<ID=GL000191.1,length=106433>
+##contig=<ID=GL000227.1,length=128374>
+##contig=<ID=GL000228.1,length=129120>
+##contig=<ID=GL000214.1,length=137718>
+##contig=<ID=GL000221.1,length=155397>
+##contig=<ID=GL000209.1,length=159169>
+##contig=<ID=GL000218.1,length=161147>
+##contig=<ID=GL000220.1,length=161802>
+##contig=<ID=GL000213.1,length=164239>
+##contig=<ID=GL000211.1,length=166566>
+##contig=<ID=GL000199.1,length=169874>
+##contig=<ID=GL000217.1,length=172149>
+##contig=<ID=GL000216.1,length=172294>
+##contig=<ID=GL000215.1,length=172545>
+##contig=<ID=GL000205.1,length=174588>
+##contig=<ID=GL000219.1,length=179198>
+##contig=<ID=GL000224.1,length=179693>
+##contig=<ID=GL000223.1,length=180455>
+##contig=<ID=GL000195.1,length=182896>
+##contig=<ID=GL000212.1,length=186858>
+##contig=<ID=GL000222.1,length=186861>
+##contig=<ID=GL000200.1,length=187035>
+##contig=<ID=GL000193.1,length=189789>
+##contig=<ID=GL000194.1,length=191469>
+##contig=<ID=GL000225.1,length=211173>
+##contig=<ID=GL000192.1,length=547496>
+##contig=<ID=NC_007605,length=171823>
+##reference=file:///.mounts/labs/DREAM/DREAM_SMC_DATA/simulated/assembly/Homo_sapiens_assembly19_fromBroad.fasta
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	G15512.prenormal.sorted	IS3.snv.indel.sv
+21	9416662	.	G	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:79,1:.:78:0.013:0	0/1:60,4:34:64:0.063:2
+21	9420304	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:72,1:.:72:0.014:0	0/1:66,5:32:71:0.070:2
+21	9420697	rs376084766	T	C	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:34,1:.:35:0.029:0	0/1:21,3:34:24:0.125:2
+21	9443408	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:61,1:.:48:0.016:0	0/1:40,3:34:43:0.070:2
+21	9585006	rs4117135	G	A	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:72,1:.:48:0.014:0	0/1:46,3:33:49:0.061:2
+21	9592254	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:50,1:.:44:0.020:0	0/1:43,4:31:47:0.085:2
+21	10401455	rs368572079	G	A	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:34,1:.:35:0.029:0	0/1:35,8:30:43:0.186:2
+21	10475683	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:82,0:.:82:0.00:0	0/1:79,6:32:85:0.071:2
+21	10513525	rs374985115	C	T	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:31,0:.:28:0.00:0	0/1:39,6:33:45:0.133:2
+21	10564460	rs374470422	A	T	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:22,4:31:26:0.154:2
+21	10574419	.	C	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:12,0:.:12:0.00:0	0/1:18,3:34:21:0.143:2
+21	10591073	rs371696421	C	T	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:20,0:.:20:0.00:0	0/1:19,6:31:25:0.240:2
+21	10591074	rs71229866	A	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:20,0:.:20:0.00:0	0/1:19,6:30:25:0.240:2
+21	10770135	rs377139733	A	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:29,0:.:18:0.00:0	0/1:18,3:33:21:0.143:2
+21	11012711	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:12,0:.:6:0.00:0	0/1:11,3:34:14:0.214:2
+21	11061074	rs71232951	C	A	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:59,1:.:53:0.017:0	0/1:44,5:31:49:0.102:2
+21	11062786	rs71265592	T	A	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:35,1:.:35:0.028:0	0/1:42,4:32:46:0.087:2
+21	11072483	rs75938377	G	A	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:112,1:.:113:8.850e-03:0	0/1:97,6:32:103:0.058:2
+21	11088174	rs4913581	A	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:67,1:.:68:0.015:0	0/1:66,5:33:71:0.070:2
+21	14496847	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:52,0:.:45:0.00:0	0/1:37,4:30:41:0.098:2
+21	14514539	rs202160504	G	A	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:50,1:.:42:0.020:0	0/1:36,3:33:39:0.077:2
+21	14516182	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:41,1:.:34:0.024:0	0/1:46,4:32:50:0.080:2
+21	14805774	rs145289864	T	C	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:21,0:.:21:0.00:0	0/1:31,3:32:34:0.088:2
+21	15223687	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:93,1:.:54:0.011:0	0/1:45,5:32:50:0.100:2
+21	15269363	rs369351918	C	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:56,1:.:57:0.018:0	0/1:53,4:32:57:0.070:2
+21	15857553	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:18,0:.:18:0.00:0	0/1:18,8:32:26:0.308:2
+21	16238878	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:38,1:.:39:0.026:0	0/1:41,3:33:44:0.068:2
+21	16662884	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:55,0:.:55:0.00:0	0/1:30,26:33:56:0.464:2
+21	17815992	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:49,0:.:49:0.00:0	0/1:22,19:31:41:0.463:2
+21	18268726	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:43,0:.:42:0.00:0	0/1:23,10:33:33:0.303:2
+21	18275592	.	C	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:27,0:.:27:0.00:0	0/1:13,13:33:26:0.500:2
+21	18621476	.	C	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:51,0:.:51:0.00:0	0/1:31,15:33:46:0.326:2
+21	18885035	.	G	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:54,0:.:54:0.00:0	0/1:43,3:33:46:0.065:2
+21	19076340	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:14,0:.:14:0.00:0	0/1:9,4:34:13:0.308:2
+21	19108114	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:45,0:.:43:0.00:0	0/1:42,10:29:52:0.192:2
+21	19437048	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:31,0:.:31:0.00:0	0/1:24,6:31:30:0.200:2
+21	20410622	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:14,0:.:14:0.00:0	0/1:12,4:35:16:0.250:2
+21	20953941	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:10,8:34:18:0.444:2
+21	21071948	.	G	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:32,0:.:32:0.00:0	0/1:21,4:33:25:0.160:2
+21	21593139	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:32,0:.:32:0.00:0	0/1:33,3:32:36:0.083:2
+21	22439786	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:18,0:.:18:0.00:0	0/1:8,3:32:11:0.273:2
+21	23018638	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:20,0:.:20:0.00:0	0/1:19,4:32:23:0.174:2
+21	23037720	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:20,0:.:20:0.00:0	0/1:15,3:28:18:0.167:2
+21	23241146	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:46,0:.:46:0.00:0	0/1:33,8:31:41:0.195:2
+21	23263891	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:25,0:.:25:0.00:0	0/1:16,7:31:23:0.304:2
+21	23884994	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:13,0:.:13:0.00:0	0/1:14,3:34:17:0.176:2
+21	24276911	.	G	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:26,0:.:26:0.00:0	0/1:25,3:34:28:0.107:2
+21	24709947	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:9,0:.:9:0.00:0	0/1:3,3:33:6:0.500:2
+21	24874977	.	G	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:30,0:.:30:0.00:0	0/1:18,8:33:26:0.308:2
+21	25281856	.	C	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:42,0:.:42:0.00:0	0/1:32,15:33:47:0.319:2
+21	25752458	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:48,0:.:48:0.00:0	0/1:38,19:32:57:0.333:2
+21	27342918	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:45,0:.:45:0.00:0	0/1:28,13:32:41:0.317:2
+21	27684021	rs201120537	C	T	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:20,0:.:20:0.00:0	0/1:20,3:31:23:0.130:2
+21	28238684	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:40,0:.:40:0.00:0	0/1:26,6:32:32:0.188:2
+21	28286053	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:44,0:.:44:0.00:0	0/1:15,16:33:31:0.516:2
+21	28629317	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:27,0:.:27:0.00:0	0/1:20,9:34:29:0.310:2
+21	28999674	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:85,1:.:71:0.012:0	0/1:58,4:32:62:0.065:2
+21	29663762	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:36,0:.:36:0.00:0	0/1:39,9:34:48:0.188:2
+21	30044331	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:27,0:.:27:0.00:0	0/1:20,17:31:37:0.459:2
+21	30241140	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:16,7:33:23:0.304:2
+21	30421987	.	C	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:41,0:.:41:0.00:0	0/1:37,8:33:45:0.178:2
+21	30521418	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:37,0:.:37:0.00:0	0/1:26,12:32:38:0.316:2
+21	31012013	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:46,0:.:46:0.00:0	0/1:20,20:32:40:0.500:2
+21	31070193	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:30,0:.:31:0.00:0	0/1:30,7:34:37:0.189:2
+21	31252166	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:22,10:31:32:0.313:2
+21	31340223	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:39,0:.:39:0.00:0	0/1:23,5:33:28:0.179:2
+21	31720577	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:47,0:.:47:0.00:0	0/1:25,3:30:28:0.107:2
+21	32095795	.	G	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:31,0:.:31:0.00:0	0/1:17,3:34:20:0.150:2
+21	32185261	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:32,0:.:32:0.00:0	0/1:17,16:33:33:0.485:2
+21	32626637	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:39,1:.:40:0.025:0	0/1:20,18:33:38:0.474:2
+21	32745976	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:27,3:.:31:0.100:0	0/1:20,4:28:24:0.167:2
+21	32751494	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:40,0:.:40:0.00:0	0/1:27,11:33:38:0.289:2
+21	32842607	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:15,3:29:18:0.167:2
+21	33259840	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:44,0:.:44:0.00:0	0/1:19,18:32:37:0.486:2
+21	33498001	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:37,0:.:36:0.00:0	0/1:14,13:33:27:0.481:2
+21	33649890	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:35,0:.:35:0.00:0	0/1:19,18:33:37:0.486:2
+21	33993136	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:20,0:.:20:0.00:0	0/1:18,7:32:25:0.280:2
+21	34085874	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:50,0:.:45:0.00:0	0/1:32,3:32:35:0.086:2
+21	34085994	rs376114910	A	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:55,1:.:46:0.018:0	0/1:36,4:33:40:0.100:2
+21	34688885	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:30,0:.:30:0.00:0	0/1:26,4:34:30:0.133:2
+21	34913579	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:19,0:.:19:0.00:0	0/1:13,3:32:16:0.188:2
+21	35039172	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:21,0:.:21:0.00:0	0/1:10,10:30:20:0.500:2
+21	35259733	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:25,0:.:25:0.00:0	0/1:22,3:32:25:0.120:2
+21	35627966	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:22,0:.:22:0.00:0	0/1:34,3:33:37:0.081:2
+21	35826002	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:47,0:.:47:0.00:0	0/1:34,7:31:41:0.171:2
+21	35878625	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:54,0:.:54:0.00:0	0/1:34,3:33:37:0.081:2
+21	35902927	rs76732551	T	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:19,0:.:19:0.00:0	0/1:0,4:31:4:1.00:2
+21	35902930	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:19,0:.:19:0.00:0	0/1:0,3:30:3:1.00:2
+21	36049128	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:47,0:.:47:0.00:0	0/1:18,17:33:35:0.486:2
+21	36326858	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:34,0:.:34:0.00:0	0/1:41,3:32:44:0.068:2
+21	36421652	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:31,0:.:31:0.00:0	0/1:23,6:34:29:0.207:2
+21	36661844	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:30,0:.:30:0.00:0	0/1:23,10:33:33:0.303:2
+21	36803545	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:31,0:.:31:0.00:0	0/1:21,10:33:31:0.323:2
+21	37409175	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:36,0:.:36:0.00:0	0/1:34,15:32:49:0.306:2
+21	37614704	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:24,0:.:23:0.00:0	0/1:24,9:34:33:0.273:2
+21	38071302	.	G	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:25,0:.:25:0.00:0	0/1:2,90:32:92:0.978:2
+21	38079231	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:57,0:.:57:0.00:0	0/1:42,19:33:61:0.311:2
+21	38760675	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:38,0:.:38:0.00:0	0/1:1,2:33:3:0.667:2
+21	39049150	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:49,0:.:49:0.00:0	0/1:40,19:30:59:0.322:2
+21	39362520	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:42,0:.:42:0.00:0	0/1:30,7:33:37:0.189:2
+21	39724015	.	A	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:38,0:.:38:0.00:0	0/1:28,13:33:41:0.317:2
+21	40087519	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:35,0:.:35:0.00:0	0/1:26,11:32:37:0.297:2
+21	40148662	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:60,0:.:60:0.00:0	0/1:30,28:32:58:0.483:2
+21	40809081	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:37,0:.:37:0.00:0	0/1:18,17:33:35:0.486:2
+21	41541217	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:35,0:.:35:0.00:0	0/1:34,3:32:37:0.081:2
+21	41686007	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:23,5:33:28:0.179:2
+21	41730797	.	T	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:16,0:.:16:0.00:0	0/1:15,3:32:18:0.167:2
+21	41766496	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:41,0:.:41:0.00:0	0/1:46,4:32:50:0.080:2
+21	43088423	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:57,0:.:57:0.00:0	0/1:47,4:32:51:0.078:2
+21	43498644	rs368472865	C	T	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:33,0:.:27:0.00:0	0/1:30,6:32:36:0.167:2
+21	43674875	.	G	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:57,0:.:57:0.00:0	0/1:24,23:33:47:0.489:2
+21	43802788	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:52,0:.:52:0.00:0	0/1:37,3:33:40:0.075:2
+21	44299195	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:55,0:.:55:0.00:0	0/1:24,11:32:35:0.314:2
+21	44531453	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:35,1:.:36:0.028:0	0/1:17,5:19:22:0.227:2
+21	44757371	rs199623188	C	G	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:50,1:.:51:0.020:0	0/1:40,3:34:43:0.070:2
+21	44892654	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:45,0:.:45:0.00:0	0/1:25,22:33:47:0.468:2
+21	45014157	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:40,0:.:40:0.00:0	0/1:22,10:34:32:0.313:2
+21	45117958	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:18,0:.:18:0.00:0	0/1:14,3:29:17:0.176:2
+21	45896468	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:53,0:.:53:0.00:0	0/1:41,19:34:60:0.317:2
+21	46344343	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:47,0:.:48:0.00:0	0/1:36,9:31:45:0.200:2
+21	46448504	.	G	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:31,1:.:22:0.031:0	0/1:21,4:29:25:0.160:2
+21	46448511	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:29,1:.:19:0.033:0	0/1:20,3:29:24:0.130:2
+21	46609963	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:35,1:.:36:0.028:0	0/1:23,10:33:33:0.303:2
+21	46626286	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:39,0:.:39:0.00:0	0/1:21,6:34:27:0.222:2
+21	46645663	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:42,0:.:42:0.00:0	0/1:40,10:33:50:0.200:2
+21	47150421	.	T	G	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:16,0:.:16:0.00:0	0/1:7,7:33:14:0.500:2
+21	47201325	.	A	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:45,0:.:45:0.00:0	0/1:28,6:32:34:0.176:2
+21	47235849	.	G	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:16:0.00:0	0/1:12,3:32:16:0.200:2
+21	47338519	.	C	T	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:58,1:.:57:0.017:0	0/1:52,4:34:56:0.071:2
+21	47455272	.	C	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:47,0:.:42:0.00:0	0/1:44,4:30:48:0.083:2
+21	47621036	rs28560443	T	C	.	PASS	DB;SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:24,5:26:29:0.172:2
+21	47621046	.	A	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:27,3:33:30:0.100:2
+21	47621047	.	G	A	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:23,0:.:23:0.00:0	0/1:23,4:30:28:0.148:2
+21	47756235	.	T	C	.	PASS	SOMATIC;VT=SNP	GT:AD:BQ:DP:FA:SS	0:44,0:.:44:0.00:0	0/1:37,8:34:45:0.178:2
