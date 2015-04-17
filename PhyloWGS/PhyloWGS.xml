@@ -1,0 +1,18 @@
+<tool id="PhyloWGS" name="PhyloWGS" version="0.1.0">
+    <stdio>
+        <exit_code range="1:" />
+    </stdio>
+    <requirements>
+        <container type="docker">ubuntu</container>
+    </requirements>
+    <command><![CDATA[
+        TODO: Fill in command template.
+    ]]></command>
+    <inputs>
+    </inputs>
+    <outputs>
+    </outputs>
+    <help><![CDATA[
+        TODO: Fill in help.
+    ]]></help>
+</tool>

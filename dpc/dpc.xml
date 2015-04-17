@@ -1,0 +1,29 @@
+<tool id="dpc" name="DPC Het" version="1.0.0">
+	<description>DPC based heterogeneity</description>
+	<requirements>
+		<container type="docker">r-base</container>
+	</requirements>
+	<command interpreter="Rscript">
+dpc.R ${input_vcf}
+	</command>
+
+	<inputs>
+		<param format="vcf" name="input_vcf" type="data" label="VCF file" help="" />
+	</inputs>
+
+	<outputs>
+		<data format="png" name="output_png" label="DirichletProcessplotBinomial PNG" from_work_dir="DirichletProcessplotBinomial.png"/>
+		<data format="txt" name="output_density" label="DirichletProcessplotBinomial Density" from_work_dir="DirichletProcessplotBinomialdensity.txt"/>
+		<data format="txt" name="output_polygon" label="DirichletProcessplotBinomial Polygon" from_work_dir="DirichletProcessplotBinomialpolygonData.txt"/>
+	</outputs>
+
+	<help>
+You should totally explain how to use your tool here
+	</help>
+
+	<tests>
+		<test>
+		</test>
+	</tests>
+
+</tool>
