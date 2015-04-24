@@ -3,14 +3,17 @@
         <exit_code range="1:" />
     </stdio>
     <requirements>
-        <container type="docker">ubuntu</container>
+        <container type="docker">phylowgs</container>
     </requirements>
     <command><![CDATA[
         TODO: Fill in command template.
     ]]></command>
     <inputs>
+      <param name="mutations" type="data" format="tabular" label="Mutation Data"/>
+      <param name="cna" type="data" format="tabular" label="CNA Data"/>
     </inputs>
     <outputs>
+      <data format="tabular" name="clustering" label="Cluster Assignments"/>      
     </outputs>
     <help><![CDATA[
         TODO: Fill in help.

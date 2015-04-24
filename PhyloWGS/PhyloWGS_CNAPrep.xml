@@ -1,0 +1,20 @@
+<tool id="PhyloWGS_CNAPrep" name="PhyloWGS CNA Prep" version="0.1.0">
+  <stdio>
+    <exit_code range="1:" />
+  </stdio>
+  <requirements>
+    <container type="docker">phylowgs</container>
+  </requirements>
+  <command><![CDATA[
+    TODO: Fill in command template.
+]]></command>
+  <inputs>
+    <param name="cna" type="data" format="bed" label="Input CNA"/>
+  </inputs>
+  <outputs>
+    <data format="tabular" name="cna_out" label="CNA Data"/>
+  </outputs>
+  <help><![CDATA[
+      TODO: Fill in help.
+]]></help>
+</tool>

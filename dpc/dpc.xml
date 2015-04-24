@@ -1,5 +1,5 @@
-<tool id="dpc" name="DPC Het" version="1.0.0">
-	<description>DPC based heterogeneity</description>
+<tool id="dpc" name="VCF DPC" version="1.0.0">
+	<description>VCF clustering</description>
 	<requirements>
 		<container type="docker">r-base</container>
 	</requirements>
