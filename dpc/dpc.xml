@@ -15,6 +15,8 @@ dpc.R ${input_vcf}
 		<data format="png" name="output_png" label="DirichletProcessplotBinomial PNG" from_work_dir="DirichletProcessplotBinomial.png"/>
 		<data format="txt" name="output_density" label="DirichletProcessplotBinomial Density" from_work_dir="DirichletProcessplotBinomialdensity.txt"/>
 		<data format="txt" name="output_polygon" label="DirichletProcessplotBinomial Polygon" from_work_dir="DirichletProcessplotBinomialpolygonData.txt"/>
+		<data format="txt" name="clusterAssignments" label="Cluster Assignments" for_work_dir="clusterAssignments.txt"/>
+		<data format="txt" name="clusterPositions" label="Cluster Positions" from_work_dir="clusterPositions.txt"/>
 	</outputs>
 
 	<help>
