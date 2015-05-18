@@ -8,6 +8,10 @@ import gzip
 import re
 import traceback
 import urlparse
+import tarfile
+import logging
+import subprocess
+from xml.dom.minidom import parse as parseXML
 
 try:
     import requests
@@ -33,7 +37,7 @@ except ImportError:
 #Some of the evaluation interface methods require an up-to-date copy of the Synapse client
 try:
     from distutils.version import StrictVersion
-    if StrictVersion(re.sub(r'\.dev\d+', '', synapseclient.__version__)) < StrictVersion('0.5.1'):
+    if StrictVersion(re.sub(r'\.dev\d+', '', synapseclient.__version__)) < StrictVersion('1.0.0'):
         print "Please Upgrade Synapse Client Library"
         print ">>> pip install -U synapseclient"
         sys.exit(1)
@@ -41,65 +45,261 @@ except ImportError:
     pass
 
 
-def main_sync(args, syn):
-    if not args.workflow.startswith("http://") or args.workflow.startswith("https://"):
+CONFIG_FILE = os.path.join(os.environ['HOME'], ".dreamSubmitConfig")
+
+EVAL_TOOL_ID = 'smc_het_eval'
+INPUT_NAMES = [ "VCF_INPUT", "CNA_INPUT" ]
+
+def validate_workflow(workflow):
+    eval_found = False
+    for step in workflow['steps'].values():
+        if step['tool_id'] == EVAL_TOOL_ID:
+            eval_found = True
+    if not eval_found:
+        print "Result Evaluation Tool not found"
+        return 1
+
+    input_found = False
+    for step in workflow['steps'].values():
+        if step['type'] == 'data_input':
+            if step['inputs'][0]['name'] in INPUT_NAMES:
+                input_found = True
+    if not input_found:
+        print "Labeled Input dataset not found"
+        return 1
+
+    return 0
+
+"""
+XML Parsing Code to read Tool config files
+"""
+def getText(nodelist):
+    rc = []
+    for node in nodelist:
+        if node.nodeType == node.TEXT_NODE:
+            rc.append(node.data)
+    return ''.join(rc)
+
+
+def dom_scan(node, query):
+    stack = query.split("/")
+    if node.localName == stack[0]:
+        return dom_scan_iter(node, stack[1:], [stack[0]])
+
+def dom_scan_iter(node, stack, prefix):
+    if len(stack):
+        for child in node.childNodes:
+            if child.nodeType == child.ELEMENT_NODE:
+                if child.localName == stack[0]:
+                    for out in dom_scan_iter(child, stack[1:], prefix + [stack[0]]):
+                        yield out
+                elif '*' == stack[0]:
+                    for out in dom_scan_iter(child, stack[1:], prefix + [child.localName]):
+                        yield out
+    else:
+        if node.nodeType == node.ELEMENT_NODE:
+            yield node, prefix, dict(node.attributes.items()), getText( node.childNodes )
+        elif node.nodeType == node.TEXT_NODE:
+            yield node, prefix, None, getText( node.childNodes )
+
+
+
+def get_tool_archive_docker_tag(tarpath):
+    tar = tarfile.open(tarpath)
+    for i in tar:
+        if i.name.endswith(".xml"):
+            tool_conf = tar.extractfile(i)
+            dom = parseXML(tool_conf)
+            s = dom_scan(dom.childNodes[0], "tool")
+            if s is not None:
+                scan = dom_scan(dom.childNodes[0], "tool/requirements/container")
+                if scan is not None:
+                    for node, prefix, attrs, text in scan:
+                        if 'type' in attrs and attrs['type'] == 'docker':
+                            tag = text
+                            return tag
+    return None
+
+def which(file):
+    for path in os.environ["PATH"].split(":"):
+        p = os.path.join(path, file)
+        if os.path.exists(p):
+            return p
+
+def get_docker_path():
+    docker_path = which('docker')
+    if docker_path is None:
+        raise Exception("Cannot find docker")
+    return docker_path
+
+
+def call_docker_save(
+    tag,
+    output,
+    host=None,
+    sudo=False,
+    ):
+
+
+    docker_path = get_docker_path()
+
+    cmd = [
+        docker_path, "save", "-o", output, tag
+    ]
+    sys_env = dict(os.environ)
+    if host is not None:
+        sys_env['DOCKER_HOST'] = host
+    if sudo:
+        cmd = ['sudo'] + cmd
+    logging.info("executing: " + " ".join(cmd))
+    proc = subprocess.Popen(cmd, close_fds=True, env=sys_env)
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        raise Exception("Call Failed: %s" % (cmd))
+
+def name_clean(name):
+    return re.sub(r'[^\w]', "_", name)
+
+def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
+
+    name = name_clean(name)
+    print "Submitting: %s" % (name)
+
+    project = syn.get(project_id)
+    image_folder_id = None
+    tool_folder_id = None
+    workflow_folder_id = None
+    for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (project_id)):
+        if row['entity.name'] == 'DockerImages':
+            image_folder_id = row['entity.id']
+        if row['entity.name'] == 'Tools':
+            tool_folder_id = row['entity.id']
+        if row['entity.name'] == 'Workflows':
+            workflow_folder_id = row['entity.id']
+    if image_folder_id is None:
+        image_folder = Folder('DockerImages', parent=project)
+        image_folder = syn.store(image_folder)
+        image_folder_id = image_folder.id
+    if tool_folder_id is None:
+        tool_folder = Folder('Tools', parent=project)
+        tool_folder = syn.store(tool_folder)
+        tool_folder_id = tool_folder.id
+    if workflow_folder_id is None:
+        workflow_folder = Folder('Workflows', parent=project)
+        workflow_folder = syn.store(workflow_folder)
+        workflow_folder_id = workflow_folder.id
+
+    if not workflow.startswith("http://") or workflow.startswith("https://"):
         print "Please provide URL to Galaxy Workflow"
+        raise Exception("Invalid Galaxy workflow URL: %s" % ())
+
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
 
     #if there provided the URL for the share page add a '/json' to the end
-    if not args.workflow.endswith("/json"):
-        args.workflow = args.workflow + "/json"
+    if not workflow.endswith("/json"):
+        workflow = workflow + "/json"
 
-    galaxy_url = urlparse.urlparse(args.workflow)
+    galaxy_url = urlparse.urlparse(workflow)
 
     #Download the Workflow JSON
-    print "Downloading Workflow", args.workflow
+    print "Downloading Workflow", workflow
     #try:
-    req = requests.get(args.workflow)
+    req = requests.get(workflow)
     workflow = req.json()
     #except ValueError:
     #    sys.stderr.write("Unexpected Value: %s" % (req.text))
     #    raise Exception("Unable to download workflow")
 
-    with open("workflow.ga", "w") as handle:
+    if validate_workflow(workflow):
+        raise Exception("Workflow failed validation")
+
+    output_paths = {
+        "workflow" : None,
+        "tools" : [],
+        "images" : []
+    }
+
+    workflow_file = os.path.join(workdir,"%s.ga" % (name))
+    with open(workflow_file, "w") as handle:
         handle.write( json.dumps(workflow, indent=4) )
+    output_paths['workflow'] = workflow_file
 
     api_base = "%s://%s/api/" % (galaxy_url.scheme, galaxy_url.netloc)
     for step_id, step in workflow['steps'].items():
-        if step['type'] == 'tool'"":
+        if step['type'] == 'tool':
             tool_id = step['tool_id']
-            tool_version = step['tool_version']
-            requests.get(api_base + "tools/%s" % (tool_id)).text
-            tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, args.apikey)
-            print "Downloading Tool:", tool_id, tool_url
-            r = requests.get(tool_url, stream=True)
-            if r.status_code == 200:
-                with open(tool_id + "." + tool_version + ".tar.gz", "wb") as f:
-                    for chunk in r.iter_content():
-                        f.write(chunk)
-            else:
-                print "Skipping Tool", tool_id, r.status_code
+            if tool_id != EVAL_TOOL_ID:
+                tool_version = step['tool_version']
+                requests.get(api_base + "tools/%s" % (tool_id)).text
+                tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, apikey)
+                print "Downloading Tool:", tool_id, tool_url
+                r = requests.get(tool_url, stream=True)
+                if r.status_code == 200:
+                    tarpath = os.path.join(workdir, tool_id + "." + tool_version + ".tar.gz")
+                    with open( tarpath, "wb") as f:
+                        for chunk in r.iter_content():
+                            f.write(chunk)
+                    output_paths['tools'].append(tarpath)
+                    docker_tag = get_tool_archive_docker_tag(tarpath)
+                    if docker_tag is None:
+                        print "Can't determine Docker image for tool: %s" % (tool_id)
+                        raise Exception("Unable to find docker image for: %s" % (tool_id))
+                    print "Docker Image:", docker_tag
+                    docker_file = os.path.join(workdir, "docker_%s.tar" % (tool_id))
+                    call_docker_save(tag=docker_tag, output=docker_file)
+                    output_paths['images'].append(docker_file)
+                else:
+                    print "Skipping Tool", tool_id, r.status_code
+
+
+    workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
+    workflow_data = syn.store(workflow_data,createOrUpdate=False)
+
+    for tool in output_paths['tools']:
+        tool_entity_id = None
+        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (tool_folder_id)):
+            if row['entity.name'] == os.path.basename(tool):
+                tool_entity_id = row['entity.id']
+                print "Tool previously uploaded: %s as %s" % (os.path.basename(tool), tool_entity_id)
+        if tool_entity_id is None:
+            tool_data = synapseclient.File(tool, parentId=tool_folder_id)
+            tool_data = syn.store(tool_data,createOrUpdate=False)
+
+    for image in output_paths['images']:
+        image_entity_id = None
+        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (image_folder_id)):
+            if row['entity.name'] == os.path.basename(image):
+                image_entity_id = row['entity.id']
+                print "Image previously uploaded: %s as %s" % (os.path.basename(image), image_entity_id)
+        if image_entity_id is None:
+            image_data = synapseclient.File(image, parentId=image_folder_id)
+            image_data = syn.store(image_data,createOrUpdate=False)
+
+
+    print output_paths
 
 
 
-def main_submit(args, syn):
+def main_submit(syn, apikey, workflow, name, team_name, project_id, workdir):
     """
     This method takes an existing VCF file, uploads it to a personal project folder, and then
     submits it to the Dream Mutation calling Challenge
     """
 
-    if args.name is None or args.team_name is None or args.project_id is None:
+    if name is None or team_name is None or project_id is None:
         print """Usage:
 dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission" --team-name "Team Name" --project-id syn12345
 """
-        if args.name is None:
+        if name is None:
             print "Please add --name"
-        if args.project_id is None:
+        if project_id is None:
             print "Please add --project-id"
-        if args.team_name is None:
+        if team_name is None:
             print "Please add --team-name"
         sys.exit(0)
 
-    main_sync(args, syn)
+    main_sync(syn, apikey=apikey, workflow=workflow, name=name, team_name=team_name, project_id=project_id, workdir=workdir)
 
 
 if __name__ == "__main__":
@@ -111,11 +311,13 @@ if __name__ == "__main__":
     parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address, example ")
     parser.add_argument("--apikey", required=True, help="Galaxy API Key")
 
-    parser.add_argument("--name", help="Name of the submission")
-    parser.add_argument("--team-name", help="Name Team")
+    parser.add_argument("--name", help="Name of the submission", required=True)
+    parser.add_argument("--team-name", help="Name Team", required=True)
     parser.add_argument("--project-id", required=True, help="The SYN id of your personal private working directory")
 
     parser.add_argument("--submit", action="store_true", default=False)
+
+    parser.add_argument("-w", "--workdir", default="work")
 
     args = parser.parse_args()
     syn = synapseclient.Synapse()
@@ -127,7 +329,19 @@ if __name__ == "__main__":
         else:
             syn.login()
 
-    if args.submit:
-        sys.exit(main_submit(args, syn))
+    submit = args.submit
+    kwds=dict(vars(args))
+    del kwds['submit']
+    del kwds['user']
+    del kwds['password']
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as handle:
+            text = handle.read()
+        data = json.loads(text)
+        for k,v in data.items():
+            if k not in kwds:
+                kwds[k] = v
+    if submit:
+        sys.exit(main_submit(syn, **kwds))
     else:
-        sys.exit(main_sync(args, syn))
+        sys.exit(main_sync(syn, **kwds))
