@@ -1,0 +1,42 @@
+<tool id="PhyloWGS_Prep" name="PhyloWGS Prep" version="0.1.0">
+  <stdio>
+    <exit_code range="1:" />
+  </stdio>
+  <requirements>
+    <container type="docker">phylowgs</container>
+  </requirements>
+  <command><![CDATA[
+python /opt/phylowgs/parser/create_phylowgs_inputs.py 
+--sample-size ${sample_size}
+#if str($battenberg) != 'None':
+--battenberg ${battenberg}
+#end if
+#if $only_normal_cn
+--only-normal-cn 
+#end if
+--output-cnvs ${output_cnvs}
+--output-variants ${output_variants}
+--cellularity ${cellularity}
+--variant-type ${input_type}
+${vcf_file}
+]]></command>
+  <inputs>
+      <param name="sample_size" type="integer" help="Subsample reported number of SSMs" value="1"/>
+      <param name="battenberg" type="data" format="tabular" optional="true" help="Battenberg-formatted list of CNVs"/>
+      <param name="only_normal_cn" type="boolean" help="Only output variants lying in normal CN regions. Do not output CNV data directly."/>
+      <param name="cellularity" type="float" help="Fraction of sample that is cancerous rather than somatic" value="1.0"/>
+      <param name="input_type" type="select">
+          <option value="mutect" selected="True">MuTect</option>
+          <option value="sanger">Sanger</option>
+          <option value="oncoscan">Oncoscan</option>
+      </param>
+      <param name="vcf_file" type="data" format="vcf" help="Variant File"/>
+  </inputs>
+  <outputs>
+    <data format="tabular" name="output_cnvs" label="Output destination for CNVs"/>
+    <data format="tabular" name="output_variants" label="Output destination for variants"/>
+  </outputs>
+  <help><![CDATA[
+      TODO: Fill in help.
+]]></help>
+</tool>

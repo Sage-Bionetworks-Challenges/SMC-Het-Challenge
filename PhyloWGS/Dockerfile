@@ -2,6 +2,7 @@ FROM ubuntu
 
 RUN apt-get update && apt-get install -y gfortran build-essential make gcc build-essential python python-dev wget libgsl0ldbl gsl-bin libgsl0-dev python-pip git texlive-latex-base
 
+RUN pip install PyVCF
 # blas
 ADD blas.sh /tmp/blas.sh
 RUN chmod 755 /tmp/blas.sh
