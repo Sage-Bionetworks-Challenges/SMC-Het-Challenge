@@ -49,6 +49,7 @@ CONFIG_FILE = os.path.join(os.environ['HOME'], ".dreamSubmitConfig")
 
 EVAL_TOOL_ID = 'smc_het_eval'
 INPUT_NAMES = [ "VCF_INPUT", "CNA_INPUT" ]
+GALAXY_API_KEY_FILE = "/etc/galaxy/api.key"
 
 def validate_workflow(workflow):
     eval_found = False
@@ -309,7 +310,7 @@ if __name__ == "__main__":
     parser.add_argument("--user", help="Synapse UserName", default=None)
     parser.add_argument("--password", help="Synapse Password", default=None)
     parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address, example ")
-    parser.add_argument("--apikey", required=True, help="Galaxy API Key")
+    parser.add_argument("--apikey", help="Galaxy API Key", default=None)
 
     parser.add_argument("--name", help="Name of the submission", required=True)
     parser.add_argument("--team-name", help="Name Team", required=True)
@@ -328,6 +329,13 @@ if __name__ == "__main__":
             syn.login(email=os.environ['SYNAPSE_EMAIL'], apiKey=os.environ['SYNAPSE_APIKEY'])
         else:
             syn.login()
+
+    if args.apikey is None:
+        if os.path.exists( GALAXY_API_KEY_FILE ):
+            with open( GALAXY_API_KEY_FILE ) as handle:
+                args.apikey = handle.read().rstrip()
+        else:
+            print "Need Galaxy API key: --apikey"
 
     submit = args.submit
     kwds=dict(vars(args))
