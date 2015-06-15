@@ -7,7 +7,9 @@
   </requirements>
   <command><![CDATA[
 python /opt/phylowgs/parser/create_phylowgs_inputs.py 
---sample-size ${sample_size}
+#if $subsample.run == "yes":
+--sample-size ${subsample.count}
+#end if
 #if str($battenberg) != 'None':
 --battenberg ${battenberg}
 #end if
@@ -18,23 +20,35 @@ python /opt/phylowgs/parser/create_phylowgs_inputs.py
 --output-variants ${output_variants}
 --cellularity ${cellularity}
 --variant-type ${input_type}
+--cnv-confidence ${cnv_confidence}
+--read-length ${read_length}
 ${vcf_file}
 ]]></command>
   <inputs>
-      <param name="sample_size" type="integer" help="Subsample reported number of SSMs" value="1"/>
-      <param name="battenberg" type="data" format="tabular" optional="true" help="Battenberg-formatted list of CNVs"/>
-      <param name="only_normal_cn" type="boolean" help="Only output variants lying in normal CN regions. Do not output CNV data directly."/>
-      <param name="cellularity" type="float" help="Fraction of sample that is cancerous rather than somatic" value="1.0"/>
-      <param name="input_type" type="select">
-          <option value="mutect" selected="True">MuTect</option>
-          <option value="sanger">Sanger</option>
-          <option value="oncoscan">Oncoscan</option>
-      </param>
-      <param name="vcf_file" type="data" format="vcf" help="Variant File"/>
+        <conditional name="subsample">
+            <param name="run" label="Run Subsampling" type="select" help="Subsample SSMs to reduce PhyloWGS runtime">
+                <option value="yes">Yes</option>
+                <option value="no" selected="True">No</option>
+            </param>
+            <when value="yes">
+                <param name="count" type="integer" label="Subsample Size" help="Subsample reported number of SSMs" value="0"/>
+            </when>
+        </conditional>
+        <param name="battenberg" type="data" format="tabular" optional="true" help="Battenberg-formatted list of CNVs"/>
+        <param name="only_normal_cn" type="boolean" label="Only report CN regions" help="Only output variants lying in normal CN regions. Do not output CNV data directly."/>
+        <param name="cellularity" type="float" label="Cellularity" help="Fraction of sample that is cancerous rather than somatic" value="1.0"/>
+        <param name="input_type" value="Variant Input Type" type="select">
+            <option value="mutect_smchet" selected="True">MuTect</option>
+            <option value="sanger">Sanger</option>
+            <option value="oncoscan">Oncoscan</option>
+        </param>
+        <param name="cnv_confidence" type="float" help="Confidence in CNVs. Set to &lt; 1 to scale 'd' values" value="1.0"/>
+        <param name="read_length" type="integer" help="Approximate length of reads. Used to calculate confidence in CNV frequencies (default: 100)" value="100"/>
+        <param name="vcf_file" type="data" format="vcf" help="Variant File"/>
   </inputs>
   <outputs>
-    <data format="tabular" name="output_cnvs" label="Output destination for CNVs"/>
-    <data format="tabular" name="output_variants" label="Output destination for variants"/>
+        <data format="tabular" name="output_cnvs" label="Output destination for CNVs"/>
+        <data format="tabular" name="output_variants" label="Output destination for variants"/>
   </outputs>
   <help><![CDATA[
       TODO: Fill in help.
