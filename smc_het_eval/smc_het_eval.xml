@@ -3,10 +3,15 @@
     <exit_code range="1:" />
   </stdio>
   <requirements>
-    <container type="docker">ubuntu</container>
+    <container type="docker">ipython/scipystack</container>
   </requirements>
   <command interpreter="python"><![CDATA[
-scoringSC1.py ${challenge} ${predfile} ${truthfile} ${outfile}
+SMCScoring.py 
+${challenge} 
+--predfiles ${predfile} 
+--truthfiles ${truthfile} 
+--specfile ${specfile}
+${outfile}
     ]]></command>
   <inputs>
       <param name="challenge" type="select" label="Challenge">
@@ -16,6 +21,7 @@ scoringSC1.py ${challenge} ${predfile} ${truthfile} ${outfile}
        </param>
       <param name="predfile" type="data" format="tabular" label="Predicted File"/>
       <param name="truthfile" type="data" format="tabular" label="Truth File"/>
+      <param name="specfile" type="data" format="tabular" label="Specfile"/>
   </inputs>
   <outputs>
       <data name="outfile" format="txt" label="Evaluation Scores"/>
