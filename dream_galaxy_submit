@@ -161,6 +161,18 @@ def call_docker_save(
         raise Exception("Call Failed: %s" % (cmd))
 
 
+def get_google_instance_type():
+    """
+    Query the `Google cloud metadata API <https://cloud.google.com/compute/docs/metadata>`_ to
+    get the instance type we're running on.
+    """
+    response = requests.get('http://metadata/computeMetadata/v1/instance/machine-type', headers={'Metadata-Flavor': 'Google'})
+    if response.status_code == 200 and '/' in response.text:
+        return response.text.rsplit('/', 1)[1]
+    else:
+        "failed to detect instance type"
+
+
 def give_synapse_permissions(syn, synapse_object, principal_id):
     acl = syn._getACL(synapse_object)
     acl['resourceAccess'].append({
@@ -301,8 +313,10 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
 
     print output_paths
 
+    instance_type = get_google_instance_type()
+
     workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
-    workflow_data = syn.store(workflow_data, createOrUpdate=False)
+    workflow_data = syn.store(workflow_data, createOrUpdate=False, instance_type=instance_type)
 
     tool_entities = find_or_add_to_synapse(output_paths['tools'], tool_folder_id)
     image_entities = find_or_add_to_synapse(output_paths['images'], image_folder_id)
