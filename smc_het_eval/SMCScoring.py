@@ -112,24 +112,17 @@ def calculate1C(pred,truth):
 	se = abs(truthvs - predvs)
 	return sum(1-se)/float(len(truthvs))
 
-def validate2A(data,ssmlist,return_ccm=True):
+def validate2A(data,nssms,return_ccm=True):
 	data = data.split('\n')
 	data = filter(None,data)
-	if len(data) != len(ssmlist):
+	if len(data) != nssms:
 		raise ValidationError("Input file contains a different number of lines than the specification file")
-	data = [x.split('\t') for x in data]
-	for i in range(len(data)):
-		if len(data[i]) != 2:
-			raise ValidationError("Number of tab separated columns in line %d is not 2" % (i+1))
-	for i in range(len(data)):
-		if data[i][0] != ssmlist[i]:
-			raise ValidationError("Starting at line %d, mutation names are not consistent with specification file" % (i+1))
 	cluster_entries = []
 	for i in range(len(data)):
 		try:
-			cluster_n = int(data[i][1])
+			cluster_n = int(data[i])
 			cluster_entries.append(cluster_n)
-			data[i][1] = cluster_n
+			data[i] = cluster_n
 		except ValueError:
 			raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i+1,data[i][0]))
 	used_clusters = sorted(list(set(cluster_entries)))
@@ -140,15 +133,15 @@ def validate2A(data,ssmlist,return_ccm=True):
 
 	c_m = np.zeros((len(data),len(set(cluster_entries))))
 	for i in range(len(data)):
-		c_m[i,data[i][1]-1] = 1
+		c_m[i,data[i]-1] = 1
 	if not return_ccm:
 		return c_m
 	else:
 		ccm = np.dot(c_m,c_m.T)
 		return ccm
 
-def validate2Afor3A(data,ssmlist):
-	return validate2A(data,ssmlist,False)
+def validate2Afor3A(data,nssms):
+	return validate2A(data,nssms,False)
 
 def calculate2(pred,truth):
 	n = truth.shape[0]
@@ -158,16 +151,16 @@ def calculate2(pred,truth):
 	res = res / count
 	return 1 - res
 
-def validate2B(data,ssmlist):
+def validate2B(data,nssms):
 	data = StringIO.StringIO(data)
 	try:
 		ccm = np.loadtxt(data,ndmin=2)
 	except ValueError:
 		raise ValidationError("Entry in co-clustering matrix could not be cast as a float")
 
-	if ccm.shape != (len(ssmlist),len(ssmlist)):
-		raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((len(ssmlist),len(ssmlist)))))
-	if not np.allclose(ccm.diagonal(),np.ones((len(ssmlist)))):
+	if ccm.shape != (nssms,nssms):
+		raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms,nssms))))
+	if not np.allclose(ccm.diagonal(),np.ones((nssms))):
 		raise ValidationError("Diagonal entries of co-clustering matrix not 1")
 	if np.any(np.isnan(ccm)):
 		raise ValidationError("Co-clustering matrix contains NaNs")
@@ -181,7 +174,7 @@ def validate2B(data,ssmlist):
 		raise ValidationError("Co-clustering matrix is not symmetric")
 	return ccm
 
-def validate3A(data, cas, ssmlist):
+def validate3A(data, cas, nssms):
 	predK = cas.shape[1]
 	cluster_assignments = np.argmax(cas,1) + 1
 
@@ -232,7 +225,7 @@ def validate3A(data, cas, ssmlist):
 				ad[i,j] = 1
 	return ad
 
-def validate3B(data, ccm, ssmlist):
+def validate3B(data, ccm, nssms):
 	data = StringIO.StringIO(data)
 	k = ccm.shape[0]
 	try:
@@ -274,17 +267,13 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad):
 	return 1 - res
 
 
-def validateNssms(data):
-	return int(data)
-
-def validateSsmList(data):
-	ssmlist = data.split('\n')
-	nssms = int(ssmlist[0])
-	ssmlist = ssmlist[1:]
-	ssmlist = filter(None,ssmlist)
-	if len(ssmlist) != nssms:
-		raise ValidationError("Error in Spec file")
-	return ssmlist
+def parseVCF(data):
+	data = data.split('\n')
+	data = [x for x in data if x != '']
+	data = [x for x in data if x[0] != '#']
+	if len(data) == 0:
+		raise ValidationError("Input VCF contains no SSMs")
+	return len(data)
 
 def verify(filename,role,func,*args):
 	try:
@@ -295,6 +284,7 @@ def verify(filename,role,func,*args):
 	except (IOError,TypeError) as e:
 		print "Error opening " + role
 		print e
+		print filename,func
 		return None
 	except (ValidationError,ValueError) as e:
 		print role + " does not validate"
@@ -303,44 +293,45 @@ def verify(filename,role,func,*args):
 	return pred
 
 
-challengeMapping = { 	'1A': {'spec': None, 'val_funcs':[validate1A],'score_func':calculate1A},
-						'1B': {'spec': None, 'val_funcs':[validate1B],'score_func':calculate1B},
-						'1C': {'spec': validateNssms, 'val_funcs':[validate1C],'score_func':calculate1C},
-						'2A': {'spec': validateSsmList, 'val_funcs':[validate2A],'score_func':calculate2},
-						'2B': {'spec': validateSsmList, 'val_funcs':[validate2B],'score_func':calculate2},
-						'3A': {'spec': validateSsmList, 'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A},
-						'3B': {'spec': validateSsmList, 'val_funcs':[validate2B,validate3B],'score_func':calculate3},
+challengeMapping = { 	'1A': {'val_funcs':[validate1A],'score_func':calculate1A,'nssms':False},
+						'1B': {'val_funcs':[validate1B],'score_func':calculate1B,'nssms':False},
+						'1C': {'val_funcs':[validate1C],'score_func':calculate1C,'nssms':True},
+						'2A': {'val_funcs':[validate2A],'score_func':calculate2,'nssms':True},
+						'2B': {'val_funcs':[validate2B],'score_func':calculate2,'nssms':True},
+						'3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A,'nssms':True},
+						'3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3,'nssms':True},
 					}
 
-def verifyChallenge(challenge,predfiles,specfile):
-	if challengeMapping[challenge]['spec']:
-		spec = [verify(specfile,"specification file for Challenge %s" % (challenge), challengeMapping[challenge]['spec'])]
-		if spec == [None]:
-			print "Could not read specification file. Exiting"
+def verifyChallenge(challenge,predfiles,vcf):
+	if challengeMapping[challenge]['nssms']:
+		nssms = [verify(vcf,"input VCF", parseVCF)]
+		if nssms == [None]:
+			print "Could not read input VCF. Exiting"
 			return "NA"
 	else:
-		spec = []
+		nssms = []
+
 	if len(predfiles) != len(challengeMapping[challenge]['val_funcs']):
 		print "Not enough input files for Challenge %s" % challenge
 		return "Invalid"
 
 	out = []
 	for (predfile,valfunc) in zip(predfiles,challengeMapping[challenge]['val_funcs']):
-		args = out + spec
+		args = out + nssms
 		out.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*args))
 		if out[-1] == None:
 			return "Invalid"
 	return "Valid"
 
 
-def scoreChallenge(challenge,predfiles,truthfiles,specfile):
-	if challengeMapping[challenge]['spec']:
-		spec = [verify(specfile,"specification file for Challenge %s" % (challenge), challengeMapping[challenge]['spec'])]
-		if spec == [None]:
-			print "Could not read specification file. Exiting"
-			return "NA"	
+def scoreChallenge(challenge,predfiles,truthfiles,vcf):
+	if challengeMapping[challenge]['nssms']:
+		nssms = [verify(vcf,"input VCF", parseVCF)]
+		if nssms == [None]:
+			print "Could not read input VCF. Exiting"
+			return "NA"
 	else:
-		spec=[]
+		nssms = []
 	if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
 		print "Not enough input files for Challenge %s" % challenge
 		return "NA"
@@ -348,9 +339,9 @@ def scoreChallenge(challenge,predfiles,truthfiles,specfile):
 	tout = []
 	pout = []
 	for predfile,truthfile,valfunc in zip(predfiles,truthfiles,challengeMapping[challenge]['val_funcs']):
-		targs = tout + spec
+		targs = tout + nssms
 		tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
-		pargs = pout + spec
+		pargs = pout + nssms
 		pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
 		if tout[-1] == None or pout[-1] == None:
 			return "NA"
@@ -362,16 +353,16 @@ if __name__ == '__main__':
 	parser.add_argument("challenge")
 	parser.add_argument("--predfiles",nargs="+")
 	parser.add_argument("--truthfiles",nargs="*")
-	parser.add_argument("--specfile",nargs="?")
+	parser.add_argument("--vcf")
 	parser.add_argument("outputfile")
 	parser.add_argument('-v', action='store_true', default=False)
 
 	args = parser.parse_args()
 
 	if args.v:
-		res = verifyChallenge(args.challenge,args.predfiles,args.specfile)
+		res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
 	else:
-		res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.specfile)
+		res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
 
 	with open(args.outputfile, "w") as handle:
 		jtxt = json.dumps( { args.challenge : res } )

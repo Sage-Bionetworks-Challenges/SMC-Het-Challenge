@@ -1,0 +1,7 @@
+##fileformat=VCFv4.1
+##FILTER=<ID=PASS,Description="Accept as a confident somatic mutation">
+##FORMAT=<ID=AD,Number=.,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic event">
+##INFO=<ID=VT,Number=1,Type=String,Description="Variant type, can be SNP, INS or DEL">
+#CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT  tumour
