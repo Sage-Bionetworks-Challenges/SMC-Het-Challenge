@@ -306,8 +306,9 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
                         raise Exception("Unable to find docker image for: %s" % (tool_id))
                     print "Docker Image:", docker_tag
                     docker_file = os.path.join(workdir, "docker_%s.tar" % tag_clean(docker_tag))
-                    call_docker_save(tag=docker_tag, output=docker_file)
-                    output_paths['images'].append(docker_file)
+                    if docker_file not in output_paths['images']:
+                        call_docker_save(tag=docker_tag, output=docker_file)
+                        output_paths['images'].append(docker_file)
                 else:
                     print "Skipping Tool", tool_id, r.status_code
 
