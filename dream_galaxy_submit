@@ -50,6 +50,8 @@ CONFIG_FILE = os.path.join(os.environ['HOME'], ".dreamSubmitConfig")
 EVAL_TOOL_ID = 'smc_het_eval'
 INPUT_NAMES = [ "VCF_INPUT", "CNA_INPUT" ]
 GALAXY_API_KEY_FILE = "/etc/galaxy/api.key"
+CHALLENGE_ADMIN_TEAM_ID = 3323402
+EVALUATION_QUEUE_ID = 4487063
 
 def validate_workflow(workflow):
     eval_found = False
@@ -158,8 +160,64 @@ def call_docker_save(
     if proc.returncode != 0:
         raise Exception("Call Failed: %s" % (cmd))
 
+
+def get_google_instance_type():
+    """
+    Query the `Google cloud metadata API <https://cloud.google.com/compute/docs/metadata>`_ to
+    get the instance type we're running on.
+    """
+    response = requests.get('http://metadata/computeMetadata/v1/instance/machine-type', headers={'Metadata-Flavor': 'Google'})
+    if response.status_code == 200 and '/' in response.text:
+        return response.text.rsplit('/', 1)[1]
+    else:
+        "failed to detect instance type"
+
+
+def give_synapse_permissions(syn, synapse_object, principal_id):
+    acl = syn._getACL(synapse_object)
+    acl['resourceAccess'].append({
+        'principalId': principal_id,
+        'accessType': [
+            'CREATE',
+            'READ',
+            'SEND_MESSAGE',
+            'DOWNLOAD',
+            'UPDATE',
+            'UPDATE_SUBMISSION',
+            'READ_PRIVATE_SUBMISSION']}
+    syn.store(acl)
+    return acl
+
+def find_or_add_to_synapse(paths, folder):
+    """
+    Sync a list of tools or images to a Synapse folder, checking first to ensure that no
+    File of the same name already exists.
+    :param paths: a list of file paths of tools or images to upload to Synapse
+    :param folder: the Synapse folder where the files will be stored
+    """
+    entities = []
+    for path in paths:
+        entity = None
+        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % folder):
+            if row['entity.name'] == os.path.basename(path):
+                entity = row['entity.id']
+                print "Tool previously uploaded: %s as %s" % (os.path.basename(path), entity)
+        if entity = None:
+            entity = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=False)
+        entities.append(entity)
+    return entities
+
+
 def name_clean(name):
     return re.sub(r'[^\w]', "_", name)
+
+def tag_clean(tag):
+    if tag.endswith(":latest"):
+        raise new ValueError("Docker tag %s doesn't specify an exact version. Please don't use \":latest\".")
+    elif ":" in tag:
+        return re.sub(r':', "_", tag)
+    else:
+        raise new ValueError("Docker tag %s doesn't specify a version.")
 
 def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
 
@@ -247,39 +305,27 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
                         print "Can't determine Docker image for tool: %s" % (tool_id)
                         raise Exception("Unable to find docker image for: %s" % (tool_id))
                     print "Docker Image:", docker_tag
-                    docker_file = os.path.join(workdir, "docker_%s.tar" % (tool_id))
+                    docker_file = os.path.join(workdir, "docker_%s.tar" % tag_clean(docker_tag))
                     call_docker_save(tag=docker_tag, output=docker_file)
                     output_paths['images'].append(docker_file)
                 else:
                     print "Skipping Tool", tool_id, r.status_code
 
-
-    workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
-    workflow_data = syn.store(workflow_data,createOrUpdate=False)
-
-    for tool in output_paths['tools']:
-        tool_entity_id = None
-        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (tool_folder_id)):
-            if row['entity.name'] == os.path.basename(tool):
-                tool_entity_id = row['entity.id']
-                print "Tool previously uploaded: %s as %s" % (os.path.basename(tool), tool_entity_id)
-        if tool_entity_id is None:
-            tool_data = synapseclient.File(tool, parentId=tool_folder_id)
-            tool_data = syn.store(tool_data,createOrUpdate=False)
-
-    for image in output_paths['images']:
-        image_entity_id = None
-        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (image_folder_id)):
-            if row['entity.name'] == os.path.basename(image):
-                image_entity_id = row['entity.id']
-                print "Image previously uploaded: %s as %s" % (os.path.basename(image), image_entity_id)
-        if image_entity_id is None:
-            image_data = synapseclient.File(image, parentId=image_folder_id)
-            image_data = syn.store(image_data,createOrUpdate=False)
-
-
     print output_paths
 
+    instance_type = get_google_instance_type()
+
+    workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
+    workflow_data = syn.store(workflow_data, createOrUpdate=False, instance_type=instance_type)
+
+    tool_entities = find_or_add_to_synapse(output_paths['tools'], tool_folder_id)
+    image_entities = find_or_add_to_synapse(output_paths['images'], image_folder_id)
+
+    return {
+        'paths':output_paths,
+        'workflow_entity': workflow_data,
+        'tool_entities': tool_entities,
+        'image_entities': image_entities}
 
 
 def main_submit(syn, apikey, workflow, name, team_name, project_id, workdir):
@@ -300,7 +346,14 @@ dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission"
             print "Please add --team-name"
         sys.exit(0)
 
-    main_sync(syn, apikey=apikey, workflow=workflow, name=name, team_name=team_name, project_id=project_id, workdir=workdir)
+    output = main_sync(syn, apikey=apikey, workflow=workflow, name=name, team_name=team_name, project_id=project_id, workdir=workdir)
+
+    ## When you submit, you grant permissions to the Admin team
+    give_synapse_permissions(syn, project_id, CHALLENGE_ADMIN_TEAM_ID)
+
+    print "Submitting workflow %s saved as %s for evaluation." % (name, synapseclient.utils.id_of(output['workflow_entity']))
+    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity'], name=name, teamName=team_name)
+    print "Created submission ID: %s" % submission.id
 
 
 if __name__ == "__main__":
@@ -350,6 +403,6 @@ if __name__ == "__main__":
             if k not in kwds:
                 kwds[k] = v
     if submit:
-        sys.exit(main_submit(syn, **kwds))
+        main_submit(syn, **kwds)
     else:
-        sys.exit(main_sync(syn, **kwds))
+        main_sync(syn, **kwds)
