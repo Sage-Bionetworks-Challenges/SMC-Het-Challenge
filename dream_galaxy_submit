@@ -184,7 +184,7 @@ def give_synapse_permissions(syn, synapse_object, principal_id):
             'DOWNLOAD',
             'UPDATE',
             'UPDATE_SUBMISSION',
-            'READ_PRIVATE_SUBMISSION']}
+            'READ_PRIVATE_SUBMISSION']})
     syn.store(acl)
     return acl
 
@@ -202,7 +202,7 @@ def find_or_add_to_synapse(paths, folder):
             if row['entity.name'] == os.path.basename(path):
                 entity = row['entity.id']
                 print "Tool previously uploaded: %s as %s" % (os.path.basename(path), entity)
-        if entity = None:
+        if entity is None:
             entity = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=False)
         entities.append(entity)
     return entities
@@ -213,16 +213,16 @@ def name_clean(name):
 
 def tag_clean(tag):
     if tag.endswith(":latest"):
-        raise new ValueError("Docker tag %s doesn't specify an exact version. Please don't use \":latest\".")
+        raise ValueError("Docker tag %s doesn't specify an exact version. Please don't use \":latest\"." % (tag))
     elif ":" in tag:
         return re.sub(r':', "_", tag)
     else:
-        raise new ValueError("Docker tag %s doesn't specify a version.")
+        raise ValueError("Docker tag %s doesn't specify a version." % (tag))
 
 def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
 
     name = name_clean(name)
-    print "Submitting: %s" % (name)
+    print "Downloading: %s" % (name)
 
     project = syn.get(project_id)
     image_folder_id = None
