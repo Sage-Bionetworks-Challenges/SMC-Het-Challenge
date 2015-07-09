@@ -14,14 +14,78 @@ ${challenge}
 ${outfile}
     ]]></command>
   <inputs>
-      <param name="challenge" type="select" label="Challenge">
-          <option value="1A" selected="True">1A</option>
-          <option value="2A">2A</option>
-          <option value="3A">3A</option>
-       </param>
-      <param name="predfile" type="data" format="tabular" label="Predicted File"/>
-      <param name="truthfile" type="data" format="tabular" label="Truth File"/>
-      <param name="specfile" type="data" format="tabular" label="Specfile"/>
+
+      <conditional name="cellularity">
+        <param type="select" name="submit" label="Submit Cellularity File" help="Input for Challenge 1A">
+          <option value="yes">Yes</option>
+          <option value="no" selected="True">No</option>
+        </param>
+        <when value="yes">
+          <param name="predfile" type="data" format="txt" label="Predicted Cellularity File"/>
+        </when>
+      </conditional> 
+      
+      <conditional name="population">
+        <param type="select" name="submit" label="Submit Population File" help="Input for Challenge 1B">
+          <option value="yes">Yes</option>
+          <option value="no" selected="True">No</option>
+        </param>
+        <when value="yes">
+          <param name="predfile" type="data" format="txt" label="Predicted Population File"/>
+        </when>
+      </conditional> 
+      
+      <conditional name="proportion">
+        <param type="select" name="submit" label="Submit  Proportion File" help="Input for Challenge 1C">
+          <option value="yes">Yes</option>
+          <option value="no" selected="True">No</option>
+        </param>
+        <when value="yes">
+          <param name="predfile" type="data" format="txt" label="Predicted Proportion File"/>
+        </when>
+      </conditional> 
+      
+      <conditional name="cluster_assignment">
+        <param type="select" name="submit" label="Submit Assignment File" help="Input for Challenge 2A">
+          <option value="yes">Yes</option>
+          <option value="no" selected="True">No</option>
+        </param>
+        <when value="yes">
+          <param name="predfile" type="data" format="txt" label="Cluster Assignment File"/>
+          
+          <conditional name="phylogeny">
+            <param type="select" name="submit" label="Submit Phylogeny Matrix" help="Input for Challenge 3A">
+              <option value="yes">Yes</option>
+              <option value="no" selected="True">No</option>
+            </param>
+            <when value="yes">
+              <param name="predfile" type="data" format="txt" label="Phylogeny Matrix"/>
+            </when>
+          </conditional>
+        </when>
+      </conditional> 
+
+
+      <conditional name="cocluster_assignment">
+        <param type="select" name="submit" label="Submit Co-clustering Matrix" help="Input for Challenge 2B">
+          <option value="yes">Yes</option>
+          <option value="no" selected="True">No</option>
+        </param>
+        <when value="yes">
+          <param name="predfile" type="data" format="txt" label="Co-clustering Matrix"/>
+          
+          <conditional name="ancestor">
+            <param type="select" name="submit" label="Submit Ancestor Matrix" help="Input for Challenge 3B">
+              <option value="yes">Yes</option>
+              <option value="no" selected="True">No</option>
+            </param>
+            <when value="yes">
+              <param name="predfile" type="data" format="txt" label="Ancestor Matrix"/>
+            </when>
+          </conditional>
+        </when>
+      </conditional> 
+
   </inputs>
   <outputs>
       <data name="outfile" format="txt" label="Evaluation Scores"/>
