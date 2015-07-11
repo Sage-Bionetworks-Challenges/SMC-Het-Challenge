@@ -66,7 +66,7 @@ SMCScoring.py
             <when value="yes">
               <param name="predfile" type="data" format="txt" label="Phylogeny Matrix"/>
             </when>
-          </conditional/>
+          </conditional>
         </when>
       </conditional> 
 
@@ -119,7 +119,7 @@ SMCScoring.py
 {"3B" : ["${cocluster_assignment.predfile}","${cocluster_assignment.ancestor.predfile}"]}
 #end if
 ]]></configfile>
-  </configfile>
+  </configfiles>
 
   <help><![CDATA[
       TODO: Fill in help.
