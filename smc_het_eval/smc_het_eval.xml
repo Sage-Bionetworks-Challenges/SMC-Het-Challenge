@@ -7,14 +7,19 @@
   </requirements>
   <command interpreter="python"><![CDATA[
 SMCScoring.py 
-${challenge} 
---predfiles ${predfile} 
---truthfiles ${truthfile} 
---specfile ${specfile}
-${outfile}
+--pred-config ${config}
+--sample-config ${sample}
+-o ${outfile}
     ]]></command>
   <inputs>
-
+      
+      <param name="sample" type="select" label="Sample" help="Testing Sample">
+        <options from_file="smc_samples.loc">
+          <column name="value" index="1" />
+          <column name="name" index="0" />
+        </options>
+      </param>
+      
       <conditional name="cellularity">
         <param type="select" name="submit" label="Submit Cellularity File" help="Input for Challenge 1A">
           <option value="yes">Yes</option>
@@ -61,7 +66,7 @@ ${outfile}
             <when value="yes">
               <param name="predfile" type="data" format="txt" label="Phylogeny Matrix"/>
             </when>
-          </conditional>
+          </conditional/>
         </when>
       </conditional> 
 
@@ -85,11 +90,37 @@ ${outfile}
           </conditional>
         </when>
       </conditional> 
-
   </inputs>
   <outputs>
       <data name="outfile" format="txt" label="Evaluation Scores"/>
   </outputs>
+  
+  <configfiles>
+    <configfile name="config"><![CDATA[
+#if $cellularity.submit == 'yes':
+{"1A" : "${cellularity.predfile}"}
+#end if
+#if $population.submit == 'yes':
+{"1B" : "${population.predfile}"}
+#end if
+#if $proportion.submit == 'yes':
+{"1C" : "${proportion.predfile}"}
+#end if
+#if $cluster_assignment.submit == 'yes':
+{"2A" : "${cluster_assignment.predfile}"}
+#end if
+#if $cocluster_assignment.submit == 'yes':
+{"2B" : "${cocluster_assignment.predfile}"}
+#end if
+#if $cluster_assignment.submit == 'yes' and $cluster_assignment.phylogeny.submit == 'yes':
+{"3A" : ["${cluster_assignment.predfile}","${cluster_assignment.phylogeny.predfile}"] }
+#end if
+#if $cocluster_assignment.submit == 'yes' and $cocluster_assignment.ancestor.submit == 'yes':
+{"3B" : ["${cocluster_assignment.predfile}","${cocluster_assignment.ancestor.predfile}"]}
+#end if
+]]></configfile>
+  </configfile>
+
   <help><![CDATA[
       TODO: Fill in help.
 ]]></help>

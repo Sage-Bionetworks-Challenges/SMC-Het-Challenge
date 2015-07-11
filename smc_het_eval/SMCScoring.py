@@ -350,19 +350,50 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument("challenge")
+	parser.add_argument("--pred-config", default=None)
+	parser.add_argument("--truth-config", default=None)
+	parser.add_argument("-c", "--challenge", default=None)
 	parser.add_argument("--predfiles",nargs="+")
 	parser.add_argument("--truthfiles",nargs="*")
 	parser.add_argument("--vcf")
-	parser.add_argument("outputfile")
+	parser.add_argument("-o", "--outputfile", default=None)
 	parser.add_argument('-v', action='store_true', default=False)
 
 	args = parser.parse_args()
-
-	if args.v:
-		res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
+	
+	if args.pred_config is not None and args.truth_config is not None:
+		with open(args.pred_config) as handle:
+			pred_config = {}
+			for line in handle:
+				v = json.loads(line)
+				if isinstance(v,dict):
+					pred_config = dict(pred_config **v)
+		with open(args.truth_config) as handle:
+			truth_config = {}
+			for line in handle:
+				v = json.loads(line)
+				if isinstance(v,dict):
+					truth_config = dict(truth_config **v
+		out = {}
+		for challenge in pred_config:
+			if challenge in truth_config:
+				predfile = pred_config[challenge]
+				vcf = truth_config[challenge]['vcf']
+				truthfiles = truth_config[challenge]['truth']
+				if args.v:
+					res = verifyChallenge(challenge,predfiles,vcf)
+				else:
+					res = scoreChallenge(challenge,predfiles,truthfiles,vcf)
+				out[challenge] = res
+		with open(args.outputfile, "w") as handle:
+			jtxt = json.dumps( out )
+			handle.write(jtxt)
+				
 	else:
-		res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
+		if args.v:
+			res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
+		else:
+			res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
 
 	with open(args.outputfile, "w") as handle:
 		jtxt = json.dumps( { args.challenge : res } )
