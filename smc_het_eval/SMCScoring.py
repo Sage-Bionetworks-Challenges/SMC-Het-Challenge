@@ -143,6 +143,34 @@ def validate2A(data,nssms,return_ccm=True):
 def validate2Afor3A(data,nssms):
 	return validate2A(data,nssms,False)
 
+def calculate2_quaid(pred,truth):
+	n = truth.shape[0]
+	indices = np.triu_indices(n,k=1)
+	ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices]) 
+	ones_count = np.count_nonzero(truth[indices])
+	if ones_count > 0:
+		ones_score = 1 - ones/float(ones_count)
+	else:
+		ones_score = -1
+
+	zeros = np.sum(np.abs(pred[indices] - truth[indices]) * (1 - truth[indices]))
+	zeros_count = len(truth[indices]) - ones_count
+	if zeros_count > 0:
+		zeros_score = 1 - zeros/float(zeros_count)
+	else:
+		zeros_score = -1
+
+	if ones_score == -1:
+		return zeros_score
+	elif zeros_score == -1:
+		return ones_score
+	else:
+		try:
+			return 2.0/(1.0/ones_score + 1.0/zeros_score)
+		except Warning:
+			print ones_score, zeros_score
+			return 0
+
 def calculate2(pred,truth):
 	n = truth.shape[0]
 	indices = np.triu_indices(n,k=1)
@@ -150,6 +178,35 @@ def calculate2(pred,truth):
 	res = np.sum(np.abs(pred[indices] - truth[indices])) 
 	res = res / count
 	return 1 - res
+
+def calculate2_sqrt(pred,truth):
+	n = truth.shape[0]
+	indices = np.triu_indices(n,k=1)
+	count = (n**2 - n )/2.0
+	res = np.sum(np.abs(pred[indices] - truth[indices])) 
+	res = res / count
+	return np.sqrt(1 - res)
+
+def calculate2_simpleKL(pred,truth,rnd=0.01):
+	pred = np.abs(pred - rnd)
+	n = truth.shape[0]
+	indices = np.triu_indices(n,k=1)
+	res = 0
+	for i in range(len(indices[0])):
+
+		if truth[indices[0][i],indices[1][i]]:
+			res += np.log(pred[indices[0][i],indices[1][i]])
+		else:
+			res += np.log(1-pred[indices[0][i],indices[1][i]])
+	return res
+
+def calculate2_pseudoV(pred,truth,rnd=0.01):
+	pred[pred==0] = rnd
+	truth[truth==0] = rnd
+	pred = pred / np.sum(pred,axis=1)[:,np.newaxis]
+	truth = truth / np.sum(truth,axis=1)[:,np.newaxis]
+
+	return np.sum(truth * np.log(truth/pred))
 
 def validate2B(data,nssms):
 	data = StringIO.StringIO(data)
@@ -233,9 +290,9 @@ def validate3B(data, ccm, nssms):
 	except ValueError:
 		raise ValidationError("Entry in AD matrix could not be cast as a float")
 
-	if ad.shape != ccm.shape:
+	if ad.shape != (nssms,nssms):
 		raise ValidationError("Shape of AD matrix %s is wrong.  Should be %s" % (str(ad.shape), str(ccm.shape)))
-	if not np.allclose(ad.diagonal(),np.zeros(ccm.shape[0])):
+	if not np.allclose(ad.diagonal(),np.zeros(ad.shape[0])):
 		raise ValidationError("Diagonal entries of AD matrix not 0")
 	if np.any(np.isnan(ad)):
 		raise ValidationError("AD matrix contains NaNs")
@@ -266,14 +323,31 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad):
 	res = (cc_res + ad_res + cous_res ) / count
 	return 1 - res
 
-
-def parseVCF(data):
+def parseVCFSimple(data):
 	data = data.split('\n')
 	data = [x for x in data if x != '']
 	data = [x for x in data if x[0] != '#']
 	if len(data) == 0:
 		raise ValidationError("Input VCF contains no SSMs")
-	return len(data)
+	return [[len(data)],[len(data)]]
+
+def parseVCFScoring(data):
+	data = data.split('\n')
+	data = [x for x in data if x != '']
+	data = [x for x in data if x[0] != '#']
+	if len(data) == 0:
+		raise ValidationError("Input VCF contains no SSMs")
+	total_ssms = len(data)
+	tp_ssms = len([x for x in data if x[-4:] == "True"])
+	mask = [x[-4:] == "True" for x in data]
+	mask = [i for i,x in enumerate(mask) if x]
+	return [[total_ssms],[tp_ssms],mask]
+
+def filterFPs(matrix, mask):
+	if matrix.shape[0] == matrix.shape[1]:
+		return matrix[mask,:][:,mask]
+	else:
+		return matrix[mask,:]
 
 def verify(filename,role,func,*args):
 	try:
@@ -293,23 +367,23 @@ def verify(filename,role,func,*args):
 	return pred
 
 
-challengeMapping = { 	'1A': {'val_funcs':[validate1A],'score_func':calculate1A,'nssms':False},
-						'1B': {'val_funcs':[validate1B],'score_func':calculate1B,'nssms':False},
-						'1C': {'val_funcs':[validate1C],'score_func':calculate1C,'nssms':True},
-						'2A': {'val_funcs':[validate2A],'score_func':calculate2,'nssms':True},
-						'2B': {'val_funcs':[validate2B],'score_func':calculate2,'nssms':True},
-						'3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A,'nssms':True},
-						'3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3,'nssms':True},
+challengeMapping = { 	'1A': {'val_funcs':[validate1A],'score_func':calculate1A,'vcf_func':None, 'filter_func':None},
+						'1B': {'val_funcs':[validate1B],'score_func':calculate1B,'vcf_func':None, 'filter_func':None},
+						'1C': {'val_funcs':[validate1C],'score_func':calculate1C,'vcf_func':parseVCFSimple, 'filter_func':None},
+						'2A': {'val_funcs':[validate2A],'score_func':calculate2,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
+						'2B': {'val_funcs':[validate2B],'score_func':calculate2,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
+						'3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
+						'3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
 					}
 
 def verifyChallenge(challenge,predfiles,vcf):
-	if challengeMapping[challenge]['nssms']:
-		nssms = [verify(vcf,"input VCF", parseVCF)]
-		if nssms == [None]:
+	if challengeMapping[challenge]['vcf_func']:
+		nssms = verify(vcf,"input VCF", parseVCFSimple)
+		if nssms == None:
 			print "Could not read input VCF. Exiting"
 			return "NA"
 	else:
-		nssms = []
+		nssms = [[],[]]
 
 	if len(predfiles) != len(challengeMapping[challenge]['val_funcs']):
 		print "Not enough input files for Challenge %s" % challenge
@@ -317,7 +391,7 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 	out = []
 	for (predfile,valfunc) in zip(predfiles,challengeMapping[challenge]['val_funcs']):
-		args = out + nssms
+		args = out + nssms[0]
 		out.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*args))
 		if out[-1] == None:
 			return "Invalid"
@@ -325,13 +399,13 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
-	if challengeMapping[challenge]['nssms']:
-		nssms = [verify(vcf,"input VCF", parseVCF)]
-		if nssms == [None]:
+	if challengeMapping[challenge]['vcf_func']:
+		nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
+		if nssms == None:
 			print "Could not read input VCF. Exiting"
 			return "NA"
 	else:
-		nssms = []
+		nssms = [[],[]]
 	if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
 		print "Not enough input files for Challenge %s" % challenge
 		return "NA"
@@ -339,13 +413,14 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
 	tout = []
 	pout = []
 	for predfile,truthfile,valfunc in zip(predfiles,truthfiles,challengeMapping[challenge]['val_funcs']):
-		targs = tout + nssms
+		targs = tout + nssms[1]
 		tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
-		pargs = pout + nssms
+		pargs = pout + nssms[0]
 		pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
 		if tout[-1] == None or pout[-1] == None:
 			return "NA"
-
+	if challengeMapping[challenge]['filter_func']:
+		pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
 	return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 if __name__ == '__main__':
@@ -373,7 +448,7 @@ if __name__ == '__main__':
 			for line in handle:
 				v = json.loads(line)
 				if isinstance(v,dict):
-					truth_config = dict(truth_config **v
+					truth_config = dict(truth_config **v)
 		out = {}
 		for challenge in pred_config:
 			if challenge in truth_config:
