@@ -211,6 +211,13 @@ def calculate2_pseudoV(pred,truth,rnd=0.01):
 
 	return np.sum(truth * np.log(truth/pred))
 
+def calculate2_sym_pseudoV(pred, truth, rnd=0.01):
+	pred[pred==0] = rnd
+	truth[truth==0] = rnd
+	pred = pred / np.sum(pred,axis=1)[:,np.newaxis]
+	truth = truth / np.sum(truth,axis=1)[:,np.newaxis]
+	return np.sum(truth * np.log(truth/pred)) + np.sum(pred * np.log(pred/truth))
+
 def validate2B(data,nssms):
 	data = StringIO.StringIO(data)
 	try:
