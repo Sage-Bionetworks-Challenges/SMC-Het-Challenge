@@ -172,6 +172,9 @@ def calculate2_quaid(pred,truth):
 			return 0
 
 def calculate2(pred,truth):
+	return calculate2_orig(pred,truth)
+
+def calculate2_orig(pred,truth):
 	n = truth.shape[0]
 	indices = np.triu_indices(n,k=1)
 	count = (n**2 - n )/2.0
