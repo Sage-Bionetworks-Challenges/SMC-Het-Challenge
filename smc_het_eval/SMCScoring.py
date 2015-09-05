@@ -32,7 +32,7 @@ def validate1A(data):
 		raise ValidationError("Cellularity was < 0: %f" % numeric)
 	if numeric > 1:
 		raise ValidationError("Cellularity was > 1: %f" % numeric)
-		
+
 	return numeric
 
 def calculate1A(pred,truth):
@@ -146,7 +146,7 @@ def validate2Afor3A(data,nssms):
 def calculate2_quaid(pred,truth):
 	n = truth.shape[0]
 	indices = np.triu_indices(n,k=1)
-	ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices]) 
+	ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices])
 	ones_count = np.count_nonzero(truth[indices])
 	if ones_count > 0:
 		ones_score = 1 - ones/float(ones_count)
@@ -178,7 +178,7 @@ def calculate2_orig(pred,truth):
 	n = truth.shape[0]
 	indices = np.triu_indices(n,k=1)
 	count = (n**2 - n )/2.0
-	res = np.sum(np.abs(pred[indices] - truth[indices])) 
+	res = np.sum(np.abs(pred[indices] - truth[indices]))
 	res = res / count
 	return 1 - res
 
@@ -186,7 +186,7 @@ def calculate2_sqrt(pred,truth):
 	n = truth.shape[0]
 	indices = np.triu_indices(n,k=1)
 	count = (n**2 - n )/2.0
-	res = np.sum(np.abs(pred[indices] - truth[indices])) 
+	res = np.sum(np.abs(pred[indices] - truth[indices]))
 	res = res / count
 	return np.sqrt(1 - res)
 
@@ -258,7 +258,7 @@ def validate3A(data, cas, nssms):
 			data[i][1] = int(data[i][1])
 		except ValueError:
 			raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
-	
+
 	if [x[0] for x in data] != range(1,predK+1):
 		raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
 
@@ -266,7 +266,7 @@ def validate3A(data, cas, nssms):
 		if data[i][1] not in set(range(predK+1)):
 			raise ValidationError("Parent node label in line %d is not valid." % (i+1))
 
-	# Form decendent of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key. 
+	# Form decendent of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
 	decendent_of = dict()
 	for i in range(predK+1):
 		decendent_of[i] = []
@@ -435,17 +435,15 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--pred-config", default=None)
-	parser.add_argument("--truth-config", default=None)
-	parser.add_argument("-c", "--challenge", default=None)
+	parser.add_argument("challenge")
 	parser.add_argument("--predfiles",nargs="+")
 	parser.add_argument("--truthfiles",nargs="*")
 	parser.add_argument("--vcf")
-	parser.add_argument("-o", "--outputfile", default=None)
+	parser.add_argument("outputfile")
 	parser.add_argument('-v', action='store_true', default=False)
 
 	args = parser.parse_args()
-	
+
 	if args.pred_config is not None and args.truth_config is not None:
 		with open(args.pred_config) as handle:
 			pred_config = {}
@@ -473,13 +471,12 @@ if __name__ == '__main__':
 		with open(args.outputfile, "w") as handle:
 			jtxt = json.dumps( out )
 			handle.write(jtxt)
-				
 	else:
 		if args.v:
 			res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
 		else:
 			res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
 
-	with open(args.outputfile, "w") as handle:
-		jtxt = json.dumps( { args.challenge : res } )
-		handle.write(jtxt)
+		with open(args.outputfile, "w") as handle:
+			jtxt = json.dumps( { args.challenge : res } )
+			handle.write(jtxt)
