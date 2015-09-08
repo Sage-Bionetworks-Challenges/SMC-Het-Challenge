@@ -6,6 +6,8 @@ import json
 import argparse
 import StringIO
 import scipy.stats
+import sklearn.metrics as mt
+
 
 class ValidationError(Exception):
 	def __init__(self, value):
@@ -173,7 +175,7 @@ def calculate2_quaid(pred,truth):
 			return 0
 
 def calculate2(pred,truth):
-	return calculate2_pearson(pred,truth)
+	return calculate2_mcc(pred,truth)
 
 def calculate2_orig(pred,truth):
 	n = truth.shape[0]
@@ -223,6 +225,25 @@ def calculate2_pearson(pred, truth):
 	n = truth.shape[0]
 	inds = np.triu_indices(n,k=1)
 	return scipy.stats.pearsonr(pred[inds],truth[inds])[0]
+
+def calculate2_aupr(pred,truth):
+	n = truth.shape[0]
+	inds = np.triu_indices(n,k=1)
+	precision, recall, thresholds = mt.precision_recall_curve(truth[inds],pred[inds])
+	aucpr = mt.auc(recall, precision)
+	return aucpr
+
+def calculate2_mcc(pred,truth):
+	n = truth.shape[0]
+	#inds = np.triu_indices(n,k=1)
+	#truth = truth[inds]
+	#pred = pred[inds]
+	tp = float(sum(pred[truth==1] == 1))
+	tn = float(sum(pred[truth==0] == 0))
+	fp = float(sum(pred[truth==0] == 1))
+	fn = float(sum(pred[truth==1] == 0))
+	print tp,tn,fp,fn
+	return (tp*tn - fp*fn)/np.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
 
 def validate2B(data,nssms):
 	data = StringIO.StringIO(data)
