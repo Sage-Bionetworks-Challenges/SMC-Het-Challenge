@@ -1,4 +1,8 @@
 library(ggplot2)
+
+# Change the working directory so that it outputs in a seperate folder
+setwd('./scoring_metric_data')
+
 da = read.csv("scoring1A_behavior.tsv",sep="\t",header=FALSE)
 colnames(da) = c("Real","Pred","Error")
 png(file="1A.png")
@@ -51,11 +55,20 @@ dev.off()
 
 d = read.csv(file="scoring2A_cases.tsv", sep="\t",header=FALSE)
 colnames(d) = c("Case","Metric")
-png(file="2A_Cases.png")
+png(file="2A_Cases_sym.png")
 ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
 geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
 theme(legend.position="none") + ylab("2 Metric") +
-xlab("Case") + ggtitle("2A Cases") + coord_flip()
+xlab("Case") + ggtitle("2A Cases - Symmetric Pseudo V") + coord_flip(ylim=c(0,1500))
+dev.off()
+
+d = read.csv(file="scoring2A_big_cases.tsv", sep="\t",header=FALSE)
+colnames(d) = c("Case","Metric")
+png(file="2A_Big_Cases.png")
+ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+  theme(legend.position="none") + ylab("2 Metric") +
+  xlab("Case") + ggtitle("2A Cases with 10 Clusters - Symmetric Pseudo V") + coord_flip(ylim=c(0,1500))
 dev.off()
 
 d = read.csv("scoring2A_random_reassignment.tsv",sep="\t",header=FALSE)
@@ -86,4 +99,31 @@ ggplot(d, aes(x=as.ordered(Error), y=as.numeric(Metric))) +
 stat_summary(fun.y=median, fun.ymin=median, fun.ymax=median, geom="crossbar", width=0.7) +
 theme(legend.position="none") + xlab("Concentration Parameter") + ylab("2 Metric") + 
 ggtitle("2B Beta Noise")
+dev.off()
+
+d = read.csv(file="scoring3A_split_cases.tsv", sep="\t",header=FALSE)
+colnames(d) = c("Case","Metric")
+png(file="3A_Split_Cases.png")
+ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+  theme(legend.position="none") + ylab("3 Metric") +
+  xlab("Case") + ggtitle("3A Split Cases") + coord_flip(ylim=c(0.8,1))
+dev.off()
+
+d = read.csv(file="scoring3A_merge_cases.tsv", sep="\t",header=FALSE)
+colnames(d) = c("Case","Metric")
+png(file="3A_Merge_Cases.png")
+ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+  theme(legend.position="none") + ylab("3 Metric") +
+  xlab("Case") + ggtitle("3A Merge Cases") + coord_flip(ylim=c(0.8,1))
+dev.off()
+
+d = read.csv(file="scoring3A_parent_cases.tsv", sep="\t",header=FALSE)
+colnames(d) = c("Case","Metric")
+png(file="3A_Parent_Cases.png")
+ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+  theme(legend.position="none") + ylab("3 Metric") +
+  xlab("Case") + ggtitle("3A Incorrect Parent Cases") + coord_flip(ylim=c(0.8,1))
 dev.off()
