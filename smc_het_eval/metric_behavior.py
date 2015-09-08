@@ -605,6 +605,61 @@ def scoring3A_behavior():
     f.write('\n'.join(res_parent))
     f.close()
     
+    # Other Issues
+    res_other = []
+    
+    # OneCluster: everything is in one big cluster
+    # Incorrect Phylogeny Tree:
+    #    [1]
+    res_other.append(["OneCluster", calculate3(np.ones(t_ccm.shape),np.zeros(t_ad.shape),t_ccm,t_ad)])
+    
+    # NClustersOneLineage: everything in it's own cluster, all in one long lineage
+    # Incorrect Phylogeny Tree:
+    #  [1]
+    #   |
+    #  [2]
+    #  ...
+    #   |
+    # [600]
+    res_other.append(["NClusterOneLineage", calculate3(np.identity(t_ccm.shape[0]),np.triu(np.ones(t_ad.shape), k=1),t_ccm,t_ad)])
+    
+    # NClustersTwoLineages: everything in it's own cluster, split into two germlines
+    # Incorrect Phylogeny Tree:
+    #      [1]
+    #   |      |
+    #  [2]   [302]
+    #  ...    ...
+    #   |      |
+    # [300]  [600]
+    #   |
+    # [301]
+    ad = np.triu(np.ones(t_ad.shape), k=1)
+    ad[2:302,302:] = 0
+    res_other.append(["NClusterTwoLineages", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad)])
+    
+    # NClustersCorrectLineage: everything in it's own cluster, but with
+    # the same structure as the true matrix
+    # Incorrect Phylogeny Tree:
+    #         [1]
+    #         ...
+    #          |
+    #        [100] 
+    #     |         |
+    #   [101]     [201]
+    #    ...       ...
+    #     |         |
+    #   [200]     [300]
+    #  |      |     |
+    #[301]  [401] [501]
+    # ...    ...   ...
+    #  |      |     |
+    #[400]  [500] [600]
+    ad = np.triu(np.ones(t_ad.shape), k=1)
+    ad[100:200,range(200,300)+range(500,600)] = 0 # equivalent of cluster 2 from true AD matrix
+    ad[200:300,300:500] = 0 # cluster 3 from true AD matrix
+    ad[300:400,400:] = 0 # cluster 4 from true AD matrix
+    ad[400:500,500:600] = 0 # cluster 5 from true AD matrix
+    res_other.append(["NClusterCorrectLineage", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad)])
     
 
 if __name__ == '__main__':
