@@ -5,6 +5,7 @@ import sys
 import json
 import argparse
 import StringIO
+import scipy.stats
 
 class ValidationError(Exception):
 	def __init__(self, value):
@@ -172,7 +173,7 @@ def calculate2_quaid(pred,truth):
 			return 0
 
 def calculate2(pred,truth):
-	return calculate2_orig(pred,truth)
+	return calculate2_pearson(pred,truth)
 
 def calculate2_orig(pred,truth):
 	n = truth.shape[0]
@@ -217,6 +218,11 @@ def calculate2_sym_pseudoV(pred, truth, rnd=0.01):
 	pred = pred / np.sum(pred,axis=1)[:,np.newaxis]
 	truth = truth / np.sum(truth,axis=1)[:,np.newaxis]
 	return np.sum(truth * np.log(truth/pred)) + np.sum(pred * np.log(pred/truth))
+
+def calculate2_pearson(pred, truth):
+	n = truth.shape[0]
+	inds = np.triu_indices(n,k=1)
+	return scipy.stats.pearsonr(pred[inds],truth[inds])[0]
 
 def validate2B(data,nssms):
 	data = StringIO.StringIO(data)
