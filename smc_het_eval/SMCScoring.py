@@ -175,7 +175,7 @@ def calculate2_quaid(pred,truth):
 			return 0
 
 def calculate2(pred,truth):
-	return calculate2_mcc(pred,truth)
+	return calculate2_orig(pred,truth)
 
 def calculate2_orig(pred,truth):
 	n = truth.shape[0]
