@@ -661,6 +661,164 @@ def scoring3A_behavior():
     ad[400:500,500:600] = 0 # cluster 5 from true AD matrix
     res_other.append(["NClusterCorrectLineage", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad)])
     
+    # SmallExtraNewBot: small extra cluster with some mutations from each cluster
+    # new cluster is in a new bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |      |
+    #     [2]    [3]
+    #    |   |    |
+    #   [4] [5]  [6]
+    #    |
+    #  [7*]
+    clusters = np.zeros((600,7))
+    clusters[:,:-1] = np.copy(t_clusters)
+    for i in range(0,6):
+        clusters[100*i,i] = 0
+        clusters[100*i,6] = 1
+    ccm = np.dot(clusters,clusters.T)
+    
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i] = 0
+        ad[range(1,100)+range(101,200)+range(301,400),100*i] = 1
+        ad[100*i,:] = 0
+    res_other.append(["SmallExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # SmallExtraCurBot: small extra cluster with some mutations from each cluster
+    # new cluster is in the current bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |       |
+    #     [2]     [3]
+    #    |   |   |   |
+    #   [4] [5] [6] [7*]
+
+    # NOTE: co-clustering matrix does not change for any of the different small
+    # extra cluster instances, just the AD matrix    
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i] = 0
+        ad[range(1,100)+range(201,300),100*i] = 1
+        ad[100*i,:] = 0
+    res_other.append(["SmallExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # SmallExtraMid: small extra cluster with some mutations from each cluster
+    # new cluster is in the middle level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #           [1]
+    #      |     |   |
+    #     [2]   [3] [7*]
+    #    |   |   |
+    #   [4] [5] [6]   
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i] = 0
+        ad[range(1,100),100*i] = 1
+        ad[100*i,:] = 0
+    res_other.append(["SmallExtraMid", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # SmallExtraTop: small extra cluster with some mutations from each cluster
+    # new cluster is in a new top level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [7*]
+    #         |
+    #        [1]
+    #      |     |
+    #     [2]   [3] 
+    #    |   |   |
+    #   [4] [5] [6]   
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i] = 0
+        ad[100*i,range(1,100)+range(101,200)+range(201,300)+range(301,400)+range(401,500)+range(501,600)] = 1
+    res_other.append(["SmallExtraTop", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraNewBot: big extra cluster with some mutations from each cluster
+    # new cluster is in a new bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |      |
+    #     [2]    [3]
+    #    |   |    |
+    #   [4] [5]  [6]
+    #    |
+    #  [7*]
+    clusters = np.zeros((600,7))
+    clusters[:,:-1] = np.copy(t_clusters)
+    for i in range(0,6):
+        clusters[100*i:100*i+15,i] = 0
+        clusters[100*i:100*i+15,6] = 1
+    ccm = np.dot(clusters,clusters.T)
+    
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[range(15,100)+range(115,200)+range(315,400),100*i:100*i+15] = 1
+        ad[100*i:100*i+15,:] = 0
+    res_other.append(["BigExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraCurBot: small extra cluster with some mutations from each cluster
+    # new cluster is in the current bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |       |
+    #     [2]     [3]
+    #    |   |   |   |
+    #   [4] [5] [6] [7*]
+
+    # NOTE: co-clustering matrix does not change for any of the different small
+    # extra cluster instances, just the AD matrix    
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[range(15,100)+range(215,300),100*i:100*i+15] = 1
+        ad[100*i:100*i+15,:] = 0
+    res_other.append(["BigExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraMid: small extra cluster with some mutations from each cluster
+    # new cluster is in the middle level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #           [1]
+    #      |     |   |
+    #     [2]   [3] [7*]
+    #    |   |   |
+    #   [4] [5] [6]   
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[range(15,100),100*i:100*i+15] = 1
+        ad[100*i:100*i+15,:] = 0
+    res_other.append(["BigExtraMid", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraTop: small extra cluster with some mutations from each cluster
+    # new cluster is in a new top level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [7*]
+    #         |
+    #        [1]
+    #      |     |
+    #     [2]   [3] 
+    #    |   |   |
+    #   [4] [5] [6]   
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[100*i:100*i+15,range(15,100)+range(115,200)+range(215,300)+range(315,400)+range(415,500)+range(515,600)] = 1
+    res_other.append(["BigExtraTop", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    res_other = [map(str,x) for x in res_other]
+    res_other = ['\t'.join(x) for x in res_other]
+    f = open('scoring_metric_data/scoring3A_other_cases.tsv', 'w')
+    f.write('\n'.join(res_other))
+    f.close()
+    
+    res = res_split + res_merge + res_parent + res_other
+    f = open('scoring_metric_data/scoring3A_all_cases.tsv', 'w')
+    f.write('\n'.join(res))
+    f.close()
+    
+    
 
 if __name__ == '__main__':
     scoring1A_behavior()

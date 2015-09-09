@@ -127,3 +127,21 @@ ggplot(d,aes(y=Metric,x=as.factor(Case))) +
   theme(legend.position="none") + ylab("3 Metric") +
   xlab("Case") + ggtitle("3A Incorrect Parent Cases") + coord_flip(ylim=c(0.8,1))
 dev.off()
+
+d = read.csv(file="scoring3A_other_cases.tsv", sep="\t",header=FALSE)
+colnames(d) = c("Case","Metric")
+png(file="3A_Other_Cases.png")
+ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+  theme(legend.position="none") + ylab("3 Metric") +
+  xlab("Case") + ggtitle("3A Other Cases - Not Merge, Split or Incorrect Parent") + coord_flip(ylim=c(0.75,1))
+dev.off()
+
+d = read.csv(file="scoring3A_all_cases.tsv", sep="\t",header=FALSE)
+colnames(d) = c("Case","Metric")
+png(file="3A_All_Cases.png")
+ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+  theme(legend.position="none") + ylab("3 Metric") +
+  xlab("Case") + ggtitle("3A All Cases") + coord_flip(ylim=c(0.75,1))
+dev.off()
