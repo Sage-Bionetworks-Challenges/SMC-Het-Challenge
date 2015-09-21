@@ -32,7 +32,9 @@ sim.params = c("K.u", "K.n", "epsilon1", "epsilon2")
 
 #### HELPER FUNCTIONS ########################################
 
-#### assign.useful ##########################################
+#### Data Creation Helper Functions ##########################
+
+#### assign.useful ###########################################
 # Assign elements from classes to useful clusters
 #
 # INPUT
@@ -115,57 +117,7 @@ assign.noise.help <- function(class.elem, toassign){
   return(class.elem)
 }
 
-#### get.param.str #############################################
-# Take in a vector of parameter values, some of which can be NAs
-# and return a string with the values for the non-NA parameters
-#
-# INPUT:
-#     param.vals - vector of length 4 of parameter values, 
-#         some of which can be NA. If none is specified take the
-#         current simulation parameter values
-# OTUPUT:
-#     str - formatted string with non-NA param values
-get.param.str <- function(param.vals=NULL){
-  if(is.null(param.vals)){
-    param.vals = c(K.u, K.n, epsilon1, epsilon2)
-  }
-  if(length(param.vals) != length(sim.params)){
-    stop("Vector of parameter values is of the wrong length")
-  }
-  str <- paste(sim.params, param.vals, sep="=", collapse="_")
-  return(str)
-}
-
-
-#### evaluate #################################################
-# Evaluate the clustering assignment given using each metric.
-# Returns a vector with the results from each clustering metric.
-#
-# INPUT:
-# data - clustering assignment data - from generate.data()
-# title - optional values for the title of the current simulation
-# OUTPUT:
-#  sim.res - vector with one entry for each defined clustering
-#     metric that contains the result of evaluating the clustering
-#     assignment using that metric
-evaluate <- function(data, title=""){
-  pv <- pseudo.v.metric(data,0.01)
-  sim.res <- c(combinatorial.metric(1,1,data), 
-               combinatorial.metric(2,1,data), 
-               1 - (pv$normal / 4000), # scale these so that they can be compared to other metrics
-               1 - (pv$sym / 4000))
-  sim.names <- c("Combinatorial.Equal.Weight", 
-                 "Combinatorial.Unequal.Weight", 
-                 "Pseudo.V", 
-                 "Pseudo.V.Sym")
-  if(title != ""){
-    sim.res <- c(title, sim.res)
-    names(sim.res) <- c("Name", sim.names)
-  } else{
-    names(sim.res) <- sim.names
-  }
-  return(sim.res)
-}
+#### Metric Helper Functions ####################################
 
 #### get.ccm ####################################################
 # Calculate the true and predicted Co-clustering matrices given 
@@ -175,7 +127,7 @@ evaluate <- function(data, title=""){
 # INPUT:
 #     data - data from the "create.data" function for a given
 #         parameter setting
-# OUTPUT:
+# OUTPUT (list of values):
 #     ccm.t - the true (classes) co-clustering matrix
 #     ccm.p - the predicted (clusters) co-clustering matrix
 get.ccm <- function(data){
@@ -214,7 +166,146 @@ get.ccm <- function(data){
   return(list(ccm.t=ccm.t, ccm.p=ccm.p))
 }
 
+#### tp #################################################
+# Returns the number of True Positives for the given clustering 
+# assignment
+#
+# INPUT:
+# data - matrix of size (K.u+K.n x C) that gives the number of
+#     elements of each class that are assigned to each cluster
+# OUTPUT:
+# tp - # of True Positives
+tp <- function(data){
+  n.elem <- sum(data)
+  # number of pairs of elements that are correctly assigned
+  # to the same cluster
+  tp <- (sum(apply(data, c(1,2), function(x){x*(x-1)})) / 2) + n.elem
+  
+  return(tp)
+}
 
+#### fp #################################################
+# Returns the number of False Positives for the given clustering 
+# assignment
+#
+# INPUT:
+# data - matrix of size (K.u+K.n x C) that gives the number of
+#     elements of each class that are assigned to each cluster
+# OUTPUT:
+# fp - # of False Positives
+fp <- function(data){
+  # find the total number of pairs of elements that are clustered together
+  total.pos <- apply(data, 1, sum)
+  #total.pos <- total.pos * (total.pos-1)
+  total.pos <- sum(total.pos^2)
+  
+  fp <- total.pos - tp(data)
+  return(fp)
+}
+
+#### tn #################################################
+# Returns the number of True Negatives for the given clustering 
+# assignment
+#
+# INPUT:
+# data - matrix of size (K.u+K.n x C) that gives the number of
+#     elements of each class that are assigned to each cluster
+# OUTPUT:
+# tn - # of True Negatives
+tn <- function(data){
+  n.elem <- sum(data) # total number of elements
+  # find the total number of pairs of elements that are not clustered together
+  total.neg <- apply(data, 1, sum)
+  total.neg <- total.neg * (n.elem - total.neg)
+  total.neg <- sum(total.neg)
+  
+  tn <- total.neg - fn(data)
+  return(tn)
+}
+
+#### fn  ##################################################
+# Returns the number of False Negatives for the given clustering 
+# assignment
+#
+# INPUT:
+# data - matrix of size (K.u+K.n x C) that gives the number of
+#     elements of each class that are assigned to each cluster
+# OUTPUT:
+# fn - number of True Negatives
+fn <- function(data){
+  # number of pairs of elements that are incorrectly assigned
+  # to the same clusters
+  fn <- sum(apply(data, 1, fn.help)) / 2
+  return(fn)
+}
+
+# Takes in a row vector associated with a cluster and returns the
+# number of False Negatives associated with that cluster
+fn.help <- function(row){
+  #number of elements in the given cluster
+  n.cluster <- sum(row)
+  # returns (elements both in the class and cluster) * [(total # elements) 
+  #         - (# elements in the cluster) - (# elements in the class outside the cluster)]
+  fn <- sum(sapply(row,function(x){x * (n.cluster-x)}))
+  return(fn)
+}
+
+#### tpr  ###############################################
+# Returns the True Positive Rate for the given clustering 
+# assignment
+#
+# INPUT:
+# data - matrix of size (K.u+K.n x C) that gives the number of
+#     elements of each class that are assigned to each cluster
+# OUTPUT:
+# tpr - True Positive Rate
+
+tpr <- function(data){
+  # NOTE: notation: lower case => local variable
+  c <- dim(data)[[2]]
+  n.c <- sum(data[,1])
+  
+  # number of pairs of elements that should be in the 
+  # same cluster
+  tp.expected <- (n.c*(n.c-1)*c) / 2
+  tpr <- tp(data) / tp.expected
+  return(tpr)
+}
+
+#### tnr  ###############################################
+# Returns the True Negative Rate for the given clustering 
+# assignment
+#
+# INPUT:
+# data - matrix of size (K.u+K.n x C) that gives the number of
+#     elements of each class that are assigned to each cluster
+# OUTPUT:
+# tnr - True Negative Rate
+tnr <- function(data){
+  # NOTE: notation: lower case => local variable
+  c <- dim(data)[[2]]
+  n.c <- sum(data[,1])
+  
+  # number of pairs of elements that should be assigned to
+  # different clusters
+  tn.expected <- (n.c * (n.c * (c-1)) * c) / 2
+  tnr <- 1 - (fn(data) / tn.expected)
+  return(tnr)
+}
+
+test.helper <- function(data){
+  res <- c(tp(data), tn(data), fp(data), fn(data))
+  names <- c("True Positive", "True Negative", "False Positive", "False Negative")
+  
+  print(paste(names, "=", res, sep=" "))
+  
+  n.elem <- sum(data)
+  
+  print(paste("Total is:", sum(res)))
+  print(paste("Total should be:", n.elem^2))
+}
+
+#### Data Output Helper Functions ###############################
 
 #### print.sim ##################################################
 # Print the details of the current simulation
@@ -228,6 +319,61 @@ print.sim <- function(){
                    "\n# of elements in each class:", n.C,
                    "\n# of simulation iterations:", n.iter,
                    sep="\t"))
+}
+
+#### get.param.str #############################################
+# Take in a vector of parameter values, some of which can be NAs
+# and return a string with the values for the non-NA parameters
+#
+# INPUT:
+#     param.vals - vector of length 4 of parameter values, 
+#         some of which can be NA. If none is specified take the
+#         current simulation parameter values
+# OTUPUT:
+#     str - formatted string with non-NA param values
+get.param.str <- function(param.vals=NULL){
+  if(is.null(param.vals)){
+    param.vals = c(K.u, K.n, epsilon1, epsilon2)
+  }
+  if(length(param.vals) != length(sim.params)){
+    stop("Vector of parameter values is of the wrong length")
+  }
+  str <- paste(sim.params, param.vals, sep="=", collapse="_")
+  return(str)
+}
+
+#### evaluate #################################################
+# Evaluate the clustering assignment given using each metric.
+# Returns a vector with the results from each clustering metric.
+#
+# INPUT:
+# data - clustering assignment data - from generate.data()
+# title - optional values for the title of the current simulation
+# OUTPUT:
+#  sim.res - vector with one entry for each defined clustering
+#     metric that contains the result of evaluating the clustering
+#     assignment using that metric
+evaluate <- function(data, title=""){
+  pv <- pseudo.v.metric(data,0.01)
+  sim.res <- c(combinatorial.metric(1,1,data), 
+               combinatorial.metric(2,1,data), 
+               1 - (pv$normal / 4000), # scale these so that they can be compared to other metrics
+               1 - (pv$sym / 4000),
+               mcc.metric(data),
+               pearson.metric(data))
+  sim.names <- c("Combinatorial.Equal.Weight", 
+                 "Combinatorial.Unequal.Weight", 
+                 "Pseudo.V", 
+                 "Pseudo.V.Sym",
+                 "MCC",
+                 "Pearson")
+  if(title != ""){
+    sim.res <- c(title, sim.res)
+    names(sim.res) <- c("Name", sim.names)
+  } else{
+    names(sim.res) <- sim.names
+  }
+  return(sim.res)
 }
 
 #### SIMLUATION DEFINITION ####################################
@@ -790,6 +936,42 @@ plot.sim.batch <- function(res, diff){
 
 #### EVALUATION METRICS #####################################
 
+#### pearson.metric #########################################
+# Evaluates the clustering assignment based on the pearson measure
+#
+# INPUT:
+#   data - matrix of size (K.u+K.n x C) that gives the number of
+#       elements of each class that are assigned to each cluster
+# OTUPUT:
+#   score - score for the clustering assignment, higher is worse
+pearson.metric <- function(data){
+  ccms <- get.ccm(data) # co-clustering matrices, both true and predicted
+  ccm.t <- ccms$ccm.t
+  ccm.p <- ccms$ccm.p
+  
+  uppertri <- upper.tri(ccm.t)
+  
+  return(cor(ccm.t[uppertri], ccm.p[uppertri], method="pearson"))
+}
+
+#### mcc.metric #############################################
+# Evaluates the clustering assignment based on the MCC measure
+#
+# INPUT:
+#   data - matrix of size (K.u+K.n x C) that gives the number of
+#       elements of each class that are assigned to each cluster
+# OTUPUT:
+#   score - score for the clustering assignment, higher is worse
+mcc.metric <- function(data){
+  # Find True/False Negatives/Positives
+  tp <- tp(data)
+  tn <- tn(data)
+  fp <- fp(data)
+  fn <- fn(data)
+  
+  return((tp*tn - fp*fn)/sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn)))
+}
+
 #### pseudo.v.metric ########################################
 # Evaluates the clustering assingment based on the pseudo 
 # v-measure, using the K-L divergence between the true matrix
@@ -809,14 +991,14 @@ plot.sim.batch <- function(res, diff){
 # OTUPUT:
 #   score - score for the clustering assignment, higher is worse
 pseudo.v.metric <- function(data, epsilon, version=c("normal","sym")){
-  ccms <- get.ccm(data)
+  ccms <- get.ccm(data) # co-clustering matrices, both true and predicted
   
   # add epsilon to everything, to ensure no zero values
   if(output){
     print("Replacing zeros...")
   }
-  ccm.t <- ccms[[1]] + epsilon
-  ccm.p <- ccms[[2]] + epsilon
+  ccm.t <- ccms$ccm.t + epsilon
+  ccm.p <- ccms$ccm.p + epsilon
   
   
   
@@ -880,66 +1062,6 @@ combinatorial.metric <- function(t, f, data){
   return((t * tpr(data) + f * tnr(data)) / (t + f))
 }
 
-#### tpr  ###############################################
-# Returns the True Positive Rate for the given clustering 
-# assignment
-#
-# INPUT:
-# data - matrix of size (K.u+K.n x C) that gives the number of
-#     elements of each class that are assigned to each cluster
-# OUTPUT:
-# tpr - True Positive Rate
 
-tpr <- function(data){
-  # NOTE: notation: lower case => local variable
-  c <- dim(data)[[2]]
-  n.c <- sum(data[,1])
-  
-  # number of pairs of elements that are correctly assigned
-  # to the same cluster
-  tp <- sum(apply(data, c(1,2), function(x){x*(x-1)})) / 2
-  # number of pairs of elements that should be in the 
-  # same cluster
-  tp.total <- (n.c*(n.c-1)*c) / 2
-  tpr <- tp / tp.total
-  return(tpr)
-}
 
-#### tnr  ###############################################
-# Returns the True Negative Rate for the given clustering 
-# assignment
-#
-# INPUT:
-# data - matrix of size (K.u+K.n x C) that gives the number of
-#     elements of each class that are assigned to each cluster
-# OUTPUT:
-# tnr - True Negative Rate
 
-tnr <- function(data){
-  # NOTE: notation: lower case => local variable
-  c <- dim(data)[[2]]
-  n.c <- sum(data[,1])
-  
-  # number of pairs of elements that are incorrectly assigned
-  # to the same clusters
-  fn <- sum(apply(data, 1, tn.help)) / 2
-  # number of pairs of elements that should be assigned to
-  # different clusters
-  tn.total <- (n.c * (n.c * (c-1)) * c) / 2
-  tnr <- 1 - (fn / tn.total)
-  return(tnr)
-}
-
-# INPUT:
-# row - vector of length C that gives the number of
-#     elements of each class that are assigned to the given cluster
-# OUTPUT:
-# fn - False Negatives for the given cluster
-fn.help <- function(row){
-  #number of elements in the given cluster
-  n.cluster <- sum(row)
-  # returns (elements both in the class and cluster) * [(total # elements) 
-  #         - (# elements in the cluster) - (# elements in the class outside the cluster)]
-  fn <- sum(sapply(row,function(x){x * (n.cluster-x)}))
-  return(fn)
-}
