@@ -7,6 +7,7 @@ import argparse
 import StringIO
 import scipy.stats
 import sklearn.metrics as mt
+import copy as cp
 
 
 class ValidationError(Exception):
@@ -351,6 +352,9 @@ def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
     return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,np.dot(truth_ca,truth_ca.T),truth_ad)
 
 def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad):
+    return calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad)
+
+def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad):
     n = truth_ccm.shape[0]
     indices = np.triu_indices(n,k=1)
     cc_res = np.sum(np.abs(pred_ccm[indices] - truth_ccm[indices])*truth_ccm[indices])
@@ -361,6 +365,70 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad):
     count = (n**2 - n )*2.0
     res = (cc_res + ad_res + cous_res ) / count
     return 1 - res
+
+def calculate3_orig_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad):
+    n = truth_ccm.shape[0]
+    indices = np.triu_indices(n,k=1)
+    ad_res = np.sum(np.abs(pred_ad.flatten() - truth_ad.flatten()) * truth_ad.flatten())
+    truth_cous = 1 - truth_ccm[indices] - truth_ad[indices] - truth_ad.T[indices]
+    pred_cous = 1 - pred_ccm[indices] - pred_ad[indices] - pred_ad.T[indices]
+    cous_res = np.sum(np.abs(pred_cous - truth_cous) * truth_cous)
+    count = (n**2 - n )*2.0 - np.sum(truth_ccm)
+    res = (ad_res + cous_res ) / count
+    return 1 - res
+    
+# Use the pseudoV measure 
+def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01):
+    # Get the cousin matrices
+    truth_cous = 1 - truth_ccm - truth_ad - truth_ad.T
+    pred_cous = 1 - pred_ccm - pred_ad - pred_ad.T
+    if(np.amax(truth_cous) > 1 or np.amin(truth_cous) < 0):
+        print("Cousin Truth is wrong...")
+    if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
+        print("Cousin Predicted is wrong...")
+        print "CCM" 
+        print pred_ccm
+        print "AD"
+        print pred_ad
+        print "Cousin"
+        print pred_cous
+        
+        
+    cpred_ccm = cp.deepcopy(pred_ccm)
+    ctruth_ccm = cp.deepcopy(truth_ccm)
+    cpred_ad = cp.deepcopy(pred_ad)
+    ctruth_ad = cp.deepcopy(truth_ad)
+    
+    # Calculate the pseudo V measure for each
+    cc_res = calculate2_pseudoV(cpred_ccm, ctruth_ccm, rnd)
+    ad_res = calculate2_pseudoV(cpred_ad, ctruth_ad, rnd)
+    cous_res = calculate2_pseudoV(pred_cous, truth_cous, rnd)
+    
+    res =  (cc_res + ad_res + cous_res )
+    print("Pseudo V for Matrices\nCC: %s, AD: %s, Cousin: %s" % (str(cc_res), str(ad_res),str(cous_res)))
+    return res
+    
+# Use the pseudoV measure 
+def calculate3_pseudoV_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01):
+    # Get the cousin matrices
+    truth_cous = 1 - truth_ccm - truth_ad - truth_ad.T
+    pred_cous = 1 - pred_ccm - pred_ad - pred_ad.T
+    if(np.amax(truth_cous) > 1 or np.amin(truth_cous) < 0):
+        print("Cousin Truth is wrong...")
+    if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
+        print("Cousin Predicted is wrong...")
+        
+    cpred_ad = cp.deepcopy(pred_ad)
+    ctruth_ad = cp.deepcopy(truth_ad)
+    
+    # Calculate the pseudo V measure for each
+    ad_res = calculate2_pseudoV(cpred_ad, ctruth_ad, rnd)
+    cous_res = calculate2_pseudoV(pred_cous, truth_cous, rnd)
+    
+    res =  (ad_res + cous_res )
+    print("Pseudo V for Matrices\nAD: %s, Cousin: %s" % (str(ad_res),str(cous_res)))
+    return res
+    
 
 def parseVCFSimple(data):
     data = data.split('\n')

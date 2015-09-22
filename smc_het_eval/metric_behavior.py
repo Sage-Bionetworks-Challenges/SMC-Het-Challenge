@@ -342,7 +342,9 @@ def scoring2B_behavior():
     f.close()  
     
 def scoring3A_behavior():
-    # Case 2: six clusters, one at top level, two at 2nd level,
+    tsv_dir = './scoring_metric_data/tsv/'
+    
+    # six clusters, one at top level, two at 2nd level,
     # three at 3rd level (one lineage with one cluster, the other with two)
     # Phylogeny Tree:
     #       [1]
@@ -431,7 +433,7 @@ def scoring3A_behavior():
     #        [4][5] [6]
     clusters = np.zeros((600,7))
     clusters[:,:-1] = np.copy(t_clusters)
-    clusters[150:200,2] = 0
+    clusters[150:200,1] = 0
     clusters[150:200,6] = 1
     ccm = np.dot(clusters, clusters.T)
     
@@ -441,7 +443,7 @@ def scoring3A_behavior():
     
     res_split = [map(str,x) for x in res_split]
     res_split = ['\t'.join(x) for x in res_split]
-    f = open('scoring_metric_data/scoring3A_split_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring3A_split_cases.tsv', 'w')
     f.write('\n'.join(res_split))
     f.close()
     
@@ -517,7 +519,7 @@ def scoring3A_behavior():
     
     res_merge = [map(str,x) for x in res_merge]
     res_merge = ['\t'.join(x) for x in res_merge]
-    f = open('scoring_metric_data/scoring3A_merge_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring3A_merge_cases.tsv', 'w')
     f.write('\n'.join(res_merge))
     f.close()
     
@@ -601,7 +603,7 @@ def scoring3A_behavior():
     
     res_parent = [map(str,x) for x in res_parent]
     res_parent = ['\t'.join(x) for x in res_parent]
-    f = open('scoring_metric_data/scoring3A_parent_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring3A_parent_cases.tsv', 'w')
     f.write('\n'.join(res_parent))
     f.close()
     
@@ -677,7 +679,7 @@ def scoring3A_behavior():
         clusters[100*i,i] = 0
         clusters[100*i,6] = 1
     ccm = np.dot(clusters,clusters.T)
-    
+        
     ad = np.copy(t_ad)
     for i in range(0,6):
         ad[:,100*i] = 0
@@ -751,6 +753,7 @@ def scoring3A_behavior():
         clusters[100*i:100*i+15,6] = 1
     ccm = np.dot(clusters,clusters.T)
     
+    
     ad = np.copy(t_ad)
     for i in range(0,6):
         ad[:,100*i:100*i+15] = 0
@@ -807,16 +810,19 @@ def scoring3A_behavior():
         ad[100*i:100*i+15,range(15,100)+range(115,200)+range(215,300)+range(315,400)+range(415,500)+range(515,600)] = 1
     res_other.append(["BigExtraTop", calculate3(ccm,ad,t_ccm,t_ad)])
     
+    
     res_other = [map(str,x) for x in res_other]
     res_other = ['\t'.join(x) for x in res_other]
-    f = open('scoring_metric_data/scoring3A_other_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring3A_other_cases.tsv', 'w')
     f.write('\n'.join(res_other))
     f.close()
     
     res = res_split + res_merge + res_parent + res_other
-    f = open('scoring_metric_data/scoring3A_all_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring3A_all_cases.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
+    
+    
     
     
 

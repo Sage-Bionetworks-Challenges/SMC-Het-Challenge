@@ -179,7 +179,7 @@ tp <- function(data){
   n.elem <- sum(data)
   # number of pairs of elements that are correctly assigned
   # to the same cluster
-  tp <- (sum(apply(data, c(1,2), function(x){x*(x-1)})) / 2) + n.elem
+  tp <- (sum(data^2))
   
   return(tp)
 }
@@ -235,18 +235,18 @@ tn <- function(data){
 fn <- function(data){
   # number of pairs of elements that are incorrectly assigned
   # to the same clusters
-  fn <- sum(apply(data, 1, fn.help)) / 2
+  fn <- sum(apply(data, 2, fn.help))
   return(fn)
 }
 
-# Takes in a row vector associated with a cluster and returns the
-# number of False Negatives associated with that cluster
-fn.help <- function(row){
+# Takes in a column vector associated with a class and returns the
+# number of False Negatives associated with that class
+fn.help <- function(col){
   #number of elements in the given cluster
-  n.cluster <- sum(row)
+  n.class <- sum(col)
   # returns (elements both in the class and cluster) * [(total # elements) 
   #         - (# elements in the cluster) - (# elements in the class outside the cluster)]
-  fn <- sum(sapply(row,function(x){x * (n.cluster-x)}))
+  fn <- sum(sapply(col,function(x){x * (n.class-x)}))
   return(fn)
 }
 
@@ -386,7 +386,7 @@ evaluate <- function(data, title=""){
 #         is the number of elements in cluster i from class j
 #         where the first K.u clusters are the useful clusters
 #         and the last K.n clusters are the noise clusters
-create.data <- function(n.iter.value = NULL,
+create.data <- function(n.iter.value = NULL, #why is this here...
                         C.value = NULL,
                         n.C.value = NULL,
                         K.u.value = NULL,
@@ -472,6 +472,7 @@ create.data <- function(n.iter.value = NULL,
 
 #### run.sim ####################################################
 # Run the simulation over the given parameter values
+# TODO: add I/O functionality for data
 #
 # INPUT:
 #    K.u.values - values of K.u to iterate over for the simulation
@@ -519,6 +520,11 @@ run.sim <- function(K.u.values=2:11,
                   res2
                 })
   names(res) <- K.u.values
+  
+  if(!is.null(filename)){
+    write.
+  }
+  
   return(res)
 }
 
@@ -773,13 +779,20 @@ plot.sim <- function(res, params.fixed.values, metrics=NA, diff=FALSE, filename=
   # name of the parameter that is not being held fixed and
   # the metrics that are being considered
   data.names <- names(plot.data)
+  if(output){
+    print(plot.data)
+    print(data.names)
+  }
   
   # formula for scatter plot
   plot.formula <- as.formula(paste("value ~", param.formula))
   print("Calculated formula...")
   
   # details of simulation for plot
-  metrics <- unique(plot.data[,3])
+  metrics <- sort(unique(plot.data[,3]), decreasing=F)
+  if(output){
+    print(metrics)
+  }
   levels <- unique(plot.data[,1])
   descrip <- paste("Metrics:", 
                    metrics, 
