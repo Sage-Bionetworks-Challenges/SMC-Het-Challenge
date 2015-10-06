@@ -341,8 +341,8 @@ def scoring2B_behavior():
     f.write('\n'.join(res))
     f.close()  
     
-def scoring3A_behavior():
-    tsv_dir = './scoring_metric_data/tsv/'
+def scoring3A_behavior(method="orig_no_cc"):
+    tsv_dir = './scoring_metric_data/text_files/'
     
     # six clusters, one at top level, two at 2nd level,
     # three at 3rd level (one lineage with one cluster, the other with two)
@@ -386,7 +386,7 @@ def scoring3A_behavior():
     clusters[550:600,5] = 0
     clusters[550:600,6] = 1
     ccm = np.dot(clusters, clusters.T)
-    res_split.append(["SplitClusterBotSame",calculate3(ccm,t_ad,t_ccm,t_ad)])
+    res_split.append(["SplitClusterBotSame",calculate3(ccm,t_ad,t_ccm,t_ad, method=method)])
     
     # Split third level (new cluster is on new bottom level)
     # Incorrect Phylogeny Tree:
@@ -405,7 +405,7 @@ def scoring3A_behavior():
     
     ad = np.copy(t_ad)
     ad[500:550,550:600] = 1
-    res_split.append(["SplitClusterBotDiff",calculate3(ccm,ad,t_ccm,t_ad)])
+    res_split.append(["SplitClusterBotDiff",calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     #Split middle level with one child (new cluster is on same level)
     # Incorrect Phylogeny Tree:
@@ -422,7 +422,7 @@ def scoring3A_behavior():
     
     ad = np.copy(t_ad)
     ad[250:300,500:600] = 0
-    res_split.append(["SplitClusterMidOneChild",calculate3(ccm,ad,t_ccm,t_ad)])
+    res_split.append(["SplitClusterMidOneChild",calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     #Split middle level with two children (new cluster is on same level)
     # Incorrect Phylogeny Tree:
@@ -439,7 +439,7 @@ def scoring3A_behavior():
     
     ad = np.copy(t_ad)
     ad[150:200,300:500] = 0
-    res_split.append(["SplitClusterMidMultiChild",calculate3(ccm,ad,t_ccm,t_ad)])
+    res_split.append(["SplitClusterMidMultiChild",calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     res_split = [map(str,x) for x in res_split]
     res_split = ['\t'.join(x) for x in res_split]
@@ -462,7 +462,7 @@ def scoring3A_behavior():
     clusters[400:500,4] = 0 #merge clusters 4 and 5 (from true phylogeny)
     clusters[300:400,3] = 1
     ccm = np.dot(clusters, clusters.T)
-    res_merge.append(["MergeClusterBot",calculate3(ccm,t_ad,t_ccm,t_ad)])
+    res_merge.append(["MergeClusterBot",calculate3(ccm,t_ad,t_ccm,t_ad, method=method)])
     
     # Merge second and third level with one child (new cluster is on the second level)
     # Incorrect Phylogeny Tree (* = merged cluster):
@@ -477,7 +477,7 @@ def scoring3A_behavior():
     
     ad = np.copy(t_ad)
     ad[200:300, 500:600] = 0
-    res_merge.append(["MergeClusterMid&BotOneChild",calculate3(ccm,ad,t_ccm,t_ad)])
+    res_merge.append(["MergeClusterMid&BotOneChild",calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     # Merge second and third level with two children (new cluster is on the second level)
     # Incorrect Phylogeny Tree (* = merged cluster):
@@ -495,7 +495,7 @@ def scoring3A_behavior():
     ad = np.copy(t_ad)
     ad[100:200, 400:500] = 0
     ad[400:500, 300:400] = 1
-    res_merge.append(["MergeClusterMid&BotMultiChild",calculate3(ccm,ad,t_ccm,t_ad)])
+    res_merge.append(["MergeClusterMid&BotMultiChild",calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     # Merge first and second level with two children (new cluster is on the first level)
     # Incorrect Phylogeny Tree (* = merged cluster):
@@ -515,7 +515,7 @@ def scoring3A_behavior():
     ad = np.zeros((600,600))
     ad[0:200, 200:] = 1
     ad[200:300, 500:] = 1
-    res_merge.append(["MergeClusterTop&Mid",calculate3(ccm,ad,t_ccm,t_ad)])
+    res_merge.append(["MergeClusterTop&Mid",calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     res_merge = [map(str,x) for x in res_merge]
     res_merge = ['\t'.join(x) for x in res_merge]
@@ -537,7 +537,7 @@ def scoring3A_behavior():
     #     [5*]    
     ad = np.copy(t_ad)
     ad[300:400,400:500] = 1
-    res_parent.append(["ParentIsSibling",calculate3(t_ccm,ad,t_ccm,t_ad)])
+    res_parent.append(["ParentIsSibling",calculate3(t_ccm,ad,t_ccm,t_ad, method=method)])
     
     # Cluster's parent is really a grandparent
     # Incorrect Phylogeny Tree (* = incorrect cluster):
@@ -548,7 +548,7 @@ def scoring3A_behavior():
     #     [4]   [6]   
     ad = np.copy(t_ad)
     ad[100:200,400:500] = 0
-    res_parent.append(["ParentIsGrandparent",calculate3(t_ccm,ad,t_ccm,t_ad)])
+    res_parent.append(["ParentIsGrandparent",calculate3(t_ccm,ad,t_ccm,t_ad, method=method)])
     
     # Cluster's parent is really an aunt/uncle
     # Incorrect Phylogeny Tree (* = incorrect cluster):
@@ -558,7 +558,7 @@ def scoring3A_behavior():
     #      |   |    |
     #     [4] [5*] [6]    
     ad[200:300,400:500] = 1
-    res_parent.append(["ParentIsAunt",calculate3(t_ccm,ad,t_ccm,t_ad)])
+    res_parent.append(["ParentIsAunt",calculate3(t_ccm,ad,t_ccm,t_ad, method=method)])
     
     # Cluster's parent is really a cousin
     # Incorrect Phylogeny Tree (* = incorrect cluster):
@@ -570,7 +570,7 @@ def scoring3A_behavior():
     #            |    
     #           [5*]     
     ad[500:600,400:500] = 1
-    res_parent.append(["ParentIsCousin",calculate3(t_ccm,ad,t_ccm,t_ad)])
+    res_parent.append(["ParentIsCousin",calculate3(t_ccm,ad,t_ccm,t_ad, method=method)])
     
     # NOTE: Keep ordering of cases the same in order for the ancestry matrix to be correct    
     
@@ -585,7 +585,7 @@ def scoring3A_behavior():
     #   [4]  [5]    
     ad = np.copy(t_ad)
     ad[200:300, range(100,200)+range(300,600)] = 1 #adjust cluster 3's ancestry
-    res_parent.append(["ParentIsSiblingWithChildren",calculate3(t_ccm,ad,t_ccm,t_ad)])
+    res_parent.append(["ParentIsSiblingWithChildren",calculate3(t_ccm,ad,t_ccm,t_ad, method=method)])
     
     # Cluster's parent is really a niece, and incorrect cluster has children
     # Incorrect Phylogeny Tree (* = incorrect cluster):
@@ -599,7 +599,7 @@ def scoring3A_behavior():
     #       |    |    
     #      [4]  [5]    
     ad[200:300, range(100,200)+range(300,600)] = 1 #adjust cluster 3's ancestry
-    res_parent.append(["ParentIsNieceWithChildren",calculate3(t_ccm,ad,t_ccm,t_ad)])
+    res_parent.append(["ParentIsNieceWithChildren",calculate3(t_ccm,ad,t_ccm,t_ad, method=method)])
     
     res_parent = [map(str,x) for x in res_parent]
     res_parent = ['\t'.join(x) for x in res_parent]
@@ -613,7 +613,7 @@ def scoring3A_behavior():
     # OneCluster: everything is in one big cluster
     # Incorrect Phylogeny Tree:
     #    [1]
-    res_other.append(["OneCluster", calculate3(np.ones(t_ccm.shape),np.zeros(t_ad.shape),t_ccm,t_ad)])
+    res_other.append(["OneCluster", calculate3(np.ones(t_ccm.shape),np.zeros(t_ad.shape),t_ccm,t_ad, method=method)])
     
     # NClustersOneLineage: everything in it's own cluster, all in one long lineage
     # Incorrect Phylogeny Tree:
@@ -623,7 +623,7 @@ def scoring3A_behavior():
     #  ...
     #   |
     # [600]
-    res_other.append(["NClusterOneLineage", calculate3(np.identity(t_ccm.shape[0]),np.triu(np.ones(t_ad.shape), k=1),t_ccm,t_ad)])
+    res_other.append(["NClusterOneLineage", calculate3(np.identity(t_ccm.shape[0]),np.triu(np.ones(t_ad.shape), k=1),t_ccm,t_ad, method=method)])
     
     # NClustersTwoLineages: everything in it's own cluster, split into two germlines
     # Incorrect Phylogeny Tree:
@@ -637,7 +637,7 @@ def scoring3A_behavior():
     # [301]
     ad = np.triu(np.ones(t_ad.shape), k=1)
     ad[2:302,302:] = 0
-    res_other.append(["NClusterTwoLineages", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad)])
+    res_other.append(["NClusterTwoLineages", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad, method=method)])
     
     # NClustersCorrectLineage: everything in it's own cluster, but with
     # the same structure as the true matrix
@@ -661,7 +661,7 @@ def scoring3A_behavior():
     ad[200:300,300:500] = 0 # cluster 3 from true AD matrix
     ad[300:400,400:] = 0 # cluster 4 from true AD matrix
     ad[400:500,500:600] = 0 # cluster 5 from true AD matrix
-    res_other.append(["NClusterCorrectLineage", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad)])
+    res_other.append(["NClusterCorrectLineage", calculate3(np.identity(t_ccm.shape[0]),ad,t_ccm,t_ad, method=method)])
     
     # SmallExtraNewBot: small extra cluster with some mutations from each cluster
     # new cluster is in a new bottom level of the lineage
@@ -685,7 +685,7 @@ def scoring3A_behavior():
         ad[:,100*i] = 0
         ad[range(1,100)+range(101,200)+range(301,400),100*i] = 1
         ad[100*i,:] = 0
-    res_other.append(["SmallExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["SmallExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     # SmallExtraCurBot: small extra cluster with some mutations from each cluster
     # new cluster is in the current bottom level of the lineage
@@ -703,7 +703,7 @@ def scoring3A_behavior():
         ad[:,100*i] = 0
         ad[range(1,100)+range(201,300),100*i] = 1
         ad[100*i,:] = 0
-    res_other.append(["SmallExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["SmallExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     # SmallExtraMid: small extra cluster with some mutations from each cluster
     # new cluster is in the middle level of the lineage
@@ -718,7 +718,7 @@ def scoring3A_behavior():
         ad[:,100*i] = 0
         ad[range(1,100),100*i] = 1
         ad[100*i,:] = 0
-    res_other.append(["SmallExtraMid", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["SmallExtraMid", calculate3(ccm,ad,t_ccm,t_ad, method=method)])
     
     # SmallExtraTop: small extra cluster with some mutations from each cluster
     # new cluster is in a new top level of the lineage
@@ -734,7 +734,7 @@ def scoring3A_behavior():
     for i in range(0,6):
         ad[:,100*i] = 0
         ad[100*i,range(1,100)+range(101,200)+range(201,300)+range(301,400)+range(401,500)+range(501,600)] = 1
-    res_other.append(["SmallExtraTop", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["SmallExtraTop", calculate3(ccm,ad,t_ccm,t_ad,method=method)])
     
     # BigExtraNewBot: big extra cluster with some mutations from each cluster
     # new cluster is in a new bottom level of the lineage
@@ -759,7 +759,7 @@ def scoring3A_behavior():
         ad[:,100*i:100*i+15] = 0
         ad[range(15,100)+range(115,200)+range(315,400),100*i:100*i+15] = 1
         ad[100*i:100*i+15,:] = 0
-    res_other.append(["BigExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["BigExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad,method=method)])
     
     # BigExtraCurBot: small extra cluster with some mutations from each cluster
     # new cluster is in the current bottom level of the lineage
@@ -777,7 +777,7 @@ def scoring3A_behavior():
         ad[:,100*i:100*i+15] = 0
         ad[range(15,100)+range(215,300),100*i:100*i+15] = 1
         ad[100*i:100*i+15,:] = 0
-    res_other.append(["BigExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["BigExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad,method=method)])
     
     # BigExtraMid: small extra cluster with some mutations from each cluster
     # new cluster is in the middle level of the lineage
@@ -792,7 +792,7 @@ def scoring3A_behavior():
         ad[:,100*i:100*i+15] = 0
         ad[range(15,100),100*i:100*i+15] = 1
         ad[100*i:100*i+15,:] = 0
-    res_other.append(["BigExtraMid", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["BigExtraMid", calculate3(ccm,ad,t_ccm,t_ad,method=method)])
     
     # BigExtraTop: small extra cluster with some mutations from each cluster
     # new cluster is in a new top level of the lineage
@@ -808,7 +808,7 @@ def scoring3A_behavior():
     for i in range(0,6):
         ad[:,100*i:100*i+15] = 0
         ad[100*i:100*i+15,range(15,100)+range(115,200)+range(215,300)+range(315,400)+range(415,500)+range(515,600)] = 1
-    res_other.append(["BigExtraTop", calculate3(ccm,ad,t_ccm,t_ad)])
+    res_other.append(["BigExtraTop", calculate3(ccm,ad,t_ccm,t_ad,method=method)])
     
     
     res_other = [map(str,x) for x in res_other]
@@ -818,7 +818,7 @@ def scoring3A_behavior():
     f.close()
     
     res = res_split + res_merge + res_parent + res_other
-    f = open(tsv_dir + 'scoring3A_all_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring3A_all_cases_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
     
@@ -827,8 +827,18 @@ def scoring3A_behavior():
     
 
 if __name__ == '__main__':
+    '''
+    scoring3A_behavior("aupr_no_cc")
+'''
+    methods = ("orig", "orig_no_cc", "pseudoV", "pseudoV_no_cc", "simpleKL_no_cc",
+                 "sqrt_no_cc", "sym_pseudoV_no_cc", "pearson_no_cc", "aupr_no_cc", "mcc_no_cc")
+    for m in methods:
+        print('Calculating metric %s...' % m)
+        scoring3A_behavior(m)
+'''
     scoring1A_behavior()
     scoring1B_behavior()
     scoring1C_behavior()
     scoring2A_behavior()
     scoring2B_behavior()
+'''

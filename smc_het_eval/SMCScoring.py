@@ -205,15 +205,25 @@ def calculate2_simpleKL(pred,truth,rnd=0.01):
             res += np.log(pred[indices[0][i],indices[1][i]])
         else:
             res += np.log(1-pred[indices[0][i],indices[1][i]])
-    return res
+    return abs(res)
 
 def calculate2_pseudoV(pred,truth,rnd=0.01):
-    pred[pred==0] = rnd
-    truth[truth==0] = rnd
-    pred = pred / np.sum(pred,axis=1)[:,np.newaxis]
-    truth = truth / np.sum(truth,axis=1)[:,np.newaxis]
+    pred_cp = cp.deepcopy(pred)
+    truth_cp = cp.deepcopy(truth)
+    # make matrix upper triangular
+    pred_cp = np.triu(pred_cp)
+    truth_cp = np.triu(truth_cp)
+    # Avoid dividing by zero
+    # Note: it is ok to do this after making the matrix upper triangular
+    # since the bottom triangle of the matrix will not affect the score
+    pred_cp[pred_cp==0] = rnd
+    truth_cp[truth_cp==0] = rnd
 
-    return np.sum(truth * np.log(truth/pred))
+    # normalize data
+    pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
+    truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
+
+    return np.sum(truth_cp * np.log(truth_cp/pred_cp))
 
 def calculate2_sym_pseudoV(pred, truth, rnd=0.01):
     pred[pred==0] = rnd
@@ -223,28 +233,28 @@ def calculate2_sym_pseudoV(pred, truth, rnd=0.01):
     return np.sum(truth * np.log(truth/pred)) + np.sum(pred * np.log(pred/truth))
 
 def calculate2_pearson(pred, truth):
-	n = truth.shape[0]
-	inds = np.triu_indices(n,k=1)
-	return scipy.stats.pearsonr(pred[inds],truth[inds])[0]
+    n = truth.shape[0]
+    inds = np.triu_indices(n,k=1)
+    return scipy.stats.pearsonr(pred[inds],truth[inds])[0]
 
 def calculate2_aupr(pred,truth):
-	n = truth.shape[0]
-	inds = np.triu_indices(n,k=1)
-	precision, recall, thresholds = mt.precision_recall_curve(truth[inds],pred[inds])
-	aucpr = mt.auc(recall, precision)
-	return aucpr
+    n = truth.shape[0]
+    inds = np.triu_indices(n,k=1)
+    precision, recall, thresholds = mt.precision_recall_curve(truth[inds],pred[inds])
+    aucpr = mt.auc(recall, precision)
+    return aucpr
 
+# Matthews Correlation Coefficient
+# don't just use upper triangular matrix because you get na's with the AD matrix
 def calculate2_mcc(pred,truth):
-	n = truth.shape[0]
-	#inds = np.triu_indices(n,k=1)
-	#truth = truth[inds]
-	#pred = pred[inds]
-	tp = float(sum(pred[truth==1] == 1))
-	tn = float(sum(pred[truth==0] == 0))
-	fp = float(sum(pred[truth==0] == 1))
-	fn = float(sum(pred[truth==1] == 0))
-	print tp,tn,fp,fn
-	return (tp*tn - fp*fn)/np.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
+    n = truth.shape[0]
+
+    tp = float(sum(pred[truth==1] == 1))
+    tn = float(sum(pred[truth==0] == 0))
+    fp = float(sum(pred[truth==0] == 1))
+    fn = float(sum(pred[truth==1] == 0))
+    print tp,tn,fp,fn
+    return (tp*tn - fp*fn)/np.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
 
 def validate2B(data,nssms):
     data = StringIO.StringIO(data)
@@ -268,6 +278,8 @@ def validate2B(data,nssms):
     if not np.allclose(ccm.T, ccm):
         raise ValidationError("Co-clustering matrix is not symmetric")
     return ccm
+
+#### SUBCHALLENGE 3 #########################################################################################
 
 def validate3A(data, cas, nssms):
 	predK = cas.shape[1]
@@ -346,15 +358,18 @@ def validate3B(data, ccm, nssms):
 
     return ad
 
-#Input Variables:
-#   pred_ca - 
 def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
     return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,np.dot(truth_ca,truth_ca.T),truth_ad)
 
-def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad):
-    return calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad)
+def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_no_cc"):
+    func = {"orig" : calculate3_orig,
+               "orig_no_cc": calculate3_orig_no_cc,
+               "pseudoV": calculate3_pseudoV,
+    }.get(method, calculate3_other_no_cc)
+    return func(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=True, method=method)
 
-def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad):
+# Include a method field to make code more easily generalizable
+def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig"):
     n = truth_ccm.shape[0]
     indices = np.triu_indices(n,k=1)
     cc_res = np.sum(np.abs(pred_ccm[indices] - truth_ccm[indices])*truth_ccm[indices])
@@ -366,7 +381,8 @@ def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad):
     res = (cc_res + ad_res + cous_res ) / count
     return 1 - res
 
-def calculate3_orig_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad):
+# Include a method field to make code more easily generalizable
+def calculate3_orig_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig_no_cc"):
     n = truth_ccm.shape[0]
     indices = np.triu_indices(n,k=1)
     ad_res = np.sum(np.abs(pred_ad.flatten() - truth_ad.flatten()) * truth_ad.flatten())
@@ -377,58 +393,63 @@ def calculate3_orig_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad):
     res = (ad_res + cous_res ) / count
     return 1 - res
     
-# Use the pseudoV measure 
-def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01):
-    # Get the cousin matrices
-    truth_cous = 1 - truth_ccm - truth_ad - truth_ad.T
-    pred_cous = 1 - pred_ccm - pred_ad - pred_ad.T
-    if(np.amax(truth_cous) > 1 or np.amin(truth_cous) < 0):
-        print("Cousin Truth is wrong...")
-    if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
-        print("Cousin Predicted is wrong...")
-        print "CCM" 
-        print pred_ccm
-        print "AD"
-        print pred_ad
-        print "Cousin"
-        print pred_cous
-        
+# Use the pseudoV measure
+# Include a method field to make code more easily generalizable
+def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV"):
+    # calculate the result without the co-clustering matrix
+    res = calculate3_other_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=rnd, verbose=verbose, method="pseudoV_no_cc",)
         
     cpred_ccm = cp.deepcopy(pred_ccm)
     ctruth_ccm = cp.deepcopy(truth_ccm)
-    cpred_ad = cp.deepcopy(pred_ad)
-    ctruth_ad = cp.deepcopy(truth_ad)
     
     # Calculate the pseudo V measure for each
     cc_res = calculate2_pseudoV(cpred_ccm, ctruth_ccm, rnd)
-    ad_res = calculate2_pseudoV(cpred_ad, ctruth_ad, rnd)
-    cous_res = calculate2_pseudoV(pred_cous, truth_cous, rnd)
     
-    res =  (cc_res + ad_res + cous_res )
-    print("Pseudo V for Matrices\nCC: %s, AD: %s, Cousin: %s" % (str(cc_res), str(ad_res),str(cous_res)))
+    res =  (cc_res + res )
+    if verbose:
+        print("CC: %s" % str(cc_res))
     return res
     
-# Use the pseudoV measure 
-def calculate3_pseudoV_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01):
+# Use one of the SC2 metrics without using the co-clustering matrix
+def calculate3_other_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV"):
+    methods_SC2 = {"pseudoV_no_cc": calculate2_pseudoV,
+               "simpleKL_no_cc": calculate2_simpleKL,
+               "sqrt_no_cc": calculate2_sqrt,
+               "sym_pseudoV_no_cc": calculate2_sym_pseudoV,
+               "pearson_no_cc": calculate2_pearson,
+               "aupr_no_cc":calculate2_aupr,
+                "mcc_no_cc": calculate2_mcc,
+    }
     # Get the cousin matrices
     truth_cous = 1 - truth_ccm - truth_ad - truth_ad.T
     pred_cous = 1 - pred_ccm - pred_ad - pred_ad.T
-    if(np.amax(truth_cous) > 1 or np.amin(truth_cous) < 0):
-        print("Cousin Truth is wrong...")
-    if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
-        print("Cousin Predicted is wrong...")
-        
-    cpred_ad = cp.deepcopy(pred_ad)
-    ctruth_ad = cp.deepcopy(truth_ad)
-    
-    # Calculate the pseudo V measure for each
-    ad_res = calculate2_pseudoV(cpred_ad, ctruth_ad, rnd)
-    cous_res = calculate2_pseudoV(pred_cous, truth_cous, rnd)
-    
-    res =  (ad_res + cous_res )
-    print("Pseudo V for Matrices\nAD: %s, Cousin: %s" % (str(ad_res),str(cous_res)))
+    if verbose:
+        if(np.amax(truth_cous) > 1 or np.amin(truth_cous) < 0):
+            print("Cousin Truth is wrong...")
+        if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
+            print("Cousin Predicted is wrong...")
+
+    # Calculate the metric measure for each matrix
+    func = methods_SC2[method]
+    if method in ("pseudoV_no_cc",
+               "simpleKL_no_cc",
+               "sym_pseudoV_no_cc"):
+        ad_res = func(pred_ad, truth_ad, rnd)
+        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), rnd)
+        cous_res = func(pred_cous, truth_cous, rnd)
+    else:
+        ad_res = func(pred_ad, truth_ad)
+        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad))
+        cous_res = func(pred_cous, truth_cous)
+
+    res =  0
+    for r in (ad_res, ad_res_t, cous_res):
+        if not math.isnan(r):
+            res += r
+    if verbose:
+        print("%s for Matrices\nAD: %s, AD Transpose: %s, Cousin: %s\nReuslt: %s" %
+              (method, str(ad_res),str(ad_res_t),str(cous_res), str(res)))
     return res
-    
 
 def parseVCFSimple(data):
     data = data.split('\n')

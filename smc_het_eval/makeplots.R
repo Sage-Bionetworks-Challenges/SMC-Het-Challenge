@@ -1,8 +1,8 @@
 library(ggplot2)
 
 # Directories for tsv files and plots respectively
-tsv_dir = "./scoring_metric_data/tsv/"
-plot_dir = "./scoring_metric_data/metric_behaviour_plots/"
+tsv_dir = "scoring_metric_data/text_files/"
+plot_dir = "scoring_metric_data/metric_behaviour_plots/"
 
 da = read.csv(paste(tsv_dir, "scoring1A_behavior.tsv", sep=""),sep="\t",header=FALSE)
 colnames(da) = c("Real","Pred","Error")
@@ -104,7 +104,7 @@ dev.off()
 
 d = read.csv(file=paste(tsv_dir, "scoring3A_split_cases.tsv", sep=""), sep="\t",header=FALSE)
 colnames(d) = c("Case","Metric")
-png(file=paste(plot_dir, "3A_Split_Cases_pseudoV_no_cc.png", sep=""))
+png(file=paste(plot_dir, "3A_Split_Cases_pseudoV.png", sep=""))
 ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
   geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
   theme(legend.position="none") + ylab("3 Metric") +
@@ -113,7 +113,7 @@ dev.off()
 
 d = read.csv(file=paste(tsv_dir, "scoring3A_merge_cases.tsv", sep=""), sep="\t",header=FALSE)
 colnames(d) = c("Case","Metric")
-png(file=paste(plot_dir, "3A_Merge_Cases_pseudoV_no_cc.png", sep=""))
+png(file=paste(plot_dir, "3A_Merge_Cases_pseudoV.png", sep=""))
 ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
   geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
   theme(legend.position="none") + ylab("3 Metric") +
@@ -122,27 +122,23 @@ dev.off()
 
 d = read.csv(file=paste(tsv_dir, "scoring3A_parent_cases.tsv", sep=""), sep="\t",header=FALSE)
 colnames(d) = c("Case","Metric")
-png(file=paste(plot_dir, "3A_Parent_Cases_pseudoV_no_cc.png", sep=""))
+png(file=paste(plot_dir, "3A_Parent_Cases_pseudoV.png", sep=""))
 ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
   geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
   theme(legend.position="none") + ylab("3 Metric") +
-  xlab("Case") + ggtitle("3A Incorrect Parent Cases") + coord_flip())#ylim=c(0.8,1))
+  xlab("Case") + ggtitle("3A Incorrect Parent Cases") + coord_flip()#ylim=c(0.8,1))
 dev.off()
 
 d = read.csv(file=paste(tsv_dir, "scoring3A_other_cases.tsv", sep=""), sep="\t",header=FALSE)
 colnames(d) = c("Case","Metric")
-png(file=paste(plot_dir, "3A_Other_Cases_pseudoV_no_cc.png", sep=""))
+png(file=paste(plot_dir, "3A_Other_Cases_pseudoV.png", sep=""))
 ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
   geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
   theme(legend.position="none") + ylab("3 Metric") +
   xlab("Case") + ggtitle("3A Other Cases - Not Merge, Split or Incorrect Parent") + coord_flip()#ylim=c(0.75,1))
 dev.off()
 
-d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases.tsv", sep=""), sep="\t",header=FALSE)
-colnames(d) = c("Case","Metric")
-png(file=paste(plot_dir, "3A_All_Cases_pseudoV_no_cc.png", sep=""))
-ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
-  geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
-  theme(legend.position="none") + ylab("3 Metric") +
-  xlab("Case") + ggtitle("3A All Cases") + coord_flip()#ylim=c(0.75,1))
-dev.off()
+
+
+
+
