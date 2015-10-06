@@ -547,17 +547,21 @@ if __name__ == '__main__':
         with open(args.pred_config) as handle:
             pred_config = {}
             for line in handle:
-                if len(line):
+                try:
                     v = json.loads(line)
                     if isinstance(v,dict):
                         pred_config = dict(pred_config **v)
+                except ValueError:
+                    pass
         with open(args.truth_config) as handle:
             truth_config = {}
             for line in handle:
-                if len(line):
+                try:
                     v = json.loads(line)
                     if isinstance(v,dict):
                         truth_config = dict(truth_config **v)
+                except ValueError:
+                    pass
         out = {}
         for challenge in pred_config:
             if challenge in truth_config:
