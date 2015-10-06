@@ -17,27 +17,27 @@ class ValidationError(Exception):
         return repr(self.value)
 
 def validate1A(data):
-	data = data.split('\n')
-	data = filter(None,data)
-	if len(data) < 1:
-		raise ValidationError("Input file contains zero lines")
-	if len(data) > 1:
-		raise ValidationError("Input file contains more than one line")
-	data = data[0].strip()
-	try:
-		numeric = float(data)
-	except ValueError:
-		raise ValidationError("Data could not be converted to float: %s" % data)
-	if math.isinf(numeric):
-		raise ValidationError("Non-finite Cellularity")
-	if math.isnan(numeric):
-		raise ValidationError("Cellularity is NaN")
-	if numeric < 0:
-		raise ValidationError("Cellularity was < 0: %f" % numeric)
-	if numeric > 1:
-		raise ValidationError("Cellularity was > 1: %f" % numeric)
+    data = data.split('\n')
+    data = filter(None,data)
+    if len(data) < 1:
+        raise ValidationError("Input file contains zero lines")
+    if len(data) > 1:
+        raise ValidationError("Input file contains more than one line")
+    data = data[0].strip()
+    try:
+        numeric = float(data)
+    except ValueError:
+        raise ValidationError("Data could not be converted to float: %s" % data)
+    if math.isinf(numeric):
+        raise ValidationError("Non-finite Cellularity")
+    if math.isnan(numeric):
+        raise ValidationError("Cellularity is NaN")
+    if numeric < 0:
+        raise ValidationError("Cellularity was < 0: %f" % numeric)
+    if numeric > 1:
+        raise ValidationError("Cellularity was > 1: %f" % numeric)
 
-	return numeric
+    return numeric
 
 def calculate1A(pred,truth):
     return 1 - abs(truth - pred)
@@ -148,51 +148,51 @@ def validate2Afor3A(data,nssms):
     return validate2A(data,nssms,False)
 
 def calculate2_quaid(pred,truth):
-	n = truth.shape[0]
-	indices = np.triu_indices(n,k=1)
-	ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices])
-	ones_count = np.count_nonzero(truth[indices])
-	if ones_count > 0:
-		ones_score = 1 - ones/float(ones_count)
-	else:
-		ones_score = -1
+    n = truth.shape[0]
+    indices = np.triu_indices(n,k=1)
+    ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices])
+    ones_count = np.count_nonzero(truth[indices])
+    if ones_count > 0:
+        ones_score = 1 - ones/float(ones_count)
+    else:
+        ones_score = -1
 
-	zeros = np.sum(np.abs(pred[indices] - truth[indices]) * (1 - truth[indices]))
-	zeros_count = len(truth[indices]) - ones_count
-	if zeros_count > 0:
-		zeros_score = 1 - zeros/float(zeros_count)
-	else:
-		zeros_score = -1
+    zeros = np.sum(np.abs(pred[indices] - truth[indices]) * (1 - truth[indices]))
+    zeros_count = len(truth[indices]) - ones_count
+    if zeros_count > 0:
+        zeros_score = 1 - zeros/float(zeros_count)
+    else:
+        zeros_score = -1
 
-	if ones_score == -1:
-		return zeros_score
-	elif zeros_score == -1:
-		return ones_score
-	else:
-		try:
-			return 2.0/(1.0/ones_score + 1.0/zeros_score)
-		except Warning:
-			print ones_score, zeros_score
-			return 0
+    if ones_score == -1:
+        return zeros_score
+    elif zeros_score == -1:
+        return ones_score
+    else:
+        try:
+            return 2.0/(1.0/ones_score + 1.0/zeros_score)
+        except Warning:
+            print ones_score, zeros_score
+            return 0
 
 def calculate2(pred,truth):
-	return calculate2_orig(pred,truth)
+    return calculate2_orig(pred,truth)
 
 def calculate2_orig(pred,truth):
-	n = truth.shape[0]
-	indices = np.triu_indices(n,k=1)
-	count = (n**2 - n )/2.0
-	res = np.sum(np.abs(pred[indices] - truth[indices]))
-	res = res / count
-	return 1 - res
+    n = truth.shape[0]
+    indices = np.triu_indices(n,k=1)
+    count = (n**2 - n )/2.0
+    res = np.sum(np.abs(pred[indices] - truth[indices]))
+    res = res / count
+    return 1 - res
 
 def calculate2_sqrt(pred,truth):
-	n = truth.shape[0]
-	indices = np.triu_indices(n,k=1)
-	count = (n**2 - n )/2.0
-	res = np.sum(np.abs(pred[indices] - truth[indices]))
-	res = res / count
-	return np.sqrt(1 - res)
+    n = truth.shape[0]
+    indices = np.triu_indices(n,k=1)
+    count = (n**2 - n )/2.0
+    res = np.sum(np.abs(pred[indices] - truth[indices]))
+    res = res / count
+    return np.sqrt(1 - res)
 
 def calculate2_simpleKL(pred,truth,rnd=0.01):
     pred = np.abs(pred - rnd)
@@ -282,55 +282,55 @@ def validate2B(data,nssms):
 #### SUBCHALLENGE 3 #########################################################################################
 
 def validate3A(data, cas, nssms):
-	predK = cas.shape[1]
-	cluster_assignments = np.argmax(cas,1) + 1
+    predK = cas.shape[1]
+    cluster_assignments = np.argmax(cas,1) + 1
 
-	data = data.split('\n')
-	data = filter(None,data)
-	if len(data) != predK:
-		raise ValidationError("Input file contains a different number of lines (%d) than expected (%d)")
-	data = [x.split('\t') for x in data]
-	for i in range(len(data)):
-		if len(data[i]) != 2:
-			raise ValidationError("Number of tab separated columns in line %d is not 2" % (i+1))
-		try:
-			data[i][0] = int(data[i][0])
-			data[i][1] = int(data[i][1])
-		except ValueError:
-			raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
+    data = data.split('\n')
+    data = filter(None,data)
+    if len(data) != predK:
+        raise ValidationError("Input file contains a different number of lines (%d) than expected (%d)")
+    data = [x.split('\t') for x in data]
+    for i in range(len(data)):
+        if len(data[i]) != 2:
+            raise ValidationError("Number of tab separated columns in line %d is not 2" % (i+1))
+        try:
+            data[i][0] = int(data[i][0])
+            data[i][1] = int(data[i][1])
+        except ValueError:
+            raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
 
-	if [x[0] for x in data] != range(1,predK+1):
-		raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
+    if [x[0] for x in data] != range(1,predK+1):
+        raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
 
-	for i in range(len(data)):
-		if data[i][1] not in set(range(predK+1)):
-			raise ValidationError("Parent node label in line %d is not valid." % (i+1))
+    for i in range(len(data)):
+        if data[i][1] not in set(range(predK+1)):
+            raise ValidationError("Parent node label in line %d is not valid." % (i+1))
 
-	# Form decendent of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
-	decendent_of = dict()
-	for i in range(predK+1):
-		decendent_of[i] = []
-	for child,parent in data:
-		decendent_of[parent] += [child] + decendent_of[child]
-		# gps (grandparents) are the list of nodes that are ancestors of the immediate parent
-		gps = [x for x in decendent_of.keys() if parent in decendent_of[x]]
-		for gp in gps:
-			decendent_of[gp] += [child] + decendent_of[child]
+    # Form decendent of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
+    decendent_of = dict()
+    for i in range(predK+1):
+        decendent_of[i] = []
+    for child,parent in data:
+        decendent_of[parent] += [child] + decendent_of[child]
+        # gps (grandparents) are the list of nodes that are ancestors of the immediate parent
+        gps = [x for x in decendent_of.keys() if parent in decendent_of[x]]
+        for gp in gps:
+            decendent_of[gp] += [child] + decendent_of[child]
 
-	# Check that root has all nodes as decendants (equivalent to checking if the tree is connected)
-	if set(decendent_of[0]) != set(range(1,predK+1)):
-		print data
-		print decendent_of
-		raise ValidationError("Root of phylogeny not ancestor of all clusters / Tree is not connected")
+    # Check that root has all nodes as decendants (equivalent to checking if the tree is connected)
+    if set(decendent_of[0]) != set(range(1,predK+1)):
+        print data
+        print decendent_of
+        raise ValidationError("Root of phylogeny not ancestor of all clusters / Tree is not connected")
 
-	# Form AD matrix
-	n = len(cluster_assignments)
-	ad = np.zeros((n,n))
-	for i in range(n):
-		for j in range(n):
-			if cluster_assignments[j] in decendent_of[cluster_assignments[i]]:
-				ad[i,j] = 1
-	return ad
+    # Form AD matrix
+    n = len(cluster_assignments)
+    ad = np.zeros((n,n))
+    for i in range(n):
+        for j in range(n):
+            if cluster_assignments[j] in decendent_of[cluster_assignments[i]]:
+                ad[i,j] = 1
+    return ad
 
 def validate3B(data, ccm, nssms):
     data = StringIO.StringIO(data)
@@ -552,49 +552,57 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
-	parser.add_argument("challenge")
-	parser.add_argument("--predfiles",nargs="+")
-	parser.add_argument("--truthfiles",nargs="*")
-	parser.add_argument("--vcf")
-	parser.add_argument("outputfile")
-	parser.add_argument('-v', action='store_true', default=False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pred-config", default=None)
+    parser.add_argument("--truth-config", default=None)
+    parser.add_argument("-c", "--challenge", default=None)
+    parser.add_argument("--predfiles",nargs="+")
+    parser.add_argument("--truthfiles",nargs="*")
+    parser.add_argument("--vcf")
+    parser.add_argument("-o", "--outputfile")
+    parser.add_argument('-v', action='store_true', default=False)
 
-	args = parser.parse_args()
+    args = parser.parse_args()
 
-	if args.pred_config is not None and args.truth_config is not None:
-		with open(args.pred_config) as handle:
-			pred_config = {}
-			for line in handle:
-				v = json.loads(line)
-				if isinstance(v,dict):
-					pred_config = dict(pred_config **v)
-		with open(args.truth_config) as handle:
-			truth_config = {}
-			for line in handle:
-				v = json.loads(line)
-				if isinstance(v,dict):
-					truth_config = dict(truth_config **v)
-		out = {}
-		for challenge in pred_config:
-			if challenge in truth_config:
-				predfile = pred_config[challenge]
-				vcf = truth_config[challenge]['vcf']
-				truthfiles = truth_config[challenge]['truth']
-				if args.v:
-					res = verifyChallenge(challenge,predfiles,vcf)
-				else:
-					res = scoreChallenge(challenge,predfiles,truthfiles,vcf)
-				out[challenge] = res
-		with open(args.outputfile, "w") as handle:
-			jtxt = json.dumps( out )
-			handle.write(jtxt)
-	else:
-		if args.v:
-			res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
-		else:
-			res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
+    if args.pred_config is not None and args.truth_config is not None:
+        with open(args.pred_config) as handle:
+            pred_config = {}
+            for line in handle:
+                try:
+                    v = json.loads(line)
+                    if isinstance(v,dict):
+                        pred_config = dict(pred_config **v)
+                except ValueError:
+                    pass
+        with open(args.truth_config) as handle:
+            truth_config = {}
+            for line in handle:
+                try:
+                    v = json.loads(line)
+                    if isinstance(v,dict):
+                        truth_config = dict(truth_config **v)
+                except ValueError:
+                    pass
+        out = {}
+        for challenge in pred_config:
+            if challenge in truth_config:
+                predfile = pred_config[challenge]
+                vcf = truth_config[challenge]['vcf']
+                truthfiles = truth_config[challenge]['truth']
+                if args.v:
+                    res = verifyChallenge(challenge,predfiles,vcf)
+                else:
+                    res = scoreChallenge(challenge,predfiles,truthfiles,vcf)
+                out[challenge] = res
+        with open(args.outputfile, "w") as handle:
+            jtxt = json.dumps( out )
+            handle.write(jtxt)
+    else:
+        if args.v:
+            res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
+        else:
+            res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
 
-		with open(args.outputfile, "w") as handle:
-			jtxt = json.dumps( { args.challenge : res } )
-			handle.write(jtxt)
+        with open(args.outputfile, "w") as handle:
+            jtxt = json.dumps( { args.challenge : res } )
+            handle.write(jtxt)

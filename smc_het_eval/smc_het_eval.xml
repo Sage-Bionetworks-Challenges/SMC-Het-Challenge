@@ -8,7 +8,7 @@
   <command interpreter="python"><![CDATA[
 SMCScoring.py 
 --pred-config ${config}
---sample-config ${sample}
+--truth-config ${sample}
 -o ${outfile}
     ]]></command>
   <inputs>
