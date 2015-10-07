@@ -563,6 +563,8 @@ if __name__ == '__main__':
                 except ValueError:
                     pass
         out = {}
+        print "pred", pred_config
+        print "truth", truth_config
         for challenge in pred_config:
             if challenge in truth_config:
                 predfile = pred_config[challenge]

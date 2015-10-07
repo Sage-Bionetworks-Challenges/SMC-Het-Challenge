@@ -98,19 +98,19 @@ SMCScoring.py
   <configfiles>
     <configfile name="pred_config"><![CDATA[
 #if $cellularity.submit == 'yes':
-{"1A" : "${cellularity.predfile}"}
+{"1A" : ["${cellularity.predfile}"]}
 #end if
 #if $population.submit == 'yes':
-{"1B" : "${population.predfile}"}
+{"1B" : ["${population.predfile}"]}
 #end if
 #if $proportion.submit == 'yes':
-{"1C" : "${proportion.predfile}"}
+{"1C" : ["${proportion.predfile}"]}
 #end if
 #if $cluster_assignment.submit == 'yes':
-{"2A" : "${cluster_assignment.predfile}"}
+{"2A" : ["${cluster_assignment.predfile}"]}
 #end if
 #if $cocluster_assignment.submit == 'yes':
-{"2B" : "${cocluster_assignment.predfile}"}
+{"2B" : ["${cocluster_assignment.predfile}"]}
 #end if
 #if $cluster_assignment.submit == 'yes' and $cluster_assignment.phylogeny.submit == 'yes':
 {"3A" : ["${cluster_assignment.predfile}","${cluster_assignment.phylogeny.predfile}"] }
