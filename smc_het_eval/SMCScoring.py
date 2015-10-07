@@ -571,9 +571,9 @@ if __name__ == '__main__':
                 vcf = truth_config[challenge]['vcf']
                 truthfiles = truth_config[challenge]['truth']
                 if args.v:
-                    res = verifyChallenge(challenge,[predfile],vcf)
+                    res = verifyChallenge(challenge,predfile,vcf)
                 else:
-                    res = scoreChallenge(challenge,[predfile],truthfiles,vcf)
+                    res = scoreChallenge(challenge,predfile,truthfiles,vcf)
                 out[challenge] = res
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( out )
