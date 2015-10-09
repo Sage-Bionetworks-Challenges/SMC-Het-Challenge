@@ -7,8 +7,8 @@
   </requirements>
   <command interpreter="python"><![CDATA[
 SMCScoring.py 
---pred-config ${config}
---truth-config ${sample}
+--pred-config ${pred_config}
+--truth-config ${truth_config}
 -o ${outfile}
     ]]></command>
   <inputs>
@@ -96,21 +96,21 @@ SMCScoring.py
   </outputs>
   
   <configfiles>
-    <configfile name="config"><![CDATA[
+    <configfile name="pred_config"><![CDATA[
 #if $cellularity.submit == 'yes':
-{"1A" : "${cellularity.predfile}"}
+{"1A" : ["${cellularity.predfile}"]}
 #end if
 #if $population.submit == 'yes':
-{"1B" : "${population.predfile}"}
+{"1B" : ["${population.predfile}"]}
 #end if
 #if $proportion.submit == 'yes':
-{"1C" : "${proportion.predfile}"}
+{"1C" : ["${proportion.predfile}"]}
 #end if
 #if $cluster_assignment.submit == 'yes':
-{"2A" : "${cluster_assignment.predfile}"}
+{"2A" : ["${cluster_assignment.predfile}"]}
 #end if
 #if $cocluster_assignment.submit == 'yes':
-{"2B" : "${cocluster_assignment.predfile}"}
+{"2B" : ["${cocluster_assignment.predfile}"]}
 #end if
 #if $cluster_assignment.submit == 'yes' and $cluster_assignment.phylogeny.submit == 'yes':
 {"3A" : ["${cluster_assignment.predfile}","${cluster_assignment.phylogeny.predfile}"] }
@@ -118,6 +118,29 @@ SMCScoring.py
 #if $cocluster_assignment.submit == 'yes' and $cocluster_assignment.ancestor.submit == 'yes':
 {"3B" : ["${cocluster_assignment.predfile}","${cocluster_assignment.ancestor.predfile}"]}
 #end if
+]]></configfile>
+   <configfile name="truth_config"><![CDATA[
+ #if $cellularity.submit == 'yes':
+ {"1A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.1A.txt"]}}
+ #end if
+ #if $population.submit == 'yes':
+ {"1B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.1B.txt"]}}
+ #end if
+ #if $proportion.submit == 'yes':
+ {"1C" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.1C.txt"]}}
+ #end if
+ #if $cluster_assignment.submit == 'yes':
+ {"2A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2A.txt"]}}
+ #end if
+ #if $cocluster_assignment.submit == 'yes':
+ {"3A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.3A.txt"]}}
+ #end if
+ #if $cluster_assignment.submit == 'yes' and $cluster_assignment.phylogeny.submit == 'yes':
+ {"2B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2A.txt", "${sample}.truth.2B.gz"]}}
+ #end if
+ #if $cocluster_assignment.submit == 'yes' and $cocluster_assignment.ancestor.submit == 'yes':
+ {"3B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.3A.txt", "${sample}.truth.3B.gz"]}}
+ #end if
 ]]></configfile>
   </configfiles>
 

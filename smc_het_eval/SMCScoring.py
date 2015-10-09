@@ -571,7 +571,7 @@ if __name__ == '__main__':
                 try:
                     v = json.loads(line)
                     if isinstance(v,dict):
-                        pred_config = dict(pred_config **v)
+                        pred_config = dict(pred_config, **v)
                 except ValueError:
                     pass
         with open(args.truth_config) as handle:
@@ -580,19 +580,21 @@ if __name__ == '__main__':
                 try:
                     v = json.loads(line)
                     if isinstance(v,dict):
-                        truth_config = dict(truth_config **v)
+                        truth_config = dict(truth_config, **v)
                 except ValueError:
                     pass
         out = {}
+        print "pred", pred_config
+        print "truth", truth_config
         for challenge in pred_config:
             if challenge in truth_config:
                 predfile = pred_config[challenge]
                 vcf = truth_config[challenge]['vcf']
                 truthfiles = truth_config[challenge]['truth']
                 if args.v:
-                    res = verifyChallenge(challenge,predfiles,vcf)
+                    res = verifyChallenge(challenge,predfile,vcf)
                 else:
-                    res = scoreChallenge(challenge,predfiles,truthfiles,vcf)
+                    res = scoreChallenge(challenge,predfile,truthfiles,vcf)
                 out[challenge] = res
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( out )
