@@ -8,6 +8,7 @@ import StringIO
 import scipy.stats
 import sklearn.metrics as mt
 import copy as cp
+from functools import reduce
 
 
 class ValidationError(Exception):
@@ -176,7 +177,13 @@ def calculate2_quaid(pred,truth):
             return 0
 
 def calculate2(pred,truth):
-    return calculate2_orig(pred,truth)
+    pv_score = 1 - calculate2_pseudoV(pred,truth) / 4000
+    pv_sym_score = 1 - calculate2_sym_pseudoV(pred, truth) / 8000
+    pear_score = calculate2_pearson(pred, truth)
+    mcc_score = calculate2_mcc(pred, truth)
+
+    scores = (pv_score, pv_sym_score, pear_score, mcc_score)
+    return np.mean(scores)
 
 def calculate2_orig(pred,truth):
     n = truth.shape[0]
@@ -249,12 +256,29 @@ def calculate2_aupr(pred,truth):
 def calculate2_mcc(pred,truth):
     n = truth.shape[0]
 
+    print np.sum(pred), np.sum(truth)
+
     tp = float(sum(pred[truth==1] == 1))
     tn = float(sum(pred[truth==0] == 0))
     fp = float(sum(pred[truth==0] == 1))
     fn = float(sum(pred[truth==1] == 0))
+
+    # To avoid divide-by-zero cases
+    den_terms = [(tp+fp),(tp+fn),(tn+fp),(tn+fn)]
+    for index, term in enumerate(den_terms):
+        if term == 0:
+            den_terms[index] = 1
+    den = np.sqrt(reduce(np.multiply, den_terms, 1))
+
+    if tp == 0 and fn == 0:
+        num = (tn - fp)
+    elif tn == 0 and fp == 0:
+        num = (tp - fn)
+    else:
+        num = (tp*tn - fp*fn)
+
     print tp,tn,fp,fn
-    return (tp*tn - fp*fn)/np.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
+    return num / den
 
 def validate2B(data,nssms):
     data = StringIO.StringIO(data)
