@@ -267,7 +267,7 @@ tpr <- function(data){
   
   # number of pairs of elements that should be in the 
   # same cluster
-  tp.expected <- (n.c*(n.c-1)*c) / 2
+  tp.expected <- (n.c*(n.c-1)*c)
   tpr <- tp(data) / tp.expected
   return(tpr)
 }
@@ -288,7 +288,7 @@ tnr <- function(data){
   
   # number of pairs of elements that should be assigned to
   # different clusters
-  tn.expected <- (n.c * (n.c * (c-1)) * c) / 2
+  tn.expected <- (n.c * (n.c * (c-1)) * c)
   tnr <- 1 - (fn(data) / tn.expected)
   return(tnr)
 }
