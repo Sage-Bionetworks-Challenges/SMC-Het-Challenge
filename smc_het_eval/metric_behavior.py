@@ -822,20 +822,149 @@ def scoring3A_behavior(method="orig_no_cc"):
     f.write('\n'.join(res))
     f.close()
     
-    
-    
-    
+def score_all(p_cell, t_cell, p_ncluster, t_ncluster, p_1c, t_1c,  p_ccm, t_ccm, p_ad, t_ad):
+    s1A = calculate1A(p_cell, t_cell)
+    s1B = calculate1B(p_ncluster, t_ncluster)
+    s1C = calculate1C(p_1c, t_1c)
+    s2 = calculate2(p_ccm, t_ccm)
+    s3 = calculate3(p_ccm, p_ad, t_ccm, t_ad)
+    scores = [s1A,s1B,s1C,s2,s3]
+
+    weights = [2000, 2000, 3000, 6000, 7000]
+    soverall = np.sum(np.multiply(scores, weights))
+
+    scores.append(soverall)
+
+    print('Scores:\nSC1 - Part A: %s, Part B: %s, Part C: %s\nSC2 - %s\nSC3 - %s\nOverall: %s' % tuple(scores))
+    return soverall
+
+def scoringtotal_behavior():
+    # True results
+    # SC 1
+    t_cellularity = 0.3
+    t_n_clusters = 6
+    t_size_clusters = np.repeat(100, 6)
+    t_cf = np.array([.7,.1,.1,.03,.04,.03])
+    t_1C = zip(t_size_clusters, t_cf)
+
+    t_clusters = np.zeros((600,6))
+    t_clusters[0:100,0] = 1 #cluster 1
+    t_clusters[100:200,1] = 1 #cluster 2
+    t_clusters[200:300,2] = 1 #...
+    t_clusters[300:400,3] = 1
+    t_clusters[400:500,4] = 1
+    t_clusters[500:600,5] = 1
+    t_ccm = np.dot(t_clusters,t_clusters.T)
+
+    t_ad = np.zeros((600,600))
+    t_ad[0:100, 100:] = 1
+    t_ad[100:200, 300:500] = 1
+    t_ad[200:300, 500:600] = 1
+
+    print "Truth"
+    res = [score_all(t_cellularity, t_cellularity,
+                    t_n_clusters, t_n_clusters,
+                    t_1C, t_1C,
+                    t_ccm, t_ccm,
+                    t_ad, t_ad)]
+
+
+    # OneCluster: everything is in one big cluster
+    # Incorrect Phylogeny Tree:
+    #    [1]
+    method = "OneCluster"
+
+    p_cellularity = 0.5
+    p_n_clusters = 1
+    p_size_clusters = np.array([600])
+    p_cf = np.array([1])
+    p_1C = zip(p_size_clusters, p_cf)
+
+    p_ccm = np.ones(t_ccm.shape)
+    p_ad = np.zeros(t_ad.shape)
+
+    print method
+    res.append([method,
+                score_all(
+                    p_cellularity, t_cellularity,
+                    p_n_clusters, t_n_clusters,
+                    p_1C, t_1C,
+                    p_ccm, t_ccm,
+                    p_ad, t_ad
+                )])
+
+    # NClustersOneLineage: everything in it's own cluster, all in one long lineage
+    # Incorrect Phylogeny Tree:
+    #  [1]
+    #   |
+    #  [2]
+    #  ...
+    #   |
+    # [600]
+    method = "NClusterOneLineages"
+
+    p_cellularity = 0.5
+    p_n_clusters = 600
+    p_size_clusters = np.repeat(1,600)
+    p_cf = np.repeat(1/600, 600)
+    p_1C = zip(p_size_clusters, p_cf)
+
+    p_ccm = np.identity(t_ccm.shape[0])
+    p_ad = np.triu(np.ones(t_ad.shape), k=1)
+
+    print method
+    res.append([method,
+               score_all(
+                    p_cellularity, t_cellularity,
+                    p_n_clusters, t_n_clusters,
+                    p_1C, t_1C,
+                    p_ccm, t_ccm,
+                    p_ad, t_ad
+                )])
+
+    # NClustersTwoLineages: everything in it's own cluster, split into two germlines
+    # Incorrect Phylogeny Tree:
+    #      [1]
+    #   |      |
+    #  [2]   [302]
+    #  ...    ...
+    #   |      |
+    # [300]  [600]
+    #   |
+    # [301]
+    method = "NClusterTwoLineages"
+
+    p_cellularity = 0.5
+    p_n_clusters = 600
+    p_size_clusters = np.repeat(1,600)
+    p_cf = np.repeat(1/600, 600)
+    p_1C = zip(p_size_clusters, p_cf)
+
+    p_ccm = np.identity(t_ccm.shape[0])
+    p_ad = ad = np.triu(np.ones(t_ad.shape), k=1)
+    p_ad[2:302,302:] = 0
+
+    print method
+    res.append([method,
+               score_all(
+                    p_cellularity, t_cellularity,
+                    p_n_clusters, t_n_clusters,
+                    p_1C, t_1C,
+                    p_ccm, t_ccm,
+                    p_ad, t_ad
+                )])
+
 
 if __name__ == '__main__':
+    #scoring1C_behavior()
+    scoringtotal_behavior()
     '''
-    scoring3A_behavior("aupr_no_cc")
-'''
+
     methods = ("orig", "orig_no_cc", "pseudoV", "pseudoV_no_cc", "simpleKL_no_cc",
                  "sqrt_no_cc", "sym_pseudoV_no_cc", "pearson_no_cc", "aupr_no_cc", "mcc_no_cc")
     for m in methods:
         print('Calculating metric %s...' % m)
-        scoring3A_behavior(m)
-'''
+
     scoring1A_behavior()
     scoring1B_behavior()
     scoring1C_behavior()
