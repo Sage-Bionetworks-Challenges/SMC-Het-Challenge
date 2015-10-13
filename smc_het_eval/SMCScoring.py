@@ -177,12 +177,16 @@ def calculate2_quaid(pred,truth):
             return 0
 
 def calculate2(pred,truth):
+    print "...calc PseudoV"
     pv_score = 1 - calculate2_pseudoV(pred,truth) / 4000
+    print "...calc Sym PseudoV"
     pv_sym_score = 1 - calculate2_sym_pseudoV(pred, truth) / 8000
-    pear_score = calculate2_pearson(pred, truth)
+    print "...calc Spearman"
+    spear_score = calculate2_spearman(pred, truth)
+    print "...calc MCC"
     mcc_score = calculate2_mcc(pred, truth)
 
-    scores = (pv_score, pv_sym_score, pear_score, mcc_score)
+    scores = (pv_score, pv_sym_score, spear_score, mcc_score)
     return np.mean(scores)
 
 def calculate2_orig(pred,truth):
@@ -239,6 +243,25 @@ def calculate2_sym_pseudoV(pred, truth, rnd=0.01):
     truth = truth / np.sum(truth,axis=1)[:,np.newaxis]
     return np.sum(truth * np.log(truth/pred)) + np.sum(pred * np.log(pred/truth))
 
+def calculate2_spearman(pred, truth):
+    # use only the upper triangular matrix of the truth and
+    # prediction matrices
+    n = truth.shape[0]
+    inds = np.triu_indices(n,k=1)
+    preda, trutha = np.asarray(pred[inds]),np.asarray(truth[inds])
+
+    # implement spearman coefficient since scipy implementation
+    # uses the covariance of the ranks, which could be zero
+    # find the rank order of both sets of data
+    predr = scipy.stats.rankdata(preda)
+    truthr = scipy.stats.rankdata(trutha)
+    d = truthr - predr
+    n = len(d)
+    row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
+
+    return row
+
+
 def calculate2_pearson(pred, truth):
     n = truth.shape[0]
     inds = np.triu_indices(n,k=1)
@@ -264,11 +287,11 @@ def calculate2_mcc(pred,truth):
     fn = float(sum(pred[truth==1] == 0))
 
     # To avoid divide-by-zero cases
-    den_terms = [(tp+fp),(tp+fn),(tn+fp),(tn+fn)]
-    for index, term in enumerate(den_terms):
+    denom_terms = [(tp+fp),(tp+fn),(tn+fp),(tn+fn)]
+    for index, term in enumerate(denom_terms):
         if term == 0:
-            den_terms[index] = 1
-    den = np.sqrt(reduce(np.multiply, den_terms, 1))
+            denom_terms[index] = 1
+    denom = np.sqrt(reduce(np.multiply, denom_terms, 1))
 
     if tp == 0 and fn == 0:
         num = (tn - fp)
@@ -278,7 +301,7 @@ def calculate2_mcc(pred,truth):
         num = (tp*tn - fp*fn)
 
     print tp,tn,fp,fn
-    return num / den
+    return num / denom
 
 def validate2B(data,nssms):
     data = StringIO.StringIO(data)
