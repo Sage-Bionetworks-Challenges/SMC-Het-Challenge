@@ -49,22 +49,26 @@ assign.useful <- function(class.pairs){
   # number of elements in each class that are incorrectly assigned 
   # to the wrong useful cluster
   num.class.incorr <- floor(n.C * (epsilon1))
-  num.clust.unpair <- sum(1 - class.pairs) # number of clusters paired with this class
+  num.clust.unpair <- sum(1 - class.pairs) # number of clusters not paired with this class
   
   num.class.corr <- n.C * (1 - epsilon) # number of elements in each class that are correctly assigned
   num.clust.pair <- sum(class.pairs) # number of clusters paired with this class
+  print(paste("In Correct Class", num.class.corr, "Paired Classes", num.clust.pair))
   
-  class.elem <- (class.pairs * floor(num.class.corr / num.clust.pair)) + # correctly assigned elements
-    ((1 - class.pairs) * floor(num.class.incorr / num.clust.unpair)) # incorrectly assigned elements
+  corr.elems <- ifelse(num.clust.pair == 0, 0, floor(num.class.corr / num.clust.pair))
+  incorr.elems <- ifelse(num.clust.unpair == 0, 0, floor(num.class.incorr / num.clust.unpair))
   
-  toassign.corr = num.class.corr %% num.clust.pair
-  toassign.incorr = num.class.incorr %% num.clust.unpair
+  
+  class.elem <- (class.pairs * corr.elems) + # correctly assigned elements
+    ((1 - class.pairs) * incorr.elems) # incorrectly assigned elements
+  
+  toassign.corr = ifelse(num.clust.pair == 0, 0, num.class.corr %% num.clust.pair)
+  toassign.incorr = ifelse(num.clust.unpair == 0, 0, num.class.incorr %% num.clust.unpair)
   # start looking at a random index so that the extra elements are
   # assigned randomly and not all to the same classes
   index <- sample(1:K.u, 1)
   # check to ensure that elements are not "lost"
   while(toassign.corr > 0 || toassign.incorr > 0){ # assign "extra" elements
-    #print(paste("Correct", toassign.corr, "Incorrect", toassign.incorr))
     if(class.pairs[index] && toassign.corr){
       class.elem[index] <- class.elem[index] + 1
       toassign.corr <- toassign.corr - 1
@@ -355,18 +359,22 @@ get.param.str <- function(param.vals=NULL){
 #     assignment using that metric
 evaluate <- function(data, title=""){
   pv <- pseudo.v.metric(data,0.01)
+  # calculate each of the desired metrics for the given simulation data
   sim.res <- c(combinatorial.metric(1,1,data), 
                combinatorial.metric(2,1,data), 
                1 - (pv$normal / 4000), # scale these so that they can be compared to other metrics
                1 - (pv$sym / 4000),
                mcc.metric(data),
-               pearson.metric(data))
+               pearson.metric(data),
+               spearman.metric(data))
+  # names of the different metrics
   sim.names <- c("Combinatorial.Equal.Weight", 
                  "Combinatorial.Unequal.Weight", 
                  "Pseudo.V", 
                  "Pseudo.V.Sym",
                  "MCC",
-                 "Pearson")
+                 "Pearson",
+                 "Spearman")
   if(title != ""){
     sim.res <- c(title, sim.res)
     names(sim.res) <- c("Name", sim.names)
@@ -483,10 +491,14 @@ create.data <- function(n.iter.value = NULL, #why is this here...
 #    res - nested list of lists with each dimension corresponding to
 #       one of the iterated parameters from the input
 
-run.sim <- function(K.u.values=2:11, 
+run.sim <- function(C = 5,
+                    K.u.values=1:8, 
                     K.n.values=0:6, 
                     e1.values=c(0,0.033,0.066,0.1), 
-                    e2.values=c(0,0.066,0.133,0.2)){
+                    e2.values=c(0,0.066,0.133,0.2),
+                    filename = NULL
+                    ){
+  C <<- C
   res <- list()
   res <- lapply(K.u.values,
                 function(k.u){
@@ -522,7 +534,7 @@ run.sim <- function(K.u.values=2:11,
   names(res) <- K.u.values
   
   if(!is.null(filename)){
-    write.
+    write.table(res, filename)
   }
   
   return(res)
@@ -965,6 +977,24 @@ pearson.metric <- function(data){
   uppertri <- upper.tri(ccm.t)
   
   return(cor(ccm.t[uppertri], ccm.p[uppertri], method="pearson"))
+}
+
+#### spearman.metric #########################################
+# Evaluates the clustering assignment based on the spearman measure
+#
+# INPUT:
+#   data - matrix of size (K.u+K.n x C) that gives the number of
+#       elements of each class that are assigned to each cluster
+# OTUPUT:
+#   score - score for the clustering assignment, higher is worse
+spearman.metric <- function(data){
+  ccms <- get.ccm(data) # co-clustering matrices, both true and predicted
+  ccm.t <- ccms$ccm.t
+  ccm.p <- ccms$ccm.p
+  
+  uppertri <- upper.tri(ccm.t)
+  
+  return(cor(ccm.t[uppertri], ccm.p[uppertri], method="spearman"))
 }
 
 #### mcc.metric #############################################
