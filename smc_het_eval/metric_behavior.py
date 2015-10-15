@@ -1,5 +1,8 @@
 from SMCScoring import *
 import numpy as np
+import csv
+
+tsv_dir = './scoring_metric_data/text_files/' # directory to save tsv's to
 
 def scoring1A_behavior():
     guesses = np.array(range(0,101))/100.0
@@ -342,7 +345,6 @@ def scoring2B_behavior():
     f.close()  
     
 def scoring3A_behavior(method="orig_no_cc"):
-    tsv_dir = './scoring_metric_data/text_files/'
     
     # six clusters, one at top level, two at 2nd level,
     # three at 3rd level (one lineage with one cluster, the other with two)
@@ -821,8 +823,19 @@ def scoring3A_behavior(method="orig_no_cc"):
     f = open(tsv_dir + 'scoring3A_all_cases_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
-    
-def score_all(p_cell, t_cell, p_ncluster, t_ncluster, p_1c, t_1c,  p_ccm, t_ccm, p_ad, t_ad):
+
+
+def overall_score(p_cell, t_cell, p_ncluster, t_ncluster, p_1c, t_1c,  p_ccm, t_ccm, p_ad, t_ad, weights = [2000, 2000, 3000, 6000, 7000], verbose=False):
+    '''Get the overall score for a prediction
+
+    Attributes:
+    p_cell, t_cell - predicted and true cellularity
+    p_ncluster, t_ncluster - predicted and true number of clusters
+    p_1c, t_1c - zippped variable with the size of each clusters and the cellullar frequency of each cluster
+    p_ccm, t_ccm - co-clustering matrix for the mutations
+    p_ad, t_ad - ancestry-descendant matrix for the mutations
+    weights - weights for scores from each challenge when combining to give an overall score
+    '''
     s1A = calculate1A(p_cell, t_cell)
     s1B = calculate1B(p_ncluster, t_ncluster)
     s1C = calculate1C(p_1c, t_1c)
@@ -830,134 +843,385 @@ def score_all(p_cell, t_cell, p_ncluster, t_ncluster, p_1c, t_1c,  p_ccm, t_ccm,
     s3 = calculate3(p_ccm, p_ad, t_ccm, t_ad)
     scores = [s1A,s1B,s1C,s2,s3]
 
-    weights = [2000, 2000, 3000, 6000, 7000]
     soverall = np.sum(np.multiply(scores, weights))
 
     scores.append(soverall)
+    if verbose:
+        print('Scores:\nSC1 - Part A: %s, Part B: %s, Part C: %s\nSC2 - %s\nSC3 - %s\nOverall: %s' % tuple(scores))
 
-    print('Scores:\nSC1 - Part A: %s, Part B: %s, Part C: %s\nSC2 - %s\nSC3 - %s\nOverall: %s' % tuple(scores))
     return soverall
 
-def scoringtotal_behavior():
-    # True results
-    # SC 1
-    t_cellularity = 0.3
-    t_n_clusters = 6
-    t_size_clusters = np.repeat(100, 6)
-    t_cf = np.array([.7,.1,.1,.03,.04,.03])
-    t_1C = zip(t_size_clusters, t_cf)
+def score_all(l_p_cell, t_cell,
+              l_p_ncluster, t_ncluster,
+              l_p_1c, t_1c,
+              l_p_ccm, t_ccm,
+              l_p_ad, t_ad,
+              weights = [2000, 2000, 3000, 6000, 7000],
+              verbose = False):
+    scores = dict()
+    for i in range(len(l_p_cell)):
+        if verbose:
+            print 'Scenario: %s' % scenarios[i]
+        score = overall_score(
+            l_p_cell[i], t_cell,
+              l_p_ncluster[i], t_ncluster,
+              l_p_1c[i], t_1c,
+              l_p_ccm[i], t_ccm,
+              l_p_ad[i], t_ad,
+              weights,
+              verbose)
+        scores[scenarios[i]] = score
 
-    t_clusters = np.zeros((600,6))
-    t_clusters[0:100,0] = 1 #cluster 1
-    t_clusters[100:200,1] = 1 #cluster 2
-    t_clusters[200:300,2] = 1 #...
-    t_clusters[300:400,3] = 1
-    t_clusters[400:500,4] = 1
-    t_clusters[500:600,5] = 1
-    t_ccm = np.dot(t_clusters,t_clusters.T)
+    if verbose:
+        print ("Overall Scores")
+        print scores
 
-    t_ad = np.zeros((600,600))
-    t_ad[0:100, 100:] = 1
-    t_ad[100:200, 300:500] = 1
-    t_ad[200:300, 500:600] = 1
+    return scores
 
-    print "Truth"
-    res = [score_all(t_cellularity, t_cellularity,
-                    t_n_clusters, t_n_clusters,
-                    t_1C, t_1C,
-                    t_ccm, t_ccm,
-                    t_ad, t_ad)]
+def rank(scores):
+    scores = np.asarray(scores)
+    order = scores.argsort()
+    rank = order.argsort()
+    return rank + 1
+
+def get_ccm(scenario, t_ccm=None):
+    '''Find the co-clustering matrix for the given scenario
+
+    Attributes:
+    scenario - string representing the clustering scenario being evaluated
+    t_ccm - optional value for the true co-clustering matrix, to avoid comupting it multiple times
+    '''
+    # TODO: make this more generalizable by calculating CCM from size and number of clusters
+    if t_ccm is None:
+        t_clusters = np.zeros((600,6))
+        t_clusters[0:100,0] = 1 #cluster 1
+        t_clusters[100:200,1] = 1 #cluster 2
+        t_clusters[200:300,2] = 1 #...
+        t_clusters[300:400,3] = 1
+        t_clusters[400:500,4] = 1
+        t_clusters[500:600,5] = 1
+        t_ccm = np.dot(t_clusters,t_clusters.T)
+
+    if scenario in "Truth" or "ParentIs" in scenario:
+        return t_ccm
+    elif scenario is "OneCluster":
+        return np.ones(t_ccm.shape)
+    elif "NCluster" in scenario:
+        return np.identity(t_ccm.shape[0])
+    elif scenario is "SplitClusterBotSame":
+        clusters = np.zeros((600,7))
+        clusters[:,:-1] = np.copy(t_clusters)
+        clusters[550:600,5] = 0
+        clusters[550:600,6] = 1
+        return np.dot(clusters, clusters.T)
+    elif scenario is "SplitClusterBotDiff":
+        clusters = np.zeros((600,7))
+        clusters[:,:-1] = np.copy(t_clusters)
+        clusters[550:600,5] = 0
+        clusters[550:600,6] = 1
+        return np.dot(clusters, clusters.T)
+    elif scenario is "SplitClusterMidOneChild":
+        clusters = np.zeros((600,7))
+        clusters[:,:-1] = np.copy(t_clusters)
+        clusters[250:300,2] = 0
+        clusters[250:300,6] = 1
+        return np.dot(clusters, clusters.T)
+    elif scenario is "SplitClusterMidMultiChild":
+        clusters = np.zeros((600,7))
+        clusters[:,:-1] = np.copy(t_clusters)
+        clusters[150:200,1] = 0
+        clusters[150:200,6] = 1
+        return np.dot(clusters, clusters.T)
+
+    elif scenario is "MergeClusterBot":
+        clusters = np.copy(t_clusters[:,:-1])
+        clusters[500:600,4] = 1 #fix cluster 5 (originally cluster 6)
+        clusters[400:500,4] = 0 #merge clusters 4 and 5 (from true phylogeny)
+        clusters[300:400,3] = 1
+        return np.dot(clusters, clusters.T)
+    elif scenario == "MergeClusterMid&BotOneChild":
+        clusters = np.copy(t_clusters[:,:-1])
+        clusters[500:600, 2] = 1 #merge clusters 3 and 6
+        return np.dot(clusters, clusters.T)
+    elif scenario == "MergeClusterMid&BotMultiChild":
+        clusters = np.copy(t_clusters[:,:-1])
+        clusters[500:600, 4] = 1 #fix cluster 5 (originally cluster 6)
+        clusters[400:500, 1] = 1 #merge clusters 2 and 5 (from true phylogeny)
+        clusters[400:500, 4] = 0
+        return np.dot(clusters, clusters.T)
+    elif scenario == "MergeClusterTop&Mid":
+        clusters = np.zeros((600,5))
+        clusters[0:200, 0] = 1 #merged cluster from clusters 1 and 2 in true phylogeny
+        clusters[200:300, 1] = 1
+        clusters[300:400, 2] = 1
+        clusters[400:500, 3] = 1
+        clusters[500:600, 4] = 1
+        return np.dot(clusters, clusters.T)
+    elif "SmallExtra" in scenario:
+        clusters = np.zeros((600,7))
+        clusters[:,:-1] = np.copy(t_clusters)
+        for i in range(0,6):
+            clusters[100*i,i] = 0
+            clusters[100*i,6] = 1
+        return np.dot(clusters,clusters.T)
+    elif "BigExtra" in scenario:
+        clusters = np.zeros((600,7))
+        clusters[:,:-1] = np.copy(t_clusters)
+        for i in range(0,6):
+            clusters[100*i:100*i+15,i] = 0
+            clusters[100*i:100*i+15,6] = 1
+        return np.dot(clusters,clusters.T)
+    else:
+        raise LookupError("Invalid scenario")
+
+def get_ad(scenario, t_ad=None):
+    '''Find the ancestry-descendant matrix for the given scenario
+
+    Attributes:
+    scenario - string representing the clustering scenario being evaluated
+    t_ad - optional value for the true AD matrix, to avoid comupting it multiple times
+    '''
+    if t_ad is None:
+        t_ad = np.zeros((600,600))
+        t_ad[0:100, 100:] = 1
+        t_ad[100:200, 300:500] = 1
+        t_ad[200:300, 500:600] = 1
+
+    if scenario in ["Truth", "SplitClusterBotSame", "MergeClusterBot"]:
+        return t_ad
+    elif scenario is "SplitClusterBotDiff":
+        ad = np.copy(t_ad)
+        ad[500:550,550:600] = 1.
+        return ad
+    elif scenario is "SplitClusterMidOneChild":
+        ad = np.copy(t_ad)
+        ad[250:300,500:600] = 0
+        return ad
+    elif scenario is "SplitClusterMidMultiChild":
+        ad = np.copy(t_ad)
+        ad[150:200,300:500] = 0
+        return ad
+    elif scenario == "MergeClusterMid&BotOneChild":
+        ad = np.copy(t_ad)
+        ad[200:300, 500:600] = 0
+        return ad
+    elif scenario == "MergeClusterMid&BotMultiChild":
+        ad = np.copy(t_ad)
+        ad[100:200, 400:500] = 0
+        ad[400:500, 300:400] = 1
+        return ad
+    elif scenario == "MergeClusterTop&Mid":
+        ad = np.zeros((600,600))
+        ad[0:200, 200:] = 1
+        ad[200:300, 500:] = 1
+        return ad
+    elif scenario is "ParentIsSibling":
+        ad = np.copy(t_ad)
+        ad[300:400,400:500] = 1
+        return ad
+    elif scenario is "ParentIsGrandparent":
+        ad = np.copy(t_ad)
+        ad[100:200,400:500] = 0
+        return ad
+    elif scenario is "ParentIsAunt":
+        ad = np.copy(t_ad)
+        ad[100:200,400:500] = 0
+        ad[200:300,400:500] = 1
+        return ad
+    elif scenario is "ParentIsCousin":
+        ad = np.copy(t_ad)
+        ad[100:200,400:500] = 0
+        ad[200:300,400:500] = 1
+        ad[500:600,400:500] = 1
+        return ad
+    elif scenario is "ParentIsSiblingWithChildren":
+        ad = np.copy(t_ad)
+        ad[200:300, range(100,200)+range(300,600)] = 1 #adjust cluster 3's ancestry
+        return ad
+    elif scenario is "ParentIsNieceWithChildren":
+        ad = np.copy(t_ad)
+        ad[200:300, range(100,200)+range(300,600)] = 1 #adjust cluster 3's ancestry
+        ad[500:600, range(100,200)+range(300,600)] = 1 #adjust cluster 6's ancestry
+        return ad
+    elif scenario is "OneCluster":
+        return np.zeros(t_ad.shape)
+    elif scenario is "NClusterOneLineage":
+        return np.triu(np.ones(t_ad.shape), k=1)
+    elif scenario is "NClusterTwoLineages":
+        ad = np.triu(np.ones(t_ad.shape), k=1)
+        ad[2:302,302:] = 0
+        return ad
+    elif scenario is "NClusterCorrectLineage":
+        ad = np.triu(np.ones(t_ad.shape), k=1)
+        ad[100:200,range(200,300)+range(500,600)] = 0 # equivalent of cluster 2 from true AD matrix
+        ad[200:300,300:500] = 0 # cluster 3 from true AD matrix
+        ad[300:400,400:] = 0 # cluster 4 from true AD matrix
+        ad[400:500,500:600] = 0 # cluster 5 from true AD matrix
+        return ad
+    elif scenario is "SmallExtraNewBot":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i] = 0
+            ad[range(1,100)+range(101,200)+range(301,400),100*i] = 1
+            ad[100*i,:] = 0
+        return ad
+    elif scenario is "SmallExtraCurBot":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i] = 0
+            ad[range(1,100)+range(201,300),100*i] = 1
+            ad[100*i,:] = 0
+        return ad
+    elif scenario is "SmallExtraMid":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i] = 0
+            ad[range(1,100),100*i] = 1
+            ad[100*i,:] = 0
+        return ad
+    elif scenario is "SmallExtraTop":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i] = 0
+            ad[100*i,range(1,100)+range(101,200)+range(201,300)+range(301,400)+range(401,500)+range(501,600)] = 1
+        return ad
+    elif scenario is "BigExtraNewBot":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i:100*i+15] = 0
+            ad[range(15,100)+range(115,200)+range(315,400),100*i:100*i+15] = 1
+            ad[100*i:100*i+15,:] = 0
+        return ad
+    elif scenario is "BigExtraCurBot":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i:100*i+15] = 0
+            ad[range(15,100)+range(215,300),100*i:100*i+15] = 1
+            ad[100*i:100*i+15,:] = 0
+        return ad
+    elif scenario is "BigExtraMid":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i:100*i+15] = 0
+            ad[range(15,100),100*i:100*i+15] = 1
+            ad[100*i:100*i+15,:] = 0
+        return ad
+    elif scenario is "BigExtraTop":
+        ad = np.copy(t_ad)
+        for i in range(0,6):
+            ad[:,100*i:100*i+15] = 0
+            ad[100*i:100*i+15,range(15,100)+range(115,200)+range(215,300)+range(315,400)+range(415,500)+range(515,600)] = 1
+        return ad
+    else:
+        raise LookupError("Invalid scenario")
+
+def get_cluster_size(scenario):
+    '''Find the size of each cluster for the given scenario
+
+    Attributes:
+    scenario - string representing the clustering scenario being evaluated
+    '''
+    t_n = 6 # true number of clusters
+    t_size = 100 # true size of a cluster
+    if scenario is "Truth" or "ParentIs" in scenario:
+        return np.repeat(t_size, t_n)
+    elif scenario is "OneCluster":
+        return np.array([t_n * t_size])
+    elif "NCluster" in scenario:
+        return np.repeat(1,t_n * t_size)
+    elif "Split" in scenario:
+        return np.concatenate((np.repeat(t_size,t_n-1),np.array([t_size / 2, t_size / 2])))
+    elif "Merge" in scenario:
+        return np.concatenate((np.array([2 * t_size]),np.repeat(t_size,t_n - 2)))
+    elif "SmallExtra" in scenario:
+        return np.concatenate((np.repeat(t_size - 1,t_n), np.array([t_n])))
+    elif "BigExtra" in scenario:
+        return np.concatenate((np.repeat(t_size - 15,t_n), np.array([15*t_n])))
+    else:
+        raise LookupError("Invalid scenario")
+
+def get_cf(scenario, size_clusters):
+    '''Find the cellular frequency for each cluster for the given scenario
+
+    Attributes:
+    scenario - string representing the clustering scenario being evaluated
+    size_cluster - the size of eah cluster in the given scenario
+    '''
+    return size_clusters / float(sum(size_clusters)) # default is frequency relative to size of cluster
 
 
-    # OneCluster: everything is in one big cluster
-    # Incorrect Phylogeny Tree:
-    #    [1]
-    method = "OneCluster"
+def get_cellularity(scenario):
+    '''Find the cellularity for the given scenario
 
-    p_cellularity = 0.5
-    p_n_clusters = 1
-    p_size_clusters = np.array([600])
-    p_cf = np.array([1])
-    p_1C = zip(p_size_clusters, p_cf)
+    Attributes:
+    scenario - string representing the clustering scenario being evaluated
+    '''
+    t_cell = 0.7 # true cellularity
+    if scenario is "Truth":
+        return t_cell
+    else:
+        return t_cell + np.random.normal(scale=0.05)
 
-    p_ccm = np.ones(t_ccm.shape)
-    p_ad = np.zeros(t_ad.shape)
+# list of scenarios for testing the metric behaviour
+scenarios = ["Truth", "OneCluster", "NClusterOneLineage", "NClusterTwoLineages", "NClusterCorrectLineage",
+                "ParentIsNieceWithChildren", "ParentIsSiblingWithChildren", "ParentIsCousin","ParentIsAunt", "ParentIsGrandparent", "ParentIsSibling",
+                "BigExtraTop", "BigExtraMid", "BigExtraCurBot", "BigExtraNewBot",
+                "SmallExtraTop", "SmallExtraMid", "SmallExtraNewBot", 'SmallExtraCurBot',
+                "SplitClusterMidMultiChild", "SplitClusterMidOneChild", "SplitClusterBotSame", "SplitClusterBotDiff",
+                "MergeClusterTop&Mid", "MergeClusterMid&BotMultiChild", "MergeClusterMid&BotOneChild","MergeClusterBot"]
 
-    print method
-    res.append([method,
-                score_all(
-                    p_cellularity, t_cellularity,
-                    p_n_clusters, t_n_clusters,
-                    p_1C, t_1C,
-                    p_ccm, t_ccm,
-                    p_ad, t_ad
-                )])
+def scoringtotal_behavior(verbose=False):
+    '''Scoring behaviour of all subchallenge metrics together
 
-    # NClustersOneLineage: everything in it's own cluster, all in one long lineage
-    # Incorrect Phylogeny Tree:
-    #  [1]
-    #   |
-    #  [2]
-    #  ...
-    #   |
-    # [600]
-    method = "NClusterOneLineages"
+    Attributes:
+    verbose - boolean for whether to output details of the scoring metrics
 
-    p_cellularity = 0.5
-    p_n_clusters = 600
-    p_size_clusters = np.repeat(1,600)
-    p_cf = np.repeat(1/600, 600)
-    p_1C = zip(p_size_clusters, p_cf)
+    '''
+    # True values for each attribute
+    t_cell = get_cellularity("Truth")
+    t_cluster_size = get_cluster_size("Truth")
+    t_ncluster = len(t_cluster_size)
+    t_cf = get_cf("Truth", t_cluster_size)
+    t_1C = zip(t_cluster_size, t_cf)
 
-    p_ccm = np.identity(t_ccm.shape[0])
-    p_ad = np.triu(np.ones(t_ad.shape), k=1)
+    t_ccm = get_ccm("Truth")
+    t_ad = get_ad("Truth")
 
-    print method
-    res.append([method,
-               score_all(
-                    p_cellularity, t_cellularity,
-                    p_n_clusters, t_n_clusters,
-                    p_1C, t_1C,
-                    p_ccm, t_ccm,
-                    p_ad, t_ad
-                )])
+    # list of predicted value for each scenario
+    l_p_cell = list()
+    l_p_ncluster = list()
+    l_p_1C = list()
+    l_p_ccm = list()
+    l_p_ad = list()
 
-    # NClustersTwoLineages: everything in it's own cluster, split into two germlines
-    # Incorrect Phylogeny Tree:
-    #      [1]
-    #   |      |
-    #  [2]   [302]
-    #  ...    ...
-    #   |      |
-    # [300]  [600]
-    #   |
-    # [301]
-    method = "NClusterTwoLineages"
+    for scenario in scenarios:
+        l_p_cell.append(get_cellularity(scenario))
+        p_cluster_size = get_cluster_size(scenario)
+        p_cf = get_cf(scenario, p_cluster_size)
+        l_p_ncluster.append(len(p_cluster_size))
+        l_p_1C.append(zip(p_cluster_size, p_cf))
 
-    p_cellularity = 0.5
-    p_n_clusters = 600
-    p_size_clusters = np.repeat(1,600)
-    p_cf = np.repeat(1/600, 600)
-    p_1C = zip(p_size_clusters, p_cf)
+        l_p_ccm.append(get_ccm(scenario))
+        l_p_ad.append(get_ad(scenario))
 
-    p_ccm = np.identity(t_ccm.shape[0])
-    p_ad = ad = np.triu(np.ones(t_ad.shape), k=1)
-    p_ad[2:302,302:] = 0
+    scores =  score_all(l_p_cell, t_cell,
+              l_p_ncluster, t_ncluster,
+              l_p_1C, t_1C,
+              l_p_ccm, t_ccm,
+              l_p_ad, t_ad, verbose=verbose)
 
-    print method
-    res.append([method,
-               score_all(
-                    p_cellularity, t_cellularity,
-                    p_n_clusters, t_n_clusters,
-                    p_1C, t_1C,
-                    p_ccm, t_ccm,
-                    p_ad, t_ad
-                )])
+    f = open(tsv_dir + "all_scores.csv", 'wb')
+    wr = csv.writer(f)
+    wr.writerow(scores.keys())
+    wr.writerow(scores.values())
+    f.close()
+
+    return scores
 
 
 if __name__ == '__main__':
     #scoring1C_behavior()
-    scoringtotal_behavior()
+    scoringtotal_behavior(True)
     '''
 
     methods = ("orig", "orig_no_cc", "pseudoV", "pseudoV_no_cc", "simpleKL_no_cc",

@@ -559,18 +559,18 @@ filter.data <- function(res,
                        e1.value=NA, 
                        e2.value=NA){
   if(!is.na(K.u.value)){
-    res <- parse.help(res, K.u.value, "K.u")
+    res <- filter.help(res, K.u.value, "K.u")
   }
   if(!is.na(K.n.value)){
     for(val1 in names(res)){
-      res[[val1]] <- parse.help(res[[val1]], K.n.value, "K.n")
+      res[[val1]] <- filter.help(res[[val1]], K.n.value, "K.n")
     }
   }
   if(!is.na(e1.value)){
     for(val1 in names(res)){
       res1 <- res[[val1]]
       for(val2 in names(res1)){
-        res1[[val2]] <- parse.help(res1[[val2]], e1.value, "epsilon1")
+        res1[[val2]] <- filter.help(res1[[val2]], e1.value, "epsilon1")
       }
       res[[val1]] <- res1
     }
@@ -581,7 +581,7 @@ filter.data <- function(res,
       for(val2 in names(res1)){
         res2 <- res1[[val2]]
         for(val3 in names(res2)){
-          res2[[val3]]<- parse.help(res2[[val3]], e2.value, "epsilon2")
+          res2[[val3]]<- filter.help(res2[[val3]], e2.value, "epsilon2")
         }
         res1[[val2]]<- res2
       }
@@ -817,6 +817,7 @@ plot.sim <- function(res, params.fixed.values, metrics=NA, diff=FALSE, filename=
   ymin <- min(plot.data[,2])
   ymax <- max(plot.data[,2])
   yrange <- ymax - ymin
+  print(paste(yrange, ymax, ymin))
   if(yrange != 0){
     ylim <- c(min(ymin, max(ymin - yrange/4, -0.1)), max(ymax,min(ymax + yrange/4, 1.1)))
   } else {
@@ -842,31 +843,46 @@ plot.sim <- function(res, params.fixed.values, metrics=NA, diff=FALSE, filename=
     legend = list(
       pch = p.pch,
       cex = p.cex,
-      #colours = default.colours(length(params.fixed.values)),
+      colours = default.colours(length(params.fixed.values)),
       labels = paste(sim.params,as.character(params.fixed.values), sep="="),
       title = 'Parameters',
       border = 'transparent'
       )
   );
   
-  metric.legend.grob <- legend.grob(
-    legends = metric.legend
-  );
+  metric.key = list(
+    text = list(
+      lab = metrics,
+      cex = 1,
+      col = 'black'
+      ),
+    points = list(
+      pch = p.pch,
+      col = p.colours,
+      cex = p.cex
+      ),
+    x = 0.04,
+    y = 0.95,
+    padding.text = 1
+    )
+#   metric.legend.grob <- legend.grob(
+#     legends = metric.legend
+#   );
   print("Created legends...")
   
-  # If we are graphing the differences then a few modifications need to be made
+  # ? If we are graphing the differences then a few modifications need to be made
   if(diff){
     
   }
   
-  create.scatterplot(plot.formula, 
+  plot <- create.scatterplot(plot.formula, 
                      plot.data,
                      filename = filename,
                      group = plot.data$metric,
                      pch = p.pch,
                      col = p.colours,
                      cex = p.cex,
-                     legend = list(right = list(fun = metric.legend.grob)),
+                     legend = list(right = list(fun = draw.key, args = list(key=metric.key), x=0.04, y = 0.9)),
                      abline.h = c(0,1),
                      abline.col = 'grey',
                      xlab.label = param.name,
@@ -880,7 +896,8 @@ plot.sim <- function(res, params.fixed.values, metrics=NA, diff=FALSE, filename=
                      main.cex = 1.5,
                      description = descrip,
                      ylimits = ylim,
-                     )
+                     );
+  return(plot);
 }
 
 # Takes in a data frame with multiple metrics in different columns
@@ -933,15 +950,16 @@ plot.sim.save <- function(res, params.fixed.values, metrics, diff, filename){
 #    res - simulation results
 #    diff - if true then plot the difference of the metric scores 
 #       evaluated for consecutive values of the given parameter, 
-#       otherwise plot the metric scores themselves  
-#    filename - filename for plot to be saved under
-#    iters - number of plots to save for each parameter
-plot.sim.batch <- function(res, diff){
+#       otherwise plot the metric scores themselves
+#    metrics - Optional vector of names of metrics to include in
+#       the plot. If not included then all metrics are considered.
+#       Passed to plot.sim
+plot.sim.batch <- function(res, diff=F, metrics=NA){
   # TODO: take these from 'res'
-  K.u.values=2:8 
-  K.n.values=0:6
-  e1.values=c(0,0.033,0.066,0.1) 
-  e2.values=c(0,0.066,0.133,0.2)
+  K.u.values=as.integer(names(res)) 
+  K.n.values=as.integer(names(res[[1]]))
+  e1.values=as.integer(names(res[[1]][[1]]))
+  e2.values=as.integer(names(res[[1]][[1]][[1]]))
   
   for(param in 1:4){
     for(i in 1:10){
@@ -952,9 +970,9 @@ plot.sim.batch <- function(res, diff){
       print(param.values)
       param.values[param] <- NA
       
-      filename <- paste("./scoring_metric_data/sim_plots/scoringmetricplot_param=",param, "_",get.params.str(param.values), ".png", sep="")
+      filename <- paste("./scoring_metric_data/sim_plots/scoringmetricplot_param=",param, "_",get.param.str(param.values), ".png", sep="")
       
-      plot.sim(res, param.values,,diff, filename)
+      plot.sim(res, param.values,metrics,diff, filename)
     }
   }  
 }
@@ -974,7 +992,7 @@ pearson.metric <- function(data){
   ccm.t <- ccms$ccm.t
   ccm.p <- ccms$ccm.p
   
-  uppertri <- upper.tri(ccm.t)
+  uppertri <- upper.tri(ccm.t, diag=T)
   
   return(cor(ccm.t[uppertri], ccm.p[uppertri], method="pearson"))
 }
@@ -992,9 +1010,16 @@ spearman.metric <- function(data){
   ccm.t <- ccms$ccm.t
   ccm.p <- ccms$ccm.p
   
-  uppertri <- upper.tri(ccm.t)
+  uppertri <- upper.tri(ccm.t, diag=T)
   
-  return(cor(ccm.t[uppertri], ccm.p[uppertri], method="spearman"))
+  rank.t <- rank(ccm.t[uppertri]) # rank of ccm variables
+  rank.p <- rank(ccm.p[uppertri])
+  
+  d <- rank.t - rank.p # differences in rank
+  n <- length(d) # number of variables
+  row <- (6 * sum(d^2)) / (n * (n^2 - 1))
+  
+  return(row)
 }
 
 #### mcc.metric #############################################
