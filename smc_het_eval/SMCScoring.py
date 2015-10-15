@@ -177,13 +177,9 @@ def calculate2_quaid(pred,truth):
             return 0
 
 def calculate2(pred,truth):
-    print "...calc PseudoV"
     pv_score = 1 - calculate2_pseudoV(pred,truth) / 4000
-    print "...calc Sym PseudoV"
     pv_sym_score = 1 - calculate2_sym_pseudoV(pred, truth) / 8000
-    print "...calc Spearman"
     spear_score = calculate2_spearman(pred, truth)
-    print "...calc MCC"
     mcc_score = calculate2_mcc(pred, truth)
 
     scores = (pv_score, pv_sym_score, spear_score, mcc_score)
@@ -279,7 +275,6 @@ def calculate2_aupr(pred,truth):
 def calculate2_mcc(pred,truth):
     n = truth.shape[0]
 
-    print np.sum(pred), np.sum(truth)
 
     tp = float(sum(pred[truth==1] == 1))
     tn = float(sum(pred[truth==0] == 0))
@@ -300,7 +295,6 @@ def calculate2_mcc(pred,truth):
     else:
         num = (tp*tn - fp*fn)
 
-    print tp,tn,fp,fn
     return num / denom
 
 def validate2B(data,nssms):
