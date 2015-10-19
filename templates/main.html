@@ -1,0 +1,18 @@
+<html>
+
+<body>
+<form action="submit" method="post">
+<div>
+Workflow Select
+<div>
+<select size="5" name="workflow"> 
+{% for w in workflows %}
+<option value="{{w.url}}">{{w.name}}</option>
+{%endfor%}
+</select>
+</div>
+</div>
+<input type="submit" value="Submit">
+</form>
+</body>
+</html>
