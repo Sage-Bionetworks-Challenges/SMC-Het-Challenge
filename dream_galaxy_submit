@@ -219,34 +219,10 @@ def tag_clean(tag):
     else:
         raise ValueError("Docker tag %s doesn't specify a version." % (tag))
 
-def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
+def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_upload=False):
 
     name = name_clean(name)
     print "Downloading: %s" % (name)
-
-    project = syn.get(project_id)
-    image_folder_id = None
-    tool_folder_id = None
-    workflow_folder_id = None
-    for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (project_id)):
-        if row['entity.name'] == 'DockerImages':
-            image_folder_id = row['entity.id']
-        if row['entity.name'] == 'Tools':
-            tool_folder_id = row['entity.id']
-        if row['entity.name'] == 'Workflows':
-            workflow_folder_id = row['entity.id']
-    if image_folder_id is None:
-        image_folder = Folder('DockerImages', parent=project)
-        image_folder = syn.store(image_folder)
-        image_folder_id = image_folder.id
-    if tool_folder_id is None:
-        tool_folder = Folder('Tools', parent=project)
-        tool_folder = syn.store(tool_folder)
-        tool_folder_id = tool_folder.id
-    if workflow_folder_id is None:
-        workflow_folder = Folder('Workflows', parent=project)
-        workflow_folder = syn.store(workflow_folder)
-        workflow_folder_id = workflow_folder.id
 
     if not workflow.startswith("http://") or workflow.startswith("https://"):
         print "Please provide URL to Galaxy Workflow"
@@ -256,8 +232,10 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
         os.mkdir(workdir)
 
     #if there provided the URL for the share page add a '/json' to the end
-    if not workflow.endswith("/json"):
+    if not workflow.endswith("/json") and not workflow.endswith("/download"):
         workflow = workflow + "/json"
+    if workflow.endswith("/download"):
+        workflow += "?key=%s" % (apikey)
 
     galaxy_url = urlparse.urlparse(workflow)
 
@@ -316,17 +294,46 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir):
 
     instance_type = get_google_instance_type()
 
-    workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
-    workflow_data = syn.store(workflow_data, createOrUpdate=False, instance_type=instance_type)
+    if not no_upload:
+        project = syn.get(project_id)
+        image_folder_id = None
+        tool_folder_id = None
+        workflow_folder_id = None
+        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (project_id)):
+            if row['entity.name'] == 'DockerImages':
+                image_folder_id = row['entity.id']
+            if row['entity.name'] == 'Tools':
+                tool_folder_id = row['entity.id']
+            if row['entity.name'] == 'Workflows':
+                workflow_folder_id = row['entity.id']
+        if image_folder_id is None:
+            image_folder = Folder('DockerImages', parent=project)
+            image_folder = syn.store(image_folder)
+            image_folder_id = image_folder.id
+        if tool_folder_id is None:
+            tool_folder = Folder('Tools', parent=project)
+            tool_folder = syn.store(tool_folder)
+            tool_folder_id = tool_folder.id
+        if workflow_folder_id is None:
+            workflow_folder = Folder('Workflows', parent=project)
+            workflow_folder = syn.store(workflow_folder)
+            workflow_folder_id = workflow_folder.id
 
-    tool_entities = find_or_add_to_synapse(output_paths['tools'], tool_folder_id)
-    image_entities = find_or_add_to_synapse(output_paths['images'], image_folder_id)
+        workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
+        workflow_data = syn.store(workflow_data, createOrUpdate=False, instance_type=instance_type)
 
-    return {
-        'paths':output_paths,
-        'workflow_entity': workflow_data,
-        'tool_entities': tool_entities,
-        'image_entities': image_entities}
+        tool_entities = find_or_add_to_synapse(output_paths['tools'], tool_folder_id)
+        image_entities = find_or_add_to_synapse(output_paths['images'], image_folder_id)
+        return {
+            'paths':output_paths,
+            'workflow_entity': workflow_data,
+            'tool_entities': tool_entities,
+            'image_entities': image_entities
+        }
+    else:
+        return {
+            'paths':output_paths,
+        }
 
 
 def main_submit(syn, apikey, workflow, name, team_name, project_id, workdir):
@@ -371,6 +378,7 @@ if __name__ == "__main__":
     parser.add_argument("--project-id", required=True, help="The SYN id of your personal private working directory")
 
     parser.add_argument("--submit", action="store_true", default=False)
+    parser.add_argument("--no-upload", action="store_true", default=False)
 
     parser.add_argument("-w", "--workdir", default="work")
 
