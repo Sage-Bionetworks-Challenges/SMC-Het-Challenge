@@ -840,6 +840,7 @@ if __name__ == '__main__':
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( out )
             handle.write(jtxt)
+            handle.write('Working on branch eval_output')
     else:
         if args.v:
             res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
