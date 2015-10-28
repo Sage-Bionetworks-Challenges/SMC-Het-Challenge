@@ -733,15 +733,9 @@ def verify(filename,role,func,*args):
         pred = func(pred_data,*args)
     except (IOError,TypeError) as e:
         err_msgs.append("Error opening %s in from file %s in function %s: %s" %  (role, filename, func, e.value))
-        #raise e
-
-        print "Error opening " + role
-        print e
-        print filename,func
         return None
     except (ValidationError,ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))
-        #raise e
         return None
     return pred
 
@@ -831,8 +825,6 @@ if __name__ == '__main__':
                     if isinstance(v,dict):
                         pred_config = dict(pred_config, **v)
                 except ValueError as e:
-                    err_msgs.append('Error in prediction file in line: \n%s' % line)
-                    err_msgs.append(e)
                     pass
         with open(args.truth_config) as handle:
             truth_config = {}
@@ -842,8 +834,6 @@ if __name__ == '__main__':
                     if isinstance(v,dict):
                         truth_config = dict(truth_config, **v)
                 except ValueError as e:
-                    err_msgs.append('Error in truth file in line: \n%s' % line)
-                    err_msgs.append(e)
                     pass
         out = {}
         print "pred", pred_config
@@ -874,4 +864,4 @@ if __name__ == '__main__':
     if len(err_msgs) > 0:
         for msg in err_msgs:
             print msg
-        raise ValidationError("Errors encountered. If running in Galaxy see stdout in the 'details' section of the executed Job.")
+        raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
