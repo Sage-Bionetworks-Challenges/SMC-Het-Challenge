@@ -321,7 +321,7 @@ def calculate2_spearman(pred, truth, full_matrix=True):
     print "Calculating spearman..."
     row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
 
-def calculate2_spearman(pred, truth, full_matrix=T):
+def calculate2_spearman(pred, truth, full_matrix=True):
     # use only the upper triangular matrix of the truth and
     # prediction matrices
     n = truth.shape[0]
@@ -346,7 +346,7 @@ def calculate2_spearman(pred, truth, full_matrix=T):
     return row
 
 
-def calculate2_pearson(pred, truth, full_matrix=T):
+def calculate2_pearson(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
         pred_cp = pred.flatten()
