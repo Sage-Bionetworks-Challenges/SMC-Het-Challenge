@@ -343,7 +343,7 @@ def scoring2B_behavior():
     f = open('scoring_metric_data/scoring2B_beta.tsv', 'w')
     f.write('\n'.join(res))
     f.close()  
-    
+
 def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True, pc_amount='more', full_matrix=True):
     '''Scoring behaviour of subchallenge 3 metrics
 
@@ -921,19 +921,18 @@ def scoringtotal_behavior(verbose=False):
 
 
 
-if __name__ == '__main__':
-    #scoring1C_behavior()
 
+if __name__ == '__main__':
+    scoring1A_behavior()
+    scoring1B_behavior()
+    scoring1C_behavior()
+    scoring2A_behavior()
+    scoring2B_behavior()
     methods = ("orig", "orig_nc", "pseudoV", "pseudoV_nc", "simpleKL_nc",
                  "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc",
                 ["pseudoV_nc", "mcc_nc", "spearman_nc"], ["pseudoV_nc", "mcc_nc", "pearson_nc"])
     for m in methods:
         print('Calculating metric %s...' % m)
         scoring3A_behavior(method=m, verbose=True)
-    '''
-    scoring1A_behavior()
-    scoring1B_behavior()
-    scoring1C_behavior()
-    scoring2A_behavior()
-    scoring2B_behavior()
-'''
+
+    scoringtotal_behavior(True)
