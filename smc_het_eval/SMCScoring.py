@@ -1,13 +1,12 @@
 import math
 import numpy as np
 import itertools
-import sys
 import json
 import argparse
 import StringIO
 import scipy.stats
 import sklearn.metrics as mt
-import copy as cp
+from functools import reduce
 
 
 class ValidationError(Exception):
@@ -104,7 +103,7 @@ def validate1C(data, nssms):
             raise ValidationError("Cellular Frequency for cluster %d can not be cast as a float: %s" % (i+1,data2[i][2]))
     reported_nssms = sum([int(x[1]) for x in data2])
     if reported_nssms != nssms:
-        raise ValidationError("Total number of reported mutations is %d.  Should be %d" % (reported_nssms,nssms))
+        raise ValidationError("Total number of reported mutations is %d. Should be %d" % (reported_nssms,nssms))
     return zip([int(x[1]) for x in data2], [float(x[2]) for x in data2])
 
 def calculate1C(pred,truth):
@@ -175,25 +174,54 @@ def calculate2_quaid(pred,truth):
             print ones_score, zeros_score
             return 0
 
-def calculate2(pred,truth):
-    return calculate2_orig(pred,truth)
+def calculate2(pred,truth, full_matrix=True):
+    pv_score = calculate2_pseudoV_norm(pred, truth, full_matrix=full_matrix)
+    pv_sym_score = calculate2_sym_pseudoV_norm(pred, truth, full_matrix=full_matrix)
+    spear_score = calculate2_spearman(pred, truth, full_matrix=full_matrix)
+    mcc_score = calculate2_mcc(pred, truth, full_matrix=full_matrix)
 
-def calculate2_orig(pred,truth):
+    scores = (pv_score, pv_sym_score, spear_score, mcc_score)
+    return np.mean(scores)
+
+def calculate2_orig(pred,truth, full_matrix=True):
     n = truth.shape[0]
-    indices = np.triu_indices(n,k=1)
+    if full_matrix:
+        pred_cp = np.copy(pred)
+        truth_cp = np.copy(truth)
+    else: # make matrix upper triangular
+        inds = np.triu_indices(n,k=1)
+        pred_cp = pred[inds]
+        truth_cp = truth[inds]
     count = (n**2 - n )/2.0
-    res = np.sum(np.abs(pred[indices] - truth[indices]))
+    res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return 1 - res
 
-def calculate2_sqrt(pred,truth):
+def calculate2_sqrt(pred,truth, full_matrix=True):
     n = truth.shape[0]
-    indices = np.triu_indices(n,k=1)
+    if full_matrix:
+        pred_cp = np.copy(pred)
+        truth_cp = np.copy(truth)
+    else: # make matrix upper triangular
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
     count = (n**2 - n )/2.0
-    res = np.sum(np.abs(pred[indices] - truth[indices]))
+    res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return np.sqrt(1 - res)
 
+def calculate2_simpleKL_norm(pred,truth,rnd=0.01):
+    """Normalized version of the pseudo V measure where the return values are between 0 and 1
+    with 0 being the worst score and 1 being the best
+
+    :param pred:
+    :param truth:
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :return:
+    """
+    return 1 - calculate2_simpleKL(pred,truth,rnd=rnd) / 4000
+
+# Out of date!!
 def calculate2_simpleKL(pred,truth,rnd=0.01):
     pred = np.abs(pred - rnd)
     n = truth.shape[0]
@@ -207,12 +235,29 @@ def calculate2_simpleKL(pred,truth,rnd=0.01):
             res += np.log(1-pred[indices[0][i],indices[1][i]])
     return abs(res)
 
-def calculate2_pseudoV(pred,truth,rnd=0.01):
-    pred_cp = cp.deepcopy(pred)
-    truth_cp = cp.deepcopy(truth)
-    # make matrix upper triangular
-    pred_cp = np.triu(pred_cp)
-    truth_cp = np.triu(truth_cp)
+
+def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True):
+    """Normalized version of the pseudo V measure where the return values are between 0 and 1
+    with 0 being the worst score and 1 being the best
+
+    :param pred:
+    :param truth:
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param max_val: maximum pseudoV value for this scenario - any prediction that has a pseudoV score >= max_val
+        will be given a score of 0
+    :return:
+    """
+    return max(1 - calculate2_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix) / max_val, 0)
+
+
+def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True):
+    if full_matrix:
+        pred_cp = np.copy(pred)
+        truth_cp = np.copy(truth)
+    else: # make matrix upper triangular
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
     # Avoid dividing by zero
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
@@ -225,36 +270,138 @@ def calculate2_pseudoV(pred,truth,rnd=0.01):
 
     return np.sum(truth_cp * np.log(truth_cp/pred_cp))
 
-def calculate2_sym_pseudoV(pred, truth, rnd=0.01):
-    pred[pred==0] = rnd
-    truth[truth==0] = rnd
-    pred = pred / np.sum(pred,axis=1)[:,np.newaxis]
-    truth = truth / np.sum(truth,axis=1)[:,np.newaxis]
-    return np.sum(truth * np.log(truth/pred)) + np.sum(pred * np.log(pred/truth))
+def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=True):
+    """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
+    with 0 being the worst score and 1 being the best
 
-def calculate2_pearson(pred, truth):
-    n = truth.shape[0]
-    inds = np.triu_indices(n,k=1)
-    return scipy.stats.pearsonr(pred[inds],truth[inds])[0]
+    :param pred:
+    :param truth:
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param max_val: maximum pseudoV value for this scenario - any prediction that has a pseudoV score >= max_val
+        will be given a score of 0
+    :return:
+    """
+    return max(1 - calculate2_sym_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix) / max_val, 0)
 
-def calculate2_aupr(pred,truth):
+def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
+    if full_matrix:
+        pred_cp = np.copy(pred)
+        truth_cp = np.copy(truth)
+    else: # make matrix upper triangular
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
+    pred_cp[pred_cp==0] = rnd
+    truth_cp[truth_cp==0] = rnd
+    pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
+    truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
+    return np.sum(truth_cp * np.log(truth_cp/pred_cp)) + np.sum(pred_cp * np.log(pred_cp/truth_cp))
+
+def calculate2_spearman(pred, truth, full_matrix=True):
+    # use only the upper triangular matrix of the truth and
+    # prediction matrices
     n = truth.shape[0]
-    inds = np.triu_indices(n,k=1)
-    precision, recall, thresholds = mt.precision_recall_curve(truth[inds],pred[inds])
+    print "Creating arrays2..."
+    if full_matrix:
+        pred_cp = np.copy(pred)
+        truth_cp = np.copy(truth)
+    else:
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
+    # implement spearman coefficient since scipy implementation
+    # uses the covariance of the ranks, which could be zero
+    # find the rank order of both sets of data
+    print "Ranking data..."
+    predr = scipy.stats.rankdata(pred_cp)
+    truthr = scipy.stats.rankdata(truth_cp)
+    print "Getting Difference..."
+    d = truthr - predr
+    n = len(d)
+    print "Calculating spearman..."
+    row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
+
+def calculate2_spearman(pred, truth, full_matrix=True):
+    # use only the upper triangular matrix of the truth and
+    # prediction matrices
+    n = truth.shape[0]
+    if full_matrix:
+        pred_cp = pred.flatten()
+        truth_cp = truth.flatten()
+    else:
+        inds = np.triu_indices(n,k=1)
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
+
+    # implement spearman coefficient since scipy implementation
+    # uses the covariance of the ranks, which could be zero
+    # find the rank order of both sets of data
+    predr = scipy.stats.rankdata(pred_cp)
+    truthr = scipy.stats.rankdata(truth_cp)
+    d = truthr - predr
+    n = len(d)
+    row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
+
+    return row
+
+
+def calculate2_pearson(pred, truth, full_matrix=True):
+    n = truth.shape[0]
+    if full_matrix:
+        pred_cp = pred.flatten()
+        truth_cp = truth.flatten()
+    else:
+        inds = np.triu_indices(n,k=1)
+        pred_cp = pred[inds]
+        truth_cp = truth[inds]
+    return scipy.stats.pearsonr(pred_cp,truth_cp)[0]
+
+def calculate2_aupr(pred,truth, full_matrix=True):
+    n = truth.shape[0]
+    if full_matrix:
+        pred_cp = pred.flatten()
+        truth_cp = truth.flatten()
+    else:
+        inds = np.triu_indices(n,k=1)
+        pred_cp = pred[inds]
+        truth_cp = truth[inds]
+    precision, recall, thresholds = mt.precision_recall_curve(truth_cp,pred_cp)
     aucpr = mt.auc(recall, precision)
     return aucpr
 
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
-def calculate2_mcc(pred,truth):
+def calculate2_mcc(pred,truth, full_matrix=True):
     n = truth.shape[0]
+    if full_matrix:
+        pred_cp = pred
+        truth_cp = truth
+    else:
+        inds = np.triu_indices(n,k=1)
+        pred_cp = pred[inds]
+        truth_cp = truth[inds]
 
-    tp = float(sum(pred[truth==1] == 1))
-    tn = float(sum(pred[truth==0] == 0))
-    fp = float(sum(pred[truth==0] == 1))
-    fn = float(sum(pred[truth==1] == 0))
-    print tp,tn,fp,fn
-    return (tp*tn - fp*fn)/np.sqrt((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn))
+    tp = float(sum(pred_cp[truth_cp==1] == 1))
+    tn = float(sum(pred_cp[truth_cp==0] == 0))
+    fp = float(sum(pred_cp[truth_cp==0] == 1))
+    fn = float(sum(pred_cp[truth_cp==1] == 0))
+
+    # To avoid divide-by-zero cases
+    denom_terms = [(tp+fp),(tp+fn),(tn+fp),(tn+fn)]
+    for index, term in enumerate(denom_terms):
+        if term == 0:
+            denom_terms[index] = 1
+    denom = np.sqrt(reduce(np.multiply, denom_terms, 1))
+
+    if tp == 0 and fn == 0:
+        num = (tn - fp)
+    elif tn == 0 and fp == 0:
+        num = (tp - fn)
+    else:
+        num = (tp*tn - fp*fn)
+
+    return num / float(denom)
 
 def validate2B(data,nssms):
     data = StringIO.StringIO(data)
@@ -361,15 +508,66 @@ def validate3B(data, ccm, nssms):
 def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
     return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,np.dot(truth_ca,truth_ca.T),truth_ad)
 
-def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_no_cc"):
+def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc", weights=None, verbose=False, pseudo_counts=True, full_matrix=True):
+    """Calculate the score for subchallenge 3 using the given metric or a weighted average of the
+    given metrics, if more than one are specified.
+
+    :param pred_ccm: predicted co-clustering matrix
+    :param pred_ad: predicted ancestor-descendant matrix
+    :param truth_ccm: true co-clustering matrix
+    :param truth_ad: trus ancestor-descendant matrix
+    :param method: method to use when evaluating the submission or list of methods to use
+    :param weights: weights to use in averaging the scores of different methods.
+    :param verbose: boolean for whether to display information about the score calculations
+    Only used if 'method' is a list - in this case must be a list of numbers of the same length as 'method'.
+    :param full_matrix: boolean for whether to use the full CCM/AD matrix when calculating the score
+    :return: score for the given submission to subchallenge 3 using the given metric
+    """
+    if pseudo_counts:
+        if isinstance(pseudo_counts, int):
+            pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad), num=pseudo_counts) # add pseudo counts to the matrices
+            pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad), num=pseudo_counts) # use np.copy so that original values are not altered
+        else:
+            pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad), num=pseudo_counts) # add pseudo counts to the matrices
+            pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad), num=pseudo_counts) # use np.copy so that original values are not     else:
+    else:
+        pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad = pred_ccm, pred_ad, truth_ccm, truth_ad
+
+    if isinstance(method, list):
+        res = [calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose) for m in method] # calculate the score for each method
+        if weights is None: # if weights are not specified or if they cannot be normalized then default to equal weights
+            weights = [1] * len(method)
+        elif sum(weights) == 0:
+            Warning('Weights sum to zero so they are invalid, defaulting to equal weights')
+            weights = [1] * len(method)
+
+        weights = np.array(weights) / float(sum(weights)) # normalize the weights
+        score = sum(np.multiply(res, weights))
+    else:
+        score =  calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
+    return score
+
+
+def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc", verbose=False, full_matrix=True):
+    """Calculate the score for subchallenge 3 using the given metric
+
+    :param pred_ccm: predicted co-clustering matrix
+    :param pred_ad: predicted ancestor-descendant matrix
+    :param truth_ccm: true co-clustering matrix
+    :param truth_ad: trus ancestor-descendant matrix
+    :param method: method to use when evaluating the submission
+    :param verbose: boolean for whether to display information about the score calculations
+    :param full_matrix: boolean for whether to use the full CCM/AD matrix when calculating the score
+    :return: score for the given submission to subchallenge 3 using the given metric
+    """
     func = {"orig" : calculate3_orig,
-               "orig_no_cc": calculate3_orig_no_cc,
+               "orig_nc": calculate3_orig_nc,
                "pseudoV": calculate3_pseudoV,
-    }.get(method, calculate3_other_no_cc)
-    return func(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=True, method=method)
+    }.get(method, calculate3_other_nc)
+    return func(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=verbose, method=method, full_matrix=full_matrix)
 
 # Include a method field to make code more easily generalizable
-def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig"):
+def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig", full_matrix=True):
     n = truth_ccm.shape[0]
     indices = np.triu_indices(n,k=1)
     cc_res = np.sum(np.abs(pred_ccm[indices] - truth_ccm[indices])*truth_ccm[indices])
@@ -382,7 +580,7 @@ def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, metho
     return 1 - res
 
 # Include a method field to make code more easily generalizable
-def calculate3_orig_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig_no_cc"):
+def calculate3_orig_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig_nc", full_matrix=True):
     n = truth_ccm.shape[0]
     indices = np.triu_indices(n,k=1)
     ad_res = np.sum(np.abs(pred_ad.flatten() - truth_ad.flatten()) * truth_ad.flatten())
@@ -395,59 +593,75 @@ def calculate3_orig_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False,
     
 # Use the pseudoV measure
 # Include a method field to make code more easily generalizable
-def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV"):
+def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV", full_matrix=True):
     # calculate the result without the co-clustering matrix
-    res = calculate3_other_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=rnd, verbose=verbose, method="pseudoV_no_cc",)
+    res = calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=rnd, verbose=verbose, method="pseudoV_nc",)
         
-    cpred_ccm = cp.deepcopy(pred_ccm)
-    ctruth_ccm = cp.deepcopy(truth_ccm)
+    cpred_ccm = np.copy(pred_ccm)
+    ctruth_ccm = np.copy(truth_ccm)
     
-    # Calculate the pseudo V measure for each
-    cc_res = calculate2_pseudoV(cpred_ccm, ctruth_ccm, rnd)
+    # Calculate the normalized pseudo V measure for each
+    cc_res = calculate2_pseudoV_norm(cpred_ccm, ctruth_ccm, rnd)
     
-    res =  (cc_res + res )
+    res =  (cc_res / 4.0) + (3 * res / 4.0 )
     if verbose:
         print("CC: %s" % str(cc_res))
     return res
     
 # Use one of the SC2 metrics without using the co-clustering matrix
-def calculate3_other_no_cc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV"):
-    methods_SC2 = {"pseudoV_no_cc": calculate2_pseudoV,
-               "simpleKL_no_cc": calculate2_simpleKL,
-               "sqrt_no_cc": calculate2_sqrt,
-               "sym_pseudoV_no_cc": calculate2_sym_pseudoV,
-               "pearson_no_cc": calculate2_pearson,
-               "aupr_no_cc":calculate2_aupr,
-                "mcc_no_cc": calculate2_mcc,
+def calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV", full_matrix=True):
+    methods_SC2 = {"pseudoV_nc": calculate2_pseudoV_norm,
+               "simpleKL_nc": calculate2_simpleKL_norm,
+               "sqrt_nc": calculate2_sqrt,
+               "sym_pseudoV_nc": calculate2_sym_pseudoV_norm,
+               "pearson_nc": calculate2_pearson,
+                "spearman_nc": calculate2_spearman,
+               "aupr_nc":calculate2_aupr,
+                "mcc_nc": calculate2_pearson
     }
     # Get the cousin matrices
     truth_cous = 1 - truth_ccm - truth_ad - truth_ad.T
     pred_cous = 1 - pred_ccm - pred_ad - pred_ad.T
     if verbose:
         if(np.amax(truth_cous) > 1 or np.amin(truth_cous) < 0):
-            print("Cousin Truth is wrong...")
+            Warning("Cousin Truth is wrong. Maximum matrix entry is greater than 1 or minimum matrix entry is less than 0")
         if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
-            print("Cousin Predicted is wrong...")
+            Warning("Cousin Predicted is wrong. Maximum matrix entry is greater than 1 or minimum matrix entry is less than 0")
 
     # Calculate the metric measure for each matrix
     func = methods_SC2[method]
-    if method in ("pseudoV_no_cc",
-               "simpleKL_no_cc",
-               "sym_pseudoV_no_cc"):
-        ad_res = func(pred_ad, truth_ad, rnd)
-        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), rnd)
-        cous_res = func(pred_cous, truth_cous, rnd)
+    if method in ("pseudoV_nc",
+               "simpleKL_nc",
+               "sym_pseudoV_nc"):
+        ad_res = func(pred_ad, truth_ad, rnd, full_matrix=full_matrix)
+        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), rnd, full_matrix=full_matrix)
+        cous_res = func(pred_cous, truth_cous, rnd, full_matrix=full_matrix)
+        results = (ad_res, ad_res_t, cous_res)
+    elif method in ("pearson_nc",
+                    "spearman_nc",
+                    "mcc_nc"):
+
+        ad_res = func(pred_ad, truth_ad, full_matrix=full_matrix)
+        ad_res_t = None
+        cous_res = func(pred_cous, truth_cous, full_matrix=full_matrix)
+        results = (ad_res, cous_res)
     else:
-        ad_res = func(pred_ad, truth_ad)
-        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad))
-        cous_res = func(pred_cous, truth_cous)
+        ad_res = func(pred_ad, truth_ad, full_matrix=full_matrix)
+        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), full_matrix=full_matrix)
+        cous_res = func(pred_cous, truth_cous, full_matrix=full_matrix)
+        results = (ad_res, ad_res_t, cous_res)
 
     res =  0
-    for r in (ad_res, ad_res_t, cous_res):
+    n = 0
+    for r in results: # TODO: fix the NA's
         if not math.isnan(r):
+            n += 1
             res += r
+    if n > 0:
+        res = res / float(n)
+
     if verbose:
-        print("%s for Matrices\nAD: %s, AD Transpose: %s, Cousin: %s\nReuslt: %s" %
+        print("%s for Matrices\nAD: %s, AD Transpose: %s, Cousin: %s\nResult: %s" %
               (method, str(ad_res),str(ad_res_t),str(cous_res), str(res)))
     return res
 
@@ -465,6 +679,8 @@ def parseVCFScoring(data):
     data = [x for x in data if x[0] != '#']
     if len(data) == 0:
         raise ValidationError("Input VCF contains no SSMs")
+    else:
+        print len(data)
     total_ssms = len(data)
     tp_ssms = len([x for x in data if x[-4:] == "True"])
     mask = [x[-4:] == "True" for x in data]
@@ -477,20 +693,49 @@ def filterFPs(matrix, mask):
     else:
         return matrix[mask,:]
 
+def add_pseudo_counts(ccm,ad=None,num=None):
+    """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
+    subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
+    either of these matrices has a variance of zero. These fake mutations must be added to both the predicted
+    and ruth matrices.
+
+    :param ccm: co-clustering matrix
+    :param ad: ancestor-descendant matrix (optional, to be compatible with subchallenge 2)
+    :param num: number of pseudo counts to add
+    :return: modified ccm and ad matrices
+    """
+    size = np.array(ccm.shape)[1]
+
+    if num is None:
+        num = np.sqrt(size)
+    elif num == 0:
+        return ccm, ad
+
+    new_ccm = np.identity(size + num)
+    new_ccm[:size, :size] = np.copy(ccm)
+    ccm = new_ccm
+
+    if ad is not None:
+        new_ad = np.zeros([size + num]*2)
+        new_ad[:size, :size] = np.copy(ad)
+        new_ad[(size+num/2):(size+3*num/4),:(size+num/2)] = 1
+        new_ad[:(size+num/2),(size+3*num/4):(size+num)] = 1
+        ad = new_ad
+
+    return ccm, ad
+
 def verify(filename,role,func,*args):
+    global err_msgs
     try:
         f = open(filename)
         pred_data = f.read(10**6)
         f.close()
         pred = func(pred_data,*args)
     except (IOError,TypeError) as e:
-        print "Error opening " + role
-        print e
-        print filename,func
+        err_msgs.append("Error opening %s in from file %s in function %s: %s" %  (role, filename, func, e.value))
         return None
     except (ValidationError,ValueError) as e:
-        print role + " does not validate"
-        print e
+        err_msgs.append("%s does not validate: %s" % (role, e.value))
         return None
     return pred
 
@@ -505,16 +750,17 @@ challengeMapping = {     '1A': {'val_funcs':[validate1A],'score_func':calculate1
                     }
 
 def verifyChallenge(challenge,predfiles,vcf):
+    global err_msgs
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", parseVCFSimple)
         if nssms == None:
-            print "Could not read input VCF. Exiting"
+            err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
     else:
         nssms = [[],[]]
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']):
-        print "Not enough input files for Challenge %s" % challenge
+        err_msgs.append("Not enough input files for Challenge %s" % challenge)
         return "Invalid"
 
     out = []
@@ -527,15 +773,17 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
+    global err_msgs
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
         if nssms == None:
-            print "Could not read input VCF. Exiting"
+            err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
+
     else:
         nssms = [[],[]]
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
-        print "Not enough input files for Challenge %s" % challenge
+        err_msgs.append("Not enough input files for Challenge %s" % challenge)
         return "NA"
 
     tout = []
@@ -551,7 +799,11 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
+
 if __name__ == '__main__':
+    global err_msgs
+    err_msgs = []
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred-config", default=None)
     parser.add_argument("--truth-config", default=None)
@@ -572,7 +824,7 @@ if __name__ == '__main__':
                     v = json.loads(line)
                     if isinstance(v,dict):
                         pred_config = dict(pred_config, **v)
-                except ValueError:
+                except ValueError as e:
                     pass
         with open(args.truth_config) as handle:
             truth_config = {}
@@ -581,7 +833,7 @@ if __name__ == '__main__':
                     v = json.loads(line)
                     if isinstance(v,dict):
                         truth_config = dict(truth_config, **v)
-                except ValueError:
+                except ValueError as e:
                     pass
         out = {}
         print "pred", pred_config
@@ -608,3 +860,8 @@ if __name__ == '__main__':
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
             handle.write(jtxt)
+
+    if len(err_msgs) > 0:
+        for msg in err_msgs:
+            print msg
+        raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
