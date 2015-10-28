@@ -321,18 +321,24 @@ def calculate2_spearman(pred, truth, full_matrix=True):
     print "Calculating spearman..."
     row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
 
-def calculate2_spearman(pred, truth):
+def calculate2_spearman(pred, truth, full_matrix=T):
     # use only the upper triangular matrix of the truth and
     # prediction matrices
     n = truth.shape[0]
-    inds = np.triu_indices(n,k=1)
-    preda, trutha = np.asarray(pred[inds]),np.asarray(truth[inds])
+    if full_matrix:
+        pred_cp = pred.flatten()
+        truth_cp = truth.flatten()
+    else:
+        inds = np.triu_indices(n,k=1)
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
 
     # implement spearman coefficient since scipy implementation
     # uses the covariance of the ranks, which could be zero
     # find the rank order of both sets of data
-    predr = scipy.stats.rankdata(preda)
-    truthr = scipy.stats.rankdata(trutha)
+    predr = scipy.stats.rankdata(pred_cp)
+    truthr = scipy.stats.rankdata(truth_cp)
     d = truthr - predr
     n = len(d)
     row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
@@ -340,7 +346,7 @@ def calculate2_spearman(pred, truth):
     return row
 
 
-def calculate2_pearson(pred, truth):
+def calculate2_pearson(pred, truth, full_matrix=T):
     n = truth.shape[0]
     if full_matrix:
         pred_cp = pred.flatten()
