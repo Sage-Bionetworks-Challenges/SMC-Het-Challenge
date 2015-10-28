@@ -7,7 +7,6 @@ import StringIO
 import scipy.stats
 import sklearn.metrics as mt
 from functools import reduce
-import warnings
 
 
 class ValidationError(Exception):
@@ -724,11 +723,17 @@ def verify(filename,role,func,*args):
         f.close()
         pred = func(pred_data,*args)
     except (IOError,TypeError) as e:
+        e.value = "Error opening %s in function %s: %s" %  (role, func, e.value)
+        raise e
+
         print "Error opening " + role
         print e
         print filename,func
         return None
     except (ValidationError,ValueError) as e:
+        e.value = "%s does not validate: %s" % (role, e.value)
+        raise e
+
         print role + " does not validate"
         print e
         return None
@@ -748,14 +753,12 @@ def verifyChallenge(challenge,predfiles,vcf):
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", parseVCFSimple)
         if nssms == None:
-            print "Could not read input VCF. Exiting"
-            return "NA"
+            raise ValidationError("Could not read input VCF. Exiting")
     else:
         nssms = [[],[]]
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']):
-        print "Not enough input files for Challenge %s" % challenge
-        return "Invalid"
+        raise ValidationError("Not enough input files for Challenge %s" % challenge)
 
     out = []
     for (predfile,valfunc) in zip(predfiles,challengeMapping[challenge]['val_funcs']):
@@ -767,18 +770,15 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
-
-
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
         if nssms == None:
-            print "Could not read input VCF. Exiting"
-            return "NA"
+            raise ValidationError("Could not read input VCF. Exiting")
+
     else:
         nssms = [[],[]]
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
-        print "Not enough input files for Challenge %s" % challenge
-        return "NA"
+        raise ValidationError("Not enough input files for Challenge %s" % challenge)
 
     tout = []
     pout = []
@@ -794,8 +794,6 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 if __name__ == '__main__':
-    warnings.warn('Test Warning', DeprecationWarning)
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred-config", default=None)
     parser.add_argument("--truth-config", default=None)
