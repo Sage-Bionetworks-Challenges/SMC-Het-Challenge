@@ -103,7 +103,7 @@ def validate1C(data, nssms):
             raise ValidationError("Cellular Frequency for cluster %d can not be cast as a float: %s" % (i+1,data2[i][2]))
     reported_nssms = sum([int(x[1]) for x in data2])
     if reported_nssms != nssms:
-        raise ValidationError("Total number of reported mutations is %d.  Should be %d" % (reported_nssms,nssms))
+        raise ValidationError("Total number of reported mutations is %d. Should be %d" % (reported_nssms,nssms))
     return zip([int(x[1]) for x in data2], [float(x[2]) for x in data2])
 
 def calculate1C(pred,truth):
@@ -723,7 +723,7 @@ def verify(filename,role,func,*args):
         f.close()
         pred = func(pred_data,*args)
     except (IOError,TypeError) as e:
-        e.value = "Error opening %s in function %s: %s" %  (role, func, e.value)
+        e.value = "Error opening %s in from file %s in function %s: %s" %  (role, filename, func, e.value)
         raise e
 
         print "Error opening " + role
@@ -733,10 +733,6 @@ def verify(filename,role,func,*args):
     except (ValidationError,ValueError) as e:
         e.value = "%s does not validate: %s" % (role, e.value)
         raise e
-
-        print role + " does not validate"
-        print e
-        return None
     return pred
 
 
@@ -841,7 +837,6 @@ if __name__ == '__main__':
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( out )
             handle.write(jtxt)
-            handle.write('\nWorking on branch eval_output')
     else:
         if args.v:
             res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
@@ -851,4 +846,3 @@ if __name__ == '__main__':
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
             handle.write(jtxt)
-            handle.write('\nWorking on branch eval_output')
