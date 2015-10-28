@@ -1,14 +1,13 @@
 import math
 import numpy as np
 import itertools
-import sys
 import json
 import argparse
 import StringIO
 import scipy.stats
 import sklearn.metrics as mt
-import copy as cp
 from functools import reduce
+import warnings
 
 
 class ValidationError(Exception):
@@ -768,7 +767,7 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
-    raise ValueError('Test Error')
+
 
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
@@ -795,6 +794,8 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 if __name__ == '__main__':
+    warnings.warn('Test Warning', DeprecationWarning)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred-config", default=None)
     parser.add_argument("--truth-config", default=None)
