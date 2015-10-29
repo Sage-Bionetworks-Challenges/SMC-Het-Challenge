@@ -175,11 +175,11 @@ def calculate2_quaid(pred,truth):
             return 0
 
 def calculate2(pred,truth, full_matrix=True):
+
     pv_score = calculate2_pseudoV_norm(pred, truth, full_matrix=full_matrix)
     pv_sym_score = calculate2_sym_pseudoV_norm(pred, truth, full_matrix=full_matrix)
     spear_score = calculate2_spearman(pred, truth, full_matrix=full_matrix)
     mcc_score = calculate2_mcc(pred, truth, full_matrix=full_matrix)
-
     scores = (pv_score, pv_sym_score, spear_score, mcc_score)
     return np.mean(scores)
 
@@ -247,7 +247,8 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
         will be given a score of 0
     :return:
     """
-    return max(1 - calculate2_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix) / max_val, 0)
+    pv_val = calculate2_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix)
+    return max(1 -  pv_val/ max_val, 0)
 
 
 def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True):
@@ -281,7 +282,8 @@ def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=T
         will be given a score of 0
     :return:
     """
-    return max(1 - calculate2_sym_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix) / max_val, 0)
+    spv_val = calculate2_sym_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix)
+    return max(1 - spv_val / max_val, 0)
 
 def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
     if full_matrix:
@@ -297,29 +299,6 @@ def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
     truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
     return np.sum(truth_cp * np.log(truth_cp/pred_cp)) + np.sum(pred_cp * np.log(pred_cp/truth_cp))
 
-def calculate2_spearman(pred, truth, full_matrix=True):
-    # use only the upper triangular matrix of the truth and
-    # prediction matrices
-    n = truth.shape[0]
-    print "Creating arrays2..."
-    if full_matrix:
-        pred_cp = np.copy(pred)
-        truth_cp = np.copy(truth)
-    else:
-        pred_cp = np.triu(pred)
-        truth_cp = np.triu(truth)
-
-    # implement spearman coefficient since scipy implementation
-    # uses the covariance of the ranks, which could be zero
-    # find the rank order of both sets of data
-    print "Ranking data..."
-    predr = scipy.stats.rankdata(pred_cp)
-    truthr = scipy.stats.rankdata(truth_cp)
-    print "Getting Difference..."
-    d = truthr - predr
-    n = len(d)
-    print "Calculating spearman..."
-    row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
 
 def calculate2_spearman(pred, truth, full_matrix=True):
     # use only the upper triangular matrix of the truth and
@@ -330,9 +309,8 @@ def calculate2_spearman(pred, truth, full_matrix=True):
         truth_cp = truth.flatten()
     else:
         inds = np.triu_indices(n,k=1)
-        pred_cp = np.triu(pred)
-        truth_cp = np.triu(truth)
-
+        pred_cp = pred[inds]
+        truth_cp = truth[inds]
 
     # implement spearman coefficient since scipy implementation
     # uses the covariance of the ranks, which could be zero
@@ -341,7 +319,9 @@ def calculate2_spearman(pred, truth, full_matrix=True):
     truthr = scipy.stats.rankdata(truth_cp)
     d = truthr - predr
     n = len(d)
-    row = 1 - (6 * sum(np.square(d))) / (n * (np.square(n) - 1))
+
+    d = np.divide(d, np.sqrt(n)) # avoid overflow warnings
+    row = 1 - (6 * sum(np.square(d))) / ((np.square(n) - 1))
 
     return row
 
@@ -403,12 +383,15 @@ def calculate2_mcc(pred,truth, full_matrix=True):
 
     return num / float(denom)
 
-def validate2B(data,nssms):
-    data = StringIO.StringIO(data)
+def validate2B(filename,nssms):
     try:
-        ccm = np.loadtxt(data,ndmin=2)
-    except ValueError:
-        raise ValidationError("Entry in co-clustering matrix could not be cast as a float")
+        if filename.endswith('.gz'):
+            ccm = np.loadtxt(str(filename),ndmin=2)
+        else:
+            data = StringIO.StringIO(filename)
+            ccm = np.loadtxt(data, ndmin=2)
+    except ValueError as e:
+        raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
 
     if ccm.shape != (nssms,nssms):
         raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms,nssms))))
@@ -453,29 +436,29 @@ def validate3A(data, cas, nssms):
         if data[i][1] not in set(range(predK+1)):
             raise ValidationError("Parent node label in line %d is not valid." % (i+1))
 
-    # Form decendent of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
-    decendent_of = dict()
+    # Form descendant of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
+    descendant_of = dict()
     for i in range(predK+1):
-        decendent_of[i] = []
+        descendant_of[i] = []
     for child,parent in data:
-        decendent_of[parent] += [child] + decendent_of[child]
+        descendant_of[parent] += [child] + descendant_of[child]
         # gps (grandparents) are the list of nodes that are ancestors of the immediate parent
-        gps = [x for x in decendent_of.keys() if parent in decendent_of[x]]
+        gps = [x for x in descendant_of.keys() if parent in descendant_of[x]]
         for gp in gps:
-            decendent_of[gp] += [child] + decendent_of[child]
+            descendant_of[gp] += [child] + descendant_of[child]
 
     # Check that root has all nodes as decendants (equivalent to checking if the tree is connected)
-    if set(decendent_of[0]) != set(range(1,predK+1)):
-        print data
-        print decendent_of
-        raise ValidationError("Root of phylogeny not ancestor of all clusters / Tree is not connected")
+    if set(descendant_of[0]) != set(range(1,predK+1)):
+        raise ValidationError("Root of phylogeny not ancestor of all clusters / Tree is not connected. " +
+                              "Phelogeny matrix: %s, Descendant_of Dictionary %s" %
+                              (data, descendant_of))
 
     # Form AD matrix
     n = len(cluster_assignments)
     ad = np.zeros((n,n))
     for i in range(n):
         for j in range(n):
-            if cluster_assignments[j] in decendent_of[cluster_assignments[i]]:
+            if cluster_assignments[j] in descendant_of[cluster_assignments[i]]:
                 ad[i,j] = 1
     return ad
 
@@ -725,12 +708,15 @@ def add_pseudo_counts(ccm,ad=None,num=None):
 def verify(filename,role,func,*args):
     global err_msgs
     try:
-        f = open(filename)
-        pred_data = f.read(10**6)
-        f.close()
-        pred = func(pred_data,*args)
+        if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
+            pred = func(filename,*args)
+        else:
+            f = open(filename)
+            pred_data = f.read()
+            f.close()
+            pred = func(pred_data,*args)
     except (IOError,TypeError) as e:
-        err_msgs.append("Error opening %s in from file %s in function %s: %s" %  (role, filename, func, e.strerror))
+        err_msgs.append("Error opening %s, from function %s using file %s in : %s" %  (role, func, filename, e.strerror))
         return None
     except (ValidationError,ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))
@@ -787,10 +773,16 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     tout = []
     pout = []
     for predfile,truthfile,valfunc in zip(predfiles,truthfiles,challengeMapping[challenge]['val_funcs']):
+        if truthfile.endswith('.gz') and challenge not in ['2B', '3B']:
+            err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
+            return "NA"
         targs = tout + nssms[1]
         tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
-        pargs = pout + nssms[0]
 
+        if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
+            err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
+            return "NA"
+        pargs = pout + nssms[0]
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
         if tout[-1] == None or pout[-1] == None:
             return "NA"
