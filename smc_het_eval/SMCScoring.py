@@ -119,7 +119,7 @@ def validate2A(data,nssms,return_ccm=True):
     data = data.split('\n')
     data = filter(None,data)
     if len(data) != nssms:
-        raise ValidationError("Input file contains a different number of lines than the specification file")
+        raise ValidationError("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
     cluster_entries = []
     for i in range(len(data)):
         try:
@@ -679,12 +679,10 @@ def parseVCFScoring(data):
     data = [x for x in data if x[0] != '#']
     if len(data) == 0:
         raise ValidationError("Input VCF contains no SSMs")
-    else:
-        print len(data)
     total_ssms = len(data)
-    tp_ssms = len([x for x in data if x[-4:] == "True"])
     mask = [x[-4:] == "True" for x in data]
     mask = [i for i,x in enumerate(mask) if x]
+    tp_ssms = len(mask)
     return [[total_ssms],[tp_ssms],mask]
 
 def filterFPs(matrix, mask):
@@ -732,7 +730,7 @@ def verify(filename,role,func,*args):
         f.close()
         pred = func(pred_data,*args)
     except (IOError,TypeError) as e:
-        err_msgs.append("Error opening %s in from file %s in function %s: %s" %  (role, filename, func, e.value))
+        err_msgs.append("Error opening %s in from file %s in function %s: %s" %  (role, filename, func, e.strerror))
         return None
     except (ValidationError,ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))
@@ -792,6 +790,7 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         targs = tout + nssms[1]
         tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
         pargs = pout + nssms[0]
+
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
         if tout[-1] == None or pout[-1] == None:
             return "NA"
