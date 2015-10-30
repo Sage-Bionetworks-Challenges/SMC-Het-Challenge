@@ -133,10 +133,10 @@ SMCScoring.py
  {"2A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2A.txt"]}}
  #end if
  #if $cocluster_assignment.submit == 'yes':
- {"3A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.3A.txt"]}}
+ {"2B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2B.gz"]}}
  #end if
  #if $cluster_assignment.submit == 'yes' and $cluster_assignment.phylogeny.submit == 'yes':
- {"2B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2A.txt", "${sample}.truth.2B.gz"]}}
+ {"3A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.3A.txt"]}}
  #end if
  #if $cocluster_assignment.submit == 'yes' and $cocluster_assignment.ancestor.submit == 'yes':
  {"3B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.3A.txt", "${sample}.truth.3B.gz"]}}
