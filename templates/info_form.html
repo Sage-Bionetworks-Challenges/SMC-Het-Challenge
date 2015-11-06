@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"></head><body>
+<h1>SMC-Het Algorithm description</h1>
+<div style="margin: 35px;">
+<form action="submit" method="post">
+
+<input type="hidden" name="workflow" value="{{ workflow }}"/>
+
+<div style="border: 1px solid black; margin: 20px; padding: 10px;">
+  <h2>Submission Account</h2>
+  <div>
+    Go to <a href="https://www.synapse.org" target="_blank">Synapse</a>, login, go
+    to your profile page, then go to the settings tab and find the 'Show API Key'
+    copy the code and code into the follow field
+  </div>
+  <div style="margin: 25px;">
+    Synapse Email
+    <div>
+      <input type="text" name="synapse_email" size="75"/>
+    </div>
+  </div>
+  <div style="margin: 25px;">
+    Synapse API Key
+    <div>
+      <input type="text" name="synapse_apikey" size="75"/>
+    </div>
+  </div>
+</div>
+
+Is your method probabilistic?<br>
+<input type="radio" name="method" value="probabilistic">Probabilistic<br>
+<input type="radio" name="method" value="nonprobabilistic">Non-probabilistic<br>
+<input type="radio" name="method" value="other">Other (please clarify)
+<input type="text" name="method_other" value=""><br>
+
+<br>How do you perform inference?<br>
+<input type="radio" name="inference" value="sampling">Sampling (e.g. MCMC)<br>
+<input type="radio" name="inference" value="enumeration">Enumeration<br>
+<input type="radio" name="inference" value="optimization">Optimization<br>
+<input type="radio" name="inference" value="em">Expectation-Maximization (including Variational Bayes)<br>
+<input type="radio" name="inference" value="other">Other (please clarify)
+<input type="text" name="inference_other" value=""><br>
+
+<br>What sort of prior do you put on the parameters of your model?<br>
+<input type="radio" name="prior" value="none">No prior<br>
+<input type="radio" name="prior" value="noninformative">Non-informative prior<br>
+<input type="radio" name="prior" value="data">Informative prior fit to data (e.g. via empirical Bayes)<br>
+<input type="radio" name="prior" value="preassign">Informative prior pre-assigned.  If so please describe how:<input type="text" name="prior_informative" value=""><br>
+
+<br>Do you cluster CNAs? SNVs? SVs? Indels? (Check all that apply)<br>
+<input type="checkbox" name="cluster" value="cna">CNAs<br>
+<input type="checkbox" name="cluster" value="snv">SNVs<br>
+<input type="checkbox" name="cluster" value="sv">SVs<br>
+<input type="checkbox" name="cluster" value="indel">Indels<br>
+
+<br>If you use CNAs in your inference do you use clonal CNAs only or do you also use subclonal CNAs?<br>
+<input type="radio" name="cnv" value="clonal">Clonal CNAs only<br>
+<input type="radio" name="cnv" value="subclonal">Clonal and subclonal CNAs<br>
+<input type="radio" name="cnv" value="none">CNAs are not used<br>
+
+<br>If you use CNAs, do you use total CN only or do you use allele specific copy numbers?<br>
+<input type="radio" name="totalcn" value="totalonly">Total CN only<br>
+<input type="radio" name="totalcn" value="allelespecific">Allele specific CN<br>
+<input type="radio" name="totalcn" value="none">CNAs are not used<br>
+
+<br>Do you correct for cancer cell fraction?<br>
+<input type="radio" name="ccf" value="yes">Yes<br>
+<input type="radio" name="ccf" value="no">No<br>
+
+<br>Do you predict mutation multiplicities?<br>
+<input type="radio" name="multiplicity" value="yes">Yes<br>
+<input type="radio" name="multiplicity" value="no">No<br>
+
+<br>Do you cluster all mutations at once or do you do post hoc assignment?<br>
+<input type="radio" name="posthoc" value="no">All at once<br>
+<input type="radio" name="posthoc" value="yes">Posthoc assignment<br>
+
+<br>How do you chose the number of clusters?<br>
+<input type="radio" name="cluster_number" value="pllh">Penalized likelihood (e.g. BIC, AIC or Variational Bayes)<br>
+<input type="radio" name="cluster_number" value="nonparametric">Non-parametric Bayesian method (e.g. Dirichlet process prior)<br>
+<input type="radio" name="cluster_number" value="data">Data-driven (e.g. cross-validation, cluster separation)<br>
+<input type="radio" name="cluster_number" value="other">Other (please clarify) <input type="text" name="cluster_number_other" value=""><br>
+
+<br>Do you assume "weak parsimony" (i.e. that mutations in the same cluster are in the same cell)?<br>
+<input type="radio" name="weak" value="yes">Yes<br>
+<input type="radio" name="weak" value="no">No<br>
+
+<br>Do you attempt to infer the phylogeny of the tumour?<br>
+<input type="radio" name="phylogeny" value="yes">Yes<br>
+<input type="radio" name="phylogeny" value="no">No<br>
+
+<br>Does your method make any of these assumptions? (Check those that apply)<br>
+<input type="checkbox" name="assumption" value="strong">Strong parsimony (clusters should be explained with the fewest subpopulations possible)<br>
+<input type="checkbox" name="assumption" value="infinite_sites">Infinite sites (i.e. mutations only appear once and never revert except via LOH or locus loss) <br>
+<input type="checkbox" name="assumption" value="other">Other (please clarify)<input type="text" name="assumption_other" value=""><br>
+
+<br>What noise model do you use for Variant Allele Fractions?<br>
+<input type="radio" name="noise" value="binomial">Binomial<br>
+<input type="radio" name="noise" value="gaussian">Gaussian<br>
+<input type="radio" name="noise" value="overdispersed">Over-dispersed binomial<br>
+<input type="radio" name="noise" value="beta">Beta<br>
+<input type="radio" name="noise" value="poisson">Poisson<br>
+<input type="radio" name="noise" value="other">Other (please clarify) <input type="text" name="noise_other" value=""><br>
+
+<br>Is the source code for your method available?  If yes, please provide a link to where the code is available.<br>
+<input type="radio" name="source" value="yes">The source code at the following URL:
+<input type="text" name="source_url" value=""><br>
+<input type="radio" name="srouce" value="no">Source code is not available<br>
+
+<br>What is the peer-reviewed publishing status of your method?  If it has been published please provide a DOI or PMID.<br>
+<input type="radio" name="peer" value="published">The method has been described in a published peer-reviewed publication<br>
+<input type="radio" name="peer" value="accepted">The method has been described in a manuscript that has been accepted for publication<br>
+<input type="radio" name="peer" value="submitted">The method has been described in a manuscript has been submitted to a peer-reviewed journal<br>
+<input type="radio" name="peer" value="notyet">The method has not yet been described in a manuscript but will be in the future<br>
+<input type="radio" name="peer" value="no">The method will not be described in a manuscript<br>
+DOI/PMID (if applicable): <input type="text" name="peer_url" value=""><br>
+
+<br>Has a description of your method appeared in a non-peer-reviewed format?  If yes, please provide a link.<br>
+<input type="radio" name="nonpeer" value="preprint">The method has been described in a manuscript available on a pre-print server (e.g. arXiv, bio-arXiv)<br>
+<input type="radio" name="nonpeer" value="website">The method is described on a website or source-code repository.<br>
+Link to pre-print or website: <input type="text" name="nonpeer_url" value=""><br>
+<br>
+<input type="submit" value="Submit">
+</form>
+</div>
+
+</body></html>

@@ -5,8 +5,11 @@ import argparse
 import tornado
 import tornado.web
 import requests
+import thread
 import threading
 import time
+import json
+import subprocess
 from jinja2 import Template
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
@@ -17,12 +20,32 @@ class MainHandler(tornado.web.RequestHandler):
     
     def initialize(self, galaxy, apikey):
         with open(os.path.join(TEMPLATE_DIR, "main.html")) as handle:
-            self.main_page = Template(handle.read())
+            self.page = Template(handle.read())
         self.remote = RemoteGalaxy(galaxy, apikey)
 
     def get(self):
         workflows = self.remote.workflow_list()
-        self.write(self.main_page.render(workflows=workflows))
+        
+        host_url = "%s://%s" % (self.request.protocol, self.request.host)
+        login=False
+        if 'login' not in self.request.arguments:
+            login=True
+        self.write(self.page.render(host_url=host_url, workflows=workflows, login=login))
+
+class FormHandler(tornado.web.RequestHandler):
+
+    def initialize(self, galaxy, apikey, submitter):
+        self.submitter = submitter
+        self.galaxy = galaxy
+        self.apikey = apikey
+        self.remote = RemoteGalaxy(galaxy, apikey)
+        with open(os.path.join(TEMPLATE_DIR, "info_form.html")) as handle:
+            self.page = Template(handle.read())
+
+    def get(self):
+        workflow = self.request.arguments['workflow'][0]
+        self.write(self.page.render(workflow=workflow))
+                
 
 class SubmitHandler(tornado.web.RequestHandler):
 
@@ -31,17 +54,34 @@ class SubmitHandler(tornado.web.RequestHandler):
         self.galaxy = galaxy
         self.apikey = apikey
         self.remote = RemoteGalaxy(galaxy, apikey)
+        with open(os.path.join(TEMPLATE_DIR, "submit.html")) as handle:
+            self.page = Template(handle.read())
 
     def post(self):
         workflow_path = self.request.arguments['workflow'][0]
         workflow = self.remote.get(workflow_path + "/download")
+        if not self.submitter.running:
+            self.submitter.submission = {
+                'workflow' : self.galaxy + workflow_path + "/download",
+                'apikey' : self.apikey,
+                'synapse_email' : self.request.arguments['synapse_email'][0],
+                'synapse_apikey' : self.request.arguments['synapse_apikey'][0],                
+            }
+        self.write(self.page.render(message=json.dumps(self.request.arguments)))
                 
-        self.write(str(workflow))
-        if self.submitter.running:
-            self.write(self.submitter.log)
-        else:
-            pass
-            
+class MonitorHandler(tornado.web.RequestHandler):
+
+    def initialize(self, galaxy, apikey, submitter):
+        self.submitter = submitter
+        self.galaxy = galaxy
+        self.apikey = apikey
+        self.remote = RemoteGalaxy(galaxy, apikey)
+        with open(os.path.join(TEMPLATE_DIR, "monitor.html")) as handle:
+            self.page = Template(handle.read())
+
+    def get(self):
+        self.write(self.page.render(log=self.submitter.log))
+
 
 class Submitter(threading.Thread):
     
@@ -55,20 +95,38 @@ class Submitter(threading.Thread):
             if self.submission is not None:
                 self.running = True
                 
-                cmd_line = "dream_galaxy_submit \
+                cmd_line_template = "./dream_galaxy_submit \
 --user {user} \
 --password {password} \
 --team-name {team_name} \
+--name {name} \
+--apikey {apikey} \
 --workflow {workflow} --no-upload" 
                 
+                cmd_line = cmd_line_template.format(
+                    user="test",
+                    name="test_workflow",
+                    password="password",
+                    team_name="team-name",
+                    apikey=self.submission['apikey'],
+                    workflow=self.submission['workflow']
+                )
+                
                 self.log = "Running: %s" % (cmd_line)
-                proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE )
-
-                while True:
-                    line = proc.stdin.readline()
-                    if not line:
-                        break
-                    self.log += line
+                proc = subprocess.Popen(cmd_line, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
+                def watch_and_log(stream):
+                    while True:
+                        line = stream.readline()
+                        if not line:
+                            break
+                        self.log += line
+                thread.start_new_thread(watch_and_log, (proc.stdout,))
+                thread.start_new_thread(watch_and_log, (proc.stderr,))
+                proc.wait()
+                if proc.returncode == 0:
+                    self.log += "\nSubmission Done"
+                else:
+                    self.log += "\nSubmission Failed"                    
                 self.running = False
                 self.submission = None
 
@@ -237,7 +295,10 @@ if __name__ == "__main__":
 
     application = tornado.web.Application([
         (r"/", MainHandler, {'galaxy' : args.galaxy, 'apikey' : args.apikey}),
-        (r"/submit", SubmitHandler, {'galaxy' : args.galaxy, 'apikey' : args.apikey, 'submitter' : submitter})
+        (r"/info_form", FormHandler, {'galaxy' : args.galaxy, 'apikey' : args.apikey, 'submitter' : submitter}),
+        (r"/submit", SubmitHandler, {'galaxy' : args.galaxy, 'apikey' : args.apikey, 'submitter' : submitter}),
+        (r"/monitor", MonitorHandler, {'galaxy' : args.galaxy, 'apikey' : args.apikey, 'submitter' : submitter}),
+
     ])
 
     application.listen(args.port)

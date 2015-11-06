@@ -212,14 +212,16 @@ def name_clean(name):
     return re.sub(r'[^\w]', "_", name)
 
 def tag_clean(tag):
+    return re.sub(r':', "_", tag)
+    """
     if tag.endswith(":latest"):
         raise ValueError("Docker tag %s doesn't specify an exact version. Please don't use \":latest\"." % (tag))
     elif ":" in tag:
         return re.sub(r':', "_", tag)
     else:
         raise ValueError("Docker tag %s doesn't specify a version." % (tag))
-
-def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_upload=False):
+    """
+def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_upload=False, gce_info=False):
 
     name = name_clean(name)
     print "Downloading: %s" % (name)
@@ -292,8 +294,11 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_up
 
     print output_paths
 
-    instance_type = get_google_instance_type()
-
+    if args.gce_info:
+        instance_type = get_google_instance_type()
+    else:
+        instance_type = "N/A"
+        
     if not no_upload:
         project = syn.get(project_id)
         image_folder_id = None
@@ -336,7 +341,7 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_up
         }
 
 
-def main_submit(syn, apikey, workflow, name, team_name, project_id, workdir):
+def main_submit(syn, apikey, workflow, name, team_name, project_id, workdir, gce_info=False):
     """
     This method takes an existing VCF file, uploads it to a personal project folder, and then
     submits it to the Dream Mutation calling Challenge
@@ -368,29 +373,34 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Submit Files to the DREAM mutation calling challenge. Please see https://www.synapse.org/#!Synapse:syn312572/wiki/60703 for usage instructions.')
     #Stack.addJobTreeOptions(parser)
-    parser.add_argument("--user", help="Synapse UserName", default=None)
-    parser.add_argument("--password", help="Synapse Password", default=None)
-    parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address, example ")
+    parser.add_argument("--synapse_email", help="Synapse UserName", default=None)
+    parser.add_argument("--synapse_key", help="Synapse APIKey", default=None)
+    parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address")
     parser.add_argument("--apikey", help="Galaxy API Key", default=None)
+    
+    parser.add_argument("--meta", help="Submission Metadata", required=True)
 
-    parser.add_argument("--name", help="Name of the submission", required=True)
-    parser.add_argument("--team-name", help="Name Team", required=True)
-    parser.add_argument("--project-id", required=True, help="The SYN id of your personal private working directory")
+    parser.add_argument("--project-id", help="The SYN id of your personal private working directory")
 
     parser.add_argument("--submit", action="store_true", default=False)
     parser.add_argument("--no-upload", action="store_true", default=False)
+    
+    parser.add_argument("--gce-info", action="store_true", default=False)
 
     parser.add_argument("-w", "--workdir", default="work")
 
     args = parser.parse_args()
-    syn = synapseclient.Synapse()
-    if args.user is not None and args.password is not None:
-        syn.login(args.user, args.password)
-    else:
-        if 'SYNAPSE_APIKEY' in os.environ and 'SYNAPSE_EMAIL' in os.environ:
-            syn.login(email=os.environ['SYNAPSE_EMAIL'], apiKey=os.environ['SYNAPSE_APIKEY'])
+    if not args.no_upload:
+        syn = synapseclient.Synapse()
+        if args.synapse_email is not None and args.synapse_key is not None:
+            syn.login(email=args.synapse_email, apiKey=args.synapse_key)
         else:
-            syn.login()
+            if 'SYNAPSE_APIKEY' in os.environ and 'SYNAPSE_EMAIL' in os.environ:
+                syn.login(email=os.environ['SYNAPSE_EMAIL'], apiKey=os.environ['SYNAPSE_APIKEY'])
+            else:
+                syn.login()
+    else:
+        syn = None
 
     if args.apikey is None:
         if os.path.exists( GALAXY_API_KEY_FILE ):
@@ -402,8 +412,8 @@ if __name__ == "__main__":
     submit = args.submit
     kwds=dict(vars(args))
     del kwds['submit']
-    del kwds['user']
-    del kwds['password']
+    del kwds['synapse_email']
+    del kwds['synapse_apikey']
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as handle:
             text = handle.read()
