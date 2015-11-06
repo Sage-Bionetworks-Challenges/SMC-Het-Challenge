@@ -1,0 +1,7 @@
+Ordering,NClusterOneLineage,OneCluster,NClusterTwoLineages,ParentIsNieceWithChildren,NClusterCorrectLineage,ParentIsSiblingWithChildren,BigExtraTop,BigExtraMid,ParentIsCousin,ParentIsAunt,ParentIsGrandparent,ParentIsSibling,BigExtraCurBot,BigExtraNewBot,MergeClusterTop&Mid,MergeClusterMid&BotMultiChild,SmallExtraTop,SplitClusterMidMultiChild,SplitClusterMidOneChild,MergeClusterMid&BotOneChild,SmallExtraMid,SmallExtraNewBot,SmallExtraCurBot,MergeClusterBot,SplitClusterBotDiff,SplitClusterBotSame
+Nathan,1,3,2,6,12,7,10,4,8,9,14,13,5,11,17,15,26,18,19,16,23,25,24,20,22,21
+Paul,2,1,3,4,5,10,16,18,8,6,11,9,19,17,7,12,20,14,15,13,23,22,24,21,25,26
+Dave,1,3,2,5,6,10,4,7,19,19,11,11,8,9,21,21,13,17,17,21,14,16,15,21,26,25
+Adriana,2,1,3,5,4,8,11,13,7,10,6,9,17,15,19,20,12,23,24,21,14,16,18,22,25,26
+Peter,1,1,3,5,4,9,6,9,9,9,13,21,19,19,6,13,8,13,13,13,13,21,21,21,21,21
+Quaid,2,2,2,5,14,7,4,6,9,8,13,15,10,11,17,12,18,17,17,22,19,20.5,20.5,25,23,24
