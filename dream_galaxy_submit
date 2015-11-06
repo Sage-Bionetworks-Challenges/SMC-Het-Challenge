@@ -221,10 +221,9 @@ def tag_clean(tag):
     else:
         raise ValueError("Docker tag %s doesn't specify a version." % (tag))
     """
-def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_upload=False, gce_info=False):
+def main_sync(syn, apikey, workflow, meta, project_id, workdir, no_upload=False, gce_info=False):
 
-    name = name_clean(name)
-    print "Downloading: %s" % (name)
+    print "Downloading: %s" % (workflow)
 
     if not workflow.startswith("http://") or workflow.startswith("https://"):
         print "Please provide URL to Galaxy Workflow"
@@ -258,7 +257,7 @@ def main_sync(syn, apikey, workflow, name, team_name, project_id, workdir, no_up
         "tools" : [],
         "images" : []
     }
-
+    name = name_clean(workflow['name'])
     workflow_file = os.path.join(workdir,"%s.ga" % (name))
     with open(workflow_file, "w") as handle:
         handle.write( json.dumps(workflow, indent=4) )
@@ -413,7 +412,7 @@ if __name__ == "__main__":
     kwds=dict(vars(args))
     del kwds['submit']
     del kwds['synapse_email']
-    del kwds['synapse_apikey']
+    del kwds['synapse_key']
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as handle:
             text = handle.read()
