@@ -1,0 +1,10 @@
+<html>
+<head>
+{% if login %}
+<meta http-equiv="refresh" content="5; url=https://synapse.sagebase.org/Portal/openid?OPEN_ID_PROVIDER=GOOGLE&amp;RETURN_TO_URL=${host_url}"/>
+{% else %}
+<meta http-equiv="refresh" content="5; url=monitor" />
+{% endif %}
+</head>
+{{message}}
+</html>
