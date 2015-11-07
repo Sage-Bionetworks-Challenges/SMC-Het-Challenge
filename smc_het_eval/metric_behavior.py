@@ -139,52 +139,35 @@ def scoring1C_behavior():
     f.close()        
 
 def scoring2A_behavior():
+    size_clusters = 200 # true size of each cluster
+    n_clusters = 3 # true number of clusters
+    big_extra_num = 33 # number of mutations to add in the BigExtra case
     # True CCM:
-    t_clusters = np.zeros((600,3))
-    t_clusters[0:200,0] = 1
-    t_clusters[200:400,1] = 1
-    t_clusters[400:,2] = 1
-    t_ccm = np.dot(t_clusters,t_clusters.T)
+    t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
 
     # Cases:
     res = []
     # Split a cluster
-    clusters = np.zeros((600,4))
-    clusters[0:100,0] = 1
-    clusters[100:200,3] = 1
-    clusters[200:400,1] = 1
-    clusters[400:,2] = 1
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('SplitClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res.append(["SplitCluster",calculate2(ccm,t_ccm)])
 
     # Merge 2 clusters
-    clusters = np.zeros((600,2))
-    clusters[0:400,0] = 1
-    clusters[400:,1] = 1
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('MergeClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res.append(["MergeCluster",calculate2(ccm,t_ccm)])
     
     #All one cluster
+    ccm = get_ccm('OneCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res.append(["OneCluster",calculate2(np.ones(t_ccm.shape),t_ccm)])
     # Each ssm own cluster
+    ccm = get_ccm('NCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res.append(["NClusters",calculate2(np.identity(t_ccm.shape[0]),t_ccm)])
     
     # Small extra cluster with some mutations from each cluster
-    clusters = np.zeros((600,4))
-    clusters[:,:-1] = np.copy(t_clusters)
-    clusters[100,:] = np.array([0,0,0,1])
-    clusters[300,:] = np.array([0,0,0,1])
-    clusters[500,:] = np.array([0,0,0,1])
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('SmallExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res.append(["SmallExtra", calculate2(ccm,t_ccm)])
     
     # Big extra cluster with some mutations from each cluster
-    clusters = np.zeros((600,4))
-    clusters[:,:-1] = np.copy(t_clusters)
-    clusters[100:133,:] = np.array([0,0,0,1])
-    clusters[300:333,:] = np.array([0,0,0,1])
-    clusters[500:533,:] = np.array([0,0,0,1])
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('BigExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res.append(["BigExtra", calculate2(ccm,t_ccm)])
 
     res = [map(str,x) for x in res]
@@ -195,72 +178,35 @@ def scoring2A_behavior():
     
     # Same thing but with more groups (all of the same size)
     # True CCM:
-    t_clusters = np.zeros((2000,10))
-    t_clusters[0:200,0] = 1
-    t_clusters[200:400,1] = 1
-    t_clusters[400:600,2] = 1
-    t_clusters[600:800,3] = 1
-    t_clusters[800:1000,4] = 1
-    t_clusters[1000:1200,5] = 1
-    t_clusters[1200:1400,6] = 1
-    t_clusters[1400:1600,7] = 1
-    t_clusters[1600:1800,8] = 1
-    t_clusters[1800:2000,9] = 1
-    
-    t_ccm = np.dot(t_clusters,t_clusters.T)
+    n_clusters = 10 # true number of clusters
+    big_extra_num = 10
+
+    t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
 
     # Cases:
     res_more_cl = []
     # Split a cluster
-    clusters = np.zeros((2000,11))
-    clusters[:,:-1] = np.copy(t_clusters)
-    clusters[1900:2000,9] = 0
-    clusters[1900:2000,10] = 1
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('SplitClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res_more_cl.append(["SplitCluster",calculate2(ccm,t_ccm)])
 
     # Merge 2 clusters
-    clusters = np.copy(t_clusters[:,:-1])
-    clusters[1800:2000,8] = 1
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('MergeClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res_more_cl.append(["MergeCluster",calculate2(ccm,t_ccm)])
-    
+
     #All one cluster
+    ccm = get_ccm('OneCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res_more_cl.append(["OneCluster",calculate2(np.ones(t_ccm.shape),t_ccm)])
     # Each ssm own cluster
+    ccm = get_ccm('NCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res_more_cl.append(["NClusters",calculate2(np.identity(t_ccm.shape[0]),t_ccm)])
-    
+
     # Small extra cluster with some mutations from each cluster
-    clusters = np.zeros((2000,11))
-    clusters[:,:-1] = np.copy(t_clusters)
-    clusters[100,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[300,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[500,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[700,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[900,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1100,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1300,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1500,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1700,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1900,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    ccm = np.dot(clusters,clusters.T)
+    ccm = get_ccm('SmallExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     res_more_cl.append(["SmallExtra", calculate2(ccm,t_ccm)])
-    
+
     # Big extra cluster with some mutations from each cluster
-    clusters = np.zeros((2000,11))
-    clusters[:,:-1] = np.copy(t_clusters)
-    clusters[100:110,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[300:310,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[500:510,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[700:710,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[900:910,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1100:1110,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1300:1310,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1500:1510,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1700:1710,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    clusters[1900:1910,:] = np.array([0,0,0,0,0,0,0,0,0,0,1])
-    ccm = np.dot(clusters,clusters.T)
-    res_more_cl.append(["BigExtra", calculate2(ccm,t_ccm)])    
+    ccm = get_ccm('BigExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+    res_more_cl.append(["BigExtra", calculate2(ccm,t_ccm)])
     
     res_more_cl = [map(str,x) for x in res_more_cl]
     res_more_cl = ['\t'.join(x) for x in res_more_cl]
@@ -318,31 +264,117 @@ def scoring2A_behavior():
     f.write('\n'.join(res))
     f.close()
     
-def scoring2B_behavior():
-    t_clusters = np.zeros((600,3))
-    t_clusters[0:200,0] = 1
-    t_clusters[200:400,1] = 1
-    t_clusters[400:,2] = 1
-    t_ccm = np.dot(t_clusters,t_clusters.T)
+def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True, method='pseudoV', verbose=True):
+    if tst_betas:
+        t_ccm, t_clusters = get_ccm('Truth',size_clusters=200, n_clusters=3, big_extra_num=33)
 
-    n_uniq = len(np.triu_indices(t_ccm.shape[0],k=1)[0])
-    res = []
-    concentrations = [1000,100,50,25,10,5,3,1]
-    for c in concentrations:
-        for i in range(50):
-            ccm = np.copy(t_ccm)
-            ccm[np.triu_indices(t_ccm.shape[0],k=1)] -= np.random.beta(1,c,n_uniq)
-            #ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = ccm[np.triu_indices(t_ccm.shape[0],k=1)]
-            ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = 0
-            ccm = ccm + ccm.T
-            np.fill_diagonal(ccm,1)
-            ccm = np.abs(ccm)
-            res.append([c,calculate2(ccm,t_ccm)])
-    res = [map(str,x) for x in res]
-    res = ['\t'.join(x) for x in res]
-    f = open('scoring_metric_data/scoring2B_beta.tsv', 'w')
-    f.write('\n'.join(res))
-    f.close()  
+        n_uniq = len(np.triu_indices(t_ccm.shape[0],k=1)[0])
+        res = []
+        concentrations = [1000,100,50,25,10,5,3,1]
+        for c in concentrations:
+            for i in range(50):
+                ccm = np.copy(t_ccm)
+                ccm[np.triu_indices(t_ccm.shape[0],k=1)] -= np.random.beta(1,c,n_uniq)
+                #ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = ccm[np.triu_indices(t_ccm.shape[0],k=1)]
+                ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = 0
+                ccm = ccm + ccm.T
+                np.fill_diagonal(ccm,1)
+                ccm = np.abs(ccm)
+                res.append([c,calculate2(ccm,t_ccm)])
+        res = [map(str,x) for x in res]
+        res = ['\t'.join(x) for x in res]
+        f = open('scoring_metric_data/scoring2B_beta.tsv', 'w')
+        f.write('\n'.join(res))
+        f.close()
+
+    if tst_prob_mod:
+        size_clusters = 200
+        n_clusters = 3
+        big_extra_num = 1
+
+        t_ccm, t_clusters = get_ccm('Truth', size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+
+        TwoBscenarios = ['SmallExtra', "BigExtra", "OneCluster", "NCluster", "SplitClusterBot", "MergeClusterBot"]
+        scoring_data = {}
+        if tst_prob_mod_err:
+            error_data = {}
+        for sc in TwoBscenarios:
+            if verbose:
+                print '  Scenario: ' + sc
+            ccm = get_ccm(sc,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+            ccm_ones = (ccm == 1)
+            ccms = [ccm]
+            if verbose:
+                print '       Calculating SC2 score with certainty of 1...'
+            data = [calculate2(ccm, t_ccm, method=method)]
+
+            diag = np.diag_indices(ccm.shape[0])
+
+            if tst_prob_mod_err:
+                stds = [0.01,0.03,0.05,0.1,0.15,0.2]
+                errs = {} # error matrix for each std valyue - keep error matrix the same for all probablistic ccm's
+                data_err = {} # ccm's for each certainty level with including small errors
+                for std in stds:
+                    err = np.random.normal(0,std,ccm.shape) # add some random error to each entry in the matrix
+                    err = np.triu(err, 1) # make sure the error matrix is symmetrical and the diagonal is all 0's
+                    err = err + np.transpose(err)
+                    errs[std] = err
+
+                for std in stds:
+                    ccm_err = (ccm - errs[std])
+
+                    ccm_err[ccm_err > 1] = 1 # make sure all values are between 0 and 1
+                    ccm_err[ccm_err < 0] = 0
+
+                    ccms_err = [ccm_err]
+                    if verbose:
+                        print '       Calculating SC2 score with certainty of 1 with Errors using std dev of ' + str(std) + '...'
+                    data_err[std] = [calculate2(ccm_err, t_ccm, method=method)]
+
+            probs = [0.95,0.9,0.85,0.8,0.75,0.7]
+            for prob in probs: # prob is your certainty of your results
+                ccm_prob = np.copy(ccm) + (1-prob) # change 0's to 1-prob
+                ccm_prob[ccm_ones] -= 2*(1-prob) # change 1's to prob
+                ccm_prob[diag] = 1 # diagonal should always be ones
+                ccms.append(ccm_prob)
+
+                if verbose:
+                    print '       Calculating SC2 score with certainty of ' + str(prob) + '...'
+                data.append(calculate2(ccm_prob, t_ccm, method=method))
+
+                if tst_prob_mod_err:
+                    for std in stds:
+                        ccm_prob_err = (ccm_prob - errs[std])
+
+                        ccm_prob_err[ccm_prob_err > 1] = 1 # make sure all values are between 0 and 1
+                        ccm_prob_err[ccm_prob_err < 0] = 0
+
+                        ccms_err.append(ccm_prob_err)
+                        if verbose:
+                            print '       Calculating SC2 score with certainty of ' + str(prob) + ' with Errors using std dev of ' + str(std) + '...'
+                        data_err[std].append(calculate2(ccm_prob_err, t_ccm, method=method))
+
+            scoring_data[sc] = data
+            if tst_prob_mod_err:
+                error_data[sc] = data_err
+
+        with open(tsv_dir + '2B_prob_scoring_' + method + '.tsv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Scenario', 1]+probs)
+            for key, val in scoring_data.iteritems():
+                writer.writerow([key] + val)
+
+        if tst_prob_mod_err:
+            for std in stds:
+                with open(tsv_dir + '2B_prob_scoring_with_err_' + str(std) + '_' + method + '.tsv', 'w') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Scenario', 1]+probs)
+                    for key, val in error_data.iteritems():
+                        writer.writerow([key] + val[std])
+
+
+
+
 
 def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True, pc_amount='more', full_matrix=True):
     '''Scoring behaviour of subchallenge 3 metrics
@@ -568,7 +600,7 @@ def rank(scores):
     rank = order.argsort()
     return rank + 1
 
-def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100):
+def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters=6, big_extra_num=15):
     '''Find the co-clustering matrix for the given scenario
 
     Attributes:
@@ -581,13 +613,9 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100):
     # TODO: make this more generalizable by calculating CCM from size and number of clusters
 
     if t_clusters is None:
-        t_clusters = np.zeros((6*size_clusters,6))
-        t_clusters[0:size_clusters,0] = 1 #cluster 1
-        t_clusters[size_clusters:2*size_clusters,1] = 1 #cluster 2
-        t_clusters[2*size_clusters:3*size_clusters,2] = 1 #...
-        t_clusters[3*size_clusters:4*size_clusters,3] = 1
-        t_clusters[4*size_clusters:5*size_clusters,4] = 1
-        t_clusters[5*size_clusters:6*size_clusters,5] = 1
+        t_clusters = np.zeros((n_clusters*size_clusters,n_clusters))
+        for i in range(n_clusters):
+            t_clusters[i*size_clusters:(i+1)*size_clusters,i] = 1 #assign each cluster
     if t_ccm is None:
         t_ccm = np.dot(t_clusters,t_clusters.T)
 
@@ -599,36 +627,28 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100):
         return np.ones(t_ccm.shape)
     elif "NCluster" in scenario:
         return np.identity(t_ccm.shape[0])
-    elif scenario is "SplitClusterBotSame":
-        clusters = np.zeros((6*size_clusters,7))
+    elif "SplitCluster" in scenario:
+        clusters = np.zeros((n_clusters*size_clusters,n_clusters+1))
         clusters[:,:-1] = np.copy(t_clusters)
-        clusters[5.5 * size_clusters:6*size_clusters,5] = 0
-        clusters[5.5*size_clusters:6*size_clusters,6] = 1
-        return np.dot(clusters, clusters.T)
-    elif scenario is "SplitClusterBotDiff":
-        clusters = np.zeros((6*size_clusters,7))
-        clusters[:,:-1] = np.copy(t_clusters)
-        clusters[5.5*size_clusters:6*size_clusters,5] = 0
-        clusters[5.5*size_clusters:6*size_clusters,6] = 1
-        return np.dot(clusters, clusters.T)
-    elif scenario is "SplitClusterMidOneChild":
-        clusters = np.zeros((6*size_clusters,7))
-        clusters[:,:-1] = np.copy(t_clusters)
-        clusters[2.5*size_clusters:3*size_clusters,2] = 0
-        clusters[2.5*size_clusters:3*size_clusters,6] = 1
-        return np.dot(clusters, clusters.T)
-    elif scenario is "SplitClusterMidMultiChild":
-        clusters = np.zeros((6*size_clusters,7))
-        clusters[:,:-1] = np.copy(t_clusters)
-        clusters[1.5*size_clusters:2*size_clusters,1] = 0
-        clusters[1.5*size_clusters:2*size_clusters,6] = 1
-        return np.dot(clusters, clusters.T)
+        if "SplitClusterBot" in scenario:
+            clusters[(n_clusters-0.5) * size_clusters:n_clusters*size_clusters,n_clusters-1] = 0
+            clusters[(n_clusters-0.5)*size_clusters:n_clusters*size_clusters,n_clusters] = 1
+            return np.dot(clusters, clusters.T)
+            return np.dot(clusters, clusters.T)
+        elif scenario is "SplitClusterMidOneChild":
+            clusters[2.5*size_clusters:3*size_clusters,2] = 0
+            clusters[2.5*size_clusters:3*size_clusters,n_clusters] = 1
+            return np.dot(clusters, clusters.T)
+        elif scenario is "SplitClusterMidMultiChild":
+            clusters[1.5*size_clusters:2*size_clusters,1] = 0
+            clusters[1.5*size_clusters:2*size_clusters,n_clusters] = 1
+            return np.dot(clusters, clusters.T)
 
     elif scenario is "MergeClusterBot":
         clusters = np.copy(t_clusters[:,:-1])
-        clusters[5*size_clusters:6*size_clusters,4] = 1 #fix cluster 5 (originally cluster 6)
-        clusters[4*size_clusters:5*size_clusters,4] = 0 #merge clusters 4 and 5 (from true phylogeny)
-        clusters[3*size_clusters:4*size_clusters,3] = 1
+        clusters[(n_clusters-1)*size_clusters:n_clusters*size_clusters,n_clusters-2] = 1 #fix cluster 5 (originally cluster 6)
+        clusters[(n_clusters-2)*size_clusters:(n_clusters-1)*size_clusters,n_clusters-2] = 0 #merge clusters 4 and 5 (from true phylogeny)
+        clusters[(n_clusters-3)*size_clusters:(n_clusters-2)*size_clusters,n_clusters-3] = 1
         return np.dot(clusters, clusters.T)
     elif scenario == "MergeClusterMid&BotOneChild":
         clusters = np.copy(t_clusters[:,:-1])
@@ -648,19 +668,17 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100):
         clusters[4*size_clusters:5*size_clusters, 3] = 1
         clusters[5*size_clusters:6*size_clusters, 4] = 1
         return np.dot(clusters, clusters.T)
-    elif "SmallExtra" in scenario:
-        clusters = np.zeros((6*size_clusters,7))
+    if 'Extra' in scenario:
+        clusters = np.zeros((n_clusters*size_clusters,n_clusters+1))
         clusters[:,:-1] = np.copy(t_clusters)
-        for i in range(0,6):
-            clusters[size_clusters*i,i] = 0
-            clusters[size_clusters*i,6] = 1
-        return np.dot(clusters,clusters.T)
-    elif "BigExtra" in scenario:
-        clusters = np.zeros((6*size_clusters,7))
-        clusters[:,:-1] = np.copy(t_clusters)
-        for i in range(0,6):
-            clusters[size_clusters*i:size_clusters*i+15,i] = 0
-            clusters[size_clusters*i:size_clusters*i+15,6] = 1
+        if "SmallExtra" in scenario:
+            num_extra = 1
+        elif "BigExtra" in scenario:
+            num_extra = big_extra_num
+
+        for i in range(n_clusters):
+            clusters[size_clusters*i:size_clusters*i+num_extra,i] = 0
+            clusters[size_clusters*i:size_clusters*i+num_extra,n_clusters] = 1
         return np.dot(clusters,clusters.T)
     else:
         raise LookupError("Invalid scenario")
@@ -923,16 +941,32 @@ def scoringtotal_behavior(verbose=False):
 
 
 if __name__ == '__main__':
+    '''
+    methods_2B = ["orig",
+            "sqrt",
+            "pseudoV",
+            "sym_pseudoV",
+            "spearman",
+            "pearson",
+            "aupr",
+            "mcc"]
+    '''
+    methods_2B = ["pseudoV", "sym_pseudoV"]
+    for m in methods_2B:
+        print 'Scoring 2B Behavior with method ' + m + '...'
+        scoring2B_behavior(tst_betas=False, method=m)
+
+    '''
     scoring1A_behavior()
     scoring1B_behavior()
     scoring1C_behavior()
     scoring2A_behavior()
-    scoring2B_behavior()
-    methods = ("orig", "orig_nc", "pseudoV", "pseudoV_nc", "simpleKL_nc",
+    methods_3A = ("orig", "orig_nc", "pseudoV", "pseudoV_nc", "simpleKL_nc",
                  "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc",
                 ["pseudoV_nc", "mcc_nc", "spearman_nc"], ["pseudoV_nc", "mcc_nc", "pearson_nc"])
-    for m in methods:
+    for m in methods_3A:
         print('Calculating metric %s...' % m)
         scoring3A_behavior(method=m, verbose=True)
 
     scoringtotal_behavior(True)
+    '''
