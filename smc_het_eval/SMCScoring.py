@@ -174,14 +174,28 @@ def calculate2_quaid(pred,truth):
             print ones_score, zeros_score
             return 0
 
-def calculate2(pred,truth, full_matrix=True):
+def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=None):
+    pc_pred = add_pseudo_counts(np.copy(pred), num=pseudo_counts) # add pseudo counts to the matrices
+    pc_truth = add_pseudo_counts(np.copy(truth), num=pseudo_counts) # use np.copy so that original values are not altered
 
-    pv_score = calculate2_pseudoV_norm(pred, truth, full_matrix=full_matrix)
-    pv_sym_score = calculate2_sym_pseudoV_norm(pred, truth, full_matrix=full_matrix)
-    spear_score = calculate2_spearman(pred, truth, full_matrix=full_matrix)
-    mcc_score = calculate2_mcc(pred, truth, full_matrix=full_matrix)
-    scores = (pv_score, pv_sym_score, spear_score, mcc_score)
-    return np.mean(scores)
+    func = {"orig" : calculate2_orig,
+            "sqrt" : calculate2_sqrt,
+            "pseudoV": calculate2_pseudoV_norm,
+            "sym_pseudoV": calculate2_sym_pseudoV_norm,
+            "spearman": calculate2_spearman,
+            "pearson": calculate2_pearson,
+            "aupr": calculate2_aupr,
+            "mcc": calculate2_mcc
+    }.get(method, None)
+    if func is None:
+        pv_score = calculate2_pseudoV_norm(pc_pred, pc_truth, full_matrix=full_matrix)
+        pv_sym_score = calculate2_sym_pseudoV_norm(pc_pred, pc_truth, full_matrix=full_matrix)
+        spear_score = calculate2_spearman(pc_pred, pc_truth, full_matrix=full_matrix)
+        mcc_score = calculate2_mcc(pc_pred, pc_truth, full_matrix=full_matrix)
+        scores = (pv_score, pv_sym_score, spear_score, mcc_score)
+        return np.mean(scores)
+    else:
+        return func(pc_pred, pc_truth, full_matrix=full_matrix)
 
 def calculate2_orig(pred,truth, full_matrix=True):
     n = truth.shape[0]
@@ -251,7 +265,14 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
     return max(1 -  pv_val/ max_val, 0)
 
 
-def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True):
+def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
+    min_pred_nonzero = np.min(pred[np.nonzero(pred)])
+    min_truth_nonzero = np.min(truth[np.nonzero(truth)])
+
+    #rnd = min(rnd, min_pred_nonzero / 2.0, min_truth_nonzero / 2.0) # make sure that rnd is not bigger than any
+                                                                    # of the values in the truth or predicted matrix
+                                                                    # truth should be ones and zeros but good sanity check
+
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
@@ -269,7 +290,10 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True):
     pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
     truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
 
-    return np.sum(truth_cp * np.log(truth_cp/pred_cp))
+    if sym:
+        return np.sum(truth_cp * np.log(truth_cp/pred_cp)) + np.sum(pred_cp * np.log(pred_cp/truth_cp))
+    else:
+        return np.sum(truth_cp * np.log(truth_cp/pred_cp))
 
 def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
@@ -286,19 +310,7 @@ def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=T
     return max(1 - spv_val / max_val, 0)
 
 def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
-    if full_matrix:
-        pred_cp = np.copy(pred)
-        truth_cp = np.copy(truth)
-    else: # make matrix upper triangular
-        pred_cp = np.triu(pred)
-        truth_cp = np.triu(truth)
-
-    pred_cp[pred_cp==0] = rnd
-    truth_cp[truth_cp==0] = rnd
-    pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
-    truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
-    return np.sum(truth_cp * np.log(truth_cp/pred_cp)) + np.sum(pred_cp * np.log(pred_cp/truth_cp))
-
+    return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
 
 def calculate2_spearman(pred, truth, full_matrix=True):
     # use only the upper triangular matrix of the truth and
@@ -362,10 +374,10 @@ def calculate2_mcc(pred,truth, full_matrix=True):
         pred_cp = pred[inds]
         truth_cp = truth[inds]
 
-    tp = float(sum(pred_cp[truth_cp==1] == 1))
-    tn = float(sum(pred_cp[truth_cp==0] == 0))
-    fp = float(sum(pred_cp[truth_cp==0] == 1))
-    fn = float(sum(pred_cp[truth_cp==1] == 0))
+    tp = float(sum(pred_cp[truth_cp==1] >= 0.5)) # Use 0.5 as the threshold for turning a probabalistic matrix into a binary matrix
+    tn = float(sum(pred_cp[truth_cp==0] < 0.5))
+    fp = float(sum(pred_cp[truth_cp==0] >= 0.5))
+    fn = float(sum(pred_cp[truth_cp==1] < 0.5))
 
     # To avoid divide-by-zero cases
     denom_terms = [(tp+fp),(tp+fn),(tn+fp),(tn+fn)]
@@ -702,8 +714,9 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         new_ad[(size+num/2):(size+3*num/4),:(size+num/2)] = 1
         new_ad[:(size+num/2),(size+3*num/4):(size+num)] = 1
         ad = new_ad
+        return ccm, ad
 
-    return ccm, ad
+    return ccm
 
 def verify(filename,role,func,*args):
     global err_msgs
