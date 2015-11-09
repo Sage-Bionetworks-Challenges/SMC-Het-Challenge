@@ -71,6 +71,13 @@ def validate_workflow(workflow):
         print "Labeled Input dataset not found"
         return 1
 
+    for step in workflow['steps'].values():
+        if step['type'] == 'data_input':
+            name = step['inputs'][0]['name']
+            if name not in INPUT_NAMES and not name.startswith("syn"):
+                print "Unrecognized input, %s" % (name)
+                return 1
+
     return 0
 
 """
@@ -211,6 +218,33 @@ def find_or_add_to_synapse(paths, folder):
 def name_clean(name):
     return re.sub(r'[^\w]', "_", name)
 
+
+def main_check(workflow_url, apikey, **kwds):
+    print "Downloading: %s" % (workflow_url)
+
+    if not workflow_url.startswith("http://") or workflow_url.startswith("https://"):
+        print "Please provide URL to Galaxy Workflow"
+        raise Exception("Invalid Galaxy workflow URL: %s" % ())
+
+    #if there provided the URL for the share page add a '/json' to the end
+    if not workflow_url.endswith("/json") and not workflow_url.endswith("/download"):
+        workflow_url = workflow_url + "/json"
+    if workflow_url.endswith("/download"):
+        workflow_url += "?key=%s" % (apikey)
+
+
+    #Download the Workflow JSON
+    print "Downloading Workflow", workflow_url
+    #try:
+    req = requests.get(workflow_url)
+    workflow = req.json()
+
+    if validate_workflow(workflow):
+        raise Exception("Workflow failed validation")
+    
+    return workflow_url, workflow
+
+
 def tag_clean(tag):
     return re.sub(r':', "_", tag)
     """
@@ -221,36 +255,14 @@ def tag_clean(tag):
     else:
         raise ValueError("Docker tag %s doesn't specify a version." % (tag))
     """
-def main_sync(syn, apikey, workflow, meta, project_id, workdir, no_upload=False, gce_info=False):
+def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=False, gce_info=False):
 
-    print "Downloading: %s" % (workflow)
+    workflow_url, workflow = main_check(workflow_url, apikey)
 
-    if not workflow.startswith("http://") or workflow.startswith("https://"):
-        print "Please provide URL to Galaxy Workflow"
-        raise Exception("Invalid Galaxy workflow URL: %s" % ())
+    galaxy_url = urlparse.urlparse(workflow_url)
 
     if not os.path.exists(workdir):
         os.mkdir(workdir)
-
-    #if there provided the URL for the share page add a '/json' to the end
-    if not workflow.endswith("/json") and not workflow.endswith("/download"):
-        workflow = workflow + "/json"
-    if workflow.endswith("/download"):
-        workflow += "?key=%s" % (apikey)
-
-    galaxy_url = urlparse.urlparse(workflow)
-
-    #Download the Workflow JSON
-    print "Downloading Workflow", workflow
-    #try:
-    req = requests.get(workflow)
-    workflow = req.json()
-    #except ValueError:
-    #    sys.stderr.write("Unexpected Value: %s" % (req.text))
-    #    raise Exception("Unable to download workflow")
-
-    if validate_workflow(workflow):
-        raise Exception("Workflow failed validation")
 
     output_paths = {
         "workflow" : None,
@@ -374,12 +386,14 @@ if __name__ == "__main__":
     #Stack.addJobTreeOptions(parser)
     parser.add_argument("--synapse_email", help="Synapse UserName", default=None)
     parser.add_argument("--synapse_key", help="Synapse APIKey", default=None)
-    parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address")
+    parser.add_argument("--workflow", dest="workflow_url", required=True, help="Galaxy Workflow Address")
     parser.add_argument("--apikey", help="Galaxy API Key", default=None)
     
     parser.add_argument("--meta", help="Submission Metadata", required=True)
 
     parser.add_argument("--project-id", help="The SYN id of your personal private working directory")
+
+    parser.add_argument("--check", action="store_true", default=False)
 
     parser.add_argument("--submit", action="store_true", default=False)
     parser.add_argument("--no-upload", action="store_true", default=False)
@@ -389,7 +403,7 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--workdir", default="work")
 
     args = parser.parse_args()
-    if not args.no_upload:
+    if not args.no_upload and not args.check:
         syn = synapseclient.Synapse()
         if args.synapse_email is not None and args.synapse_key is not None:
             syn.login(email=args.synapse_email, apiKey=args.synapse_key)
@@ -409,8 +423,10 @@ if __name__ == "__main__":
             print "Need Galaxy API key: --apikey"
 
     submit = args.submit
+    run_check = args.check
     kwds=dict(vars(args))
     del kwds['submit']
+    del kwds['check']
     del kwds['synapse_email']
     del kwds['synapse_key']
     if os.path.exists(CONFIG_FILE):
@@ -420,7 +436,9 @@ if __name__ == "__main__":
         for k,v in data.items():
             if k not in kwds:
                 kwds[k] = v
-    if submit:
+    if run_check:
+        main_check(**kwds)
+    elif submit:
         main_submit(syn, **kwds)
     else:
         main_sync(syn, **kwds)

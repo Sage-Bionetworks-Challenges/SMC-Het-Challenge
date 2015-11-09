@@ -2,9 +2,9 @@
 <body>
 <form method="get">
 <div>
-Workflow Select
+<h1>Workflow Select</h1>
 <div>
-<select size="5" name="workflow"> 
+<select size="5" name="workflow" style="width: 400px; margin: 25px;"> 
 {% for w in workflows %}
 <option value="{{w.url}}">{{w.name}}</option>
 {%endfor%}
@@ -15,7 +15,7 @@ Workflow Select
 <button type="submit" formaction="info_form">Start Submission</button>
 </div>
 <div>
-<button type="submit" formaction="check">Check Workflow</button>
+<button type="submit" formaction="validate">Check Workflow</button>
 </div>
 </form>
 </body>

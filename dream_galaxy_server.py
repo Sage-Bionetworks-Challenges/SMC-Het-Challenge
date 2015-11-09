@@ -59,6 +59,33 @@ class FormHandler(GalaxyProxy):
         self.write(self.page.render(workflow=workflow))
                 
 
+class ValidateHandler(GalaxyProxy):
+
+    def initialize(self, galaxy, apikey, submitter, keyfile, **kwds):
+        self.submitter = submitter
+        with open(os.path.join(TEMPLATE_DIR, "submit.html")) as handle:
+            self.page = Template(handle.read())
+        self.galaxy_init(galaxy, apikey, keyfile)
+
+    def get(self):
+        workflow_path = self.request.arguments['workflow'][0]
+        workflow = self.remote.get(workflow_path + "/download")
+        if not self.submitter.running:
+            meta = {}
+            for k,v in self.request.arguments.items():
+                meta[k] = v[0]
+            self.submitter.submission = {
+                'workflow' : self.galaxy + workflow_path + "/download",
+                'apikey' : self.apikey,
+                'flags' : "--no-upload --check", 
+                'meta' : {},
+                'ok_message' : "Workflow Looks OK"
+            }
+            message = "<h1>Checking</h1> %s" % (json.dumps(self.submitter.submission))
+        else:
+            message = "Already Working on submission"
+        self.write(self.page.render(message=message))
+        
 class SubmitHandler(GalaxyProxy):
 
     def initialize(self, galaxy, apikey, submitter, keyfile, **kwds):
@@ -79,7 +106,9 @@ class SubmitHandler(GalaxyProxy):
                 'apikey' : self.apikey,
                 'synapse_email' : self.request.arguments['synapse_email'][0],
                 'synapse_apikey' : self.request.arguments['synapse_apikey'][0],   
-                'meta' : meta
+                'meta' : meta,
+                'flags' : "--no-upload",
+                'ok_message' : "Workflow Submitted"
             }
             message = "<h1>Submitting</h1> %s" % (json.dumps(self.submitter.submission))
         else:
@@ -122,15 +151,17 @@ class Submitter(threading.Thread):
 --meta {meta_path} \
 --apikey {apikey} \
 --workdir {workdir} \
---workflow {workflow} --no-upload" 
+--workflow {workflow} \
+{flags}" 
                 
                 cmd_line = cmd_line_template.format(
                     submit_cmd=os.path.join(BASE_DIR, "dream_galaxy_submit"),
                     meta_path=os.path.join(WORK_DIR, "submission.json"),
-                    synapse_email=self.submission['synapse_email'],
-                    synapse_key=self.submission['synapse_apikey'],
+                    synapse_email=self.submission.get('synapse_email', "test@test.com"),
+                    synapse_key=self.submission.get('synapse_apikey', "NA"),
                     apikey=self.submission['apikey'],
                     workdir=WORK_DIR,
+                    flags=self.submission['flags'],
                     workflow=self.submission['workflow']
                 )
                 
@@ -146,9 +177,9 @@ class Submitter(threading.Thread):
                 thread.start_new_thread(watch_and_log, (proc.stderr,))
                 proc.wait()
                 if proc.returncode == 0:
-                    self.log += "\nSubmission Done"
+                    self.log += "\n%s" % (self.submission['ok_message'])
                 else:
-                    self.log += "\nSubmission Failed"                    
+                    self.log += "\nFailed"                    
                 self.running = False
                 self.submission = None
 
@@ -322,12 +353,12 @@ if __name__ == "__main__":
         'keyfile' : args.keyfile, 
         'submitter' : submitter
     }
-        
-
+    
     application = tornado.web.Application([
         (r"/", MainHandler, config),
         (r"/info_form", FormHandler, config),
         (r"/submit", SubmitHandler, config),
+        (r"/validate", ValidateHandler, config),
         (r"/monitor", MonitorHandler, config),
 
     ])
