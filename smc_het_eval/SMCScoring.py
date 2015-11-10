@@ -269,10 +269,6 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     min_pred_nonzero = np.min(pred[np.nonzero(pred)])
     min_truth_nonzero = np.min(truth[np.nonzero(truth)])
 
-    #rnd = min(rnd, min_pred_nonzero / 2.0, min_truth_nonzero / 2.0) # make sure that rnd is not bigger than any
-                                                                    # of the values in the truth or predicted matrix
-                                                                    # truth should be ones and zeros but good sanity check
-
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
@@ -280,11 +276,11 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
         pred_cp = np.triu(pred)
         truth_cp = np.triu(truth)
 
-    # Avoid dividing by zero
+    # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
-    pred_cp[pred_cp==0] = rnd
-    truth_cp[truth_cp==0] = rnd
+    pred_cp[pred_cp<rnd] = rnd
+    truth_cp[truth_cp<rnd] = rnd
 
     # normalize data
     pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
