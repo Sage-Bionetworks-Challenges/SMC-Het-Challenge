@@ -6,6 +6,7 @@ import argparse
 import StringIO
 import scipy.stats
 import sklearn.metrics as mt
+import metric_behavior as mb
 from functools import reduce
 
 
@@ -175,10 +176,21 @@ def calculate2_quaid(pred,truth):
             return 0
 
 def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=None):
+    '''Calculate the score for SubChallenge 2
+
+    :param pred: predicted co-clustering matrix
+    :param truth: true co-clustering matrix
+    :param full_matrix: logical for whether to use the full matrix or just the upper triangular matrices when calculating the score
+    :param method: scoring metric used, default is average of Pseudo V,
+    :param pseudo_counts: logical for how many psuedo counts to add to the matrices
+    :return: subchallenge 2 score for the predicted co-clustering matrix
+    '''
     pc_pred = add_pseudo_counts(np.copy(pred), num=pseudo_counts) # add pseudo counts to the matrices
     pc_truth = add_pseudo_counts(np.copy(truth), num=pseudo_counts) # use np.copy so that original values are not altered
+    ncluster = add_pseudo_counts(mb.get_ccm('NCluster', truth), num=pseudo_counts)
+    onecluster = add_pseudo_counts(mb.get_ccm('OneCluster', truth), num=pseudo_counts)
 
-    func = {"orig" : calculate2_orig,
+    func_dict = {"orig" : calculate2_orig,
             "sqrt" : calculate2_sqrt,
             "pseudoV": calculate2_pseudoV_norm,
             "sym_pseudoV": calculate2_sym_pseudoV_norm,
@@ -186,16 +198,36 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
             "pearson": calculate2_pearson,
             "aupr": calculate2_aupr,
             "mcc": calculate2_mcc
-    }.get(method, None)
+    }
+
+    func = func_dict.get(method, None)
     if func is None:
-        pv_score = calculate2_pseudoV_norm(pc_pred, pc_truth, full_matrix=full_matrix)
-        pv_sym_score = calculate2_sym_pseudoV_norm(pc_pred, pc_truth, full_matrix=full_matrix)
-        spear_score = calculate2_spearman(pc_pred, pc_truth, full_matrix=full_matrix)
-        mcc_score = calculate2_mcc(pc_pred, pc_truth, full_matrix=full_matrix)
-        scores = (pv_score, pv_sym_score, spear_score, mcc_score)
+        scores = []
+
+        for m in ['pseudoV', 'pearson', 'mcc']:
+            score = func_dict[m](pc_pred, pc_truth, full_matrix=full_matrix)
+            ncluster_score = func_dict[m](ncluster, pc_truth, full_matrix=full_matrix)
+            onecluster_score = func_dict[m](onecluster, pc_truth, full_matrix=full_matrix)
+            if method in ['pseudoV', 'sym_pseudoV']: # normalize the scores to be between 0 and 1 where 1 is the true matrix
+                worst_score = max(ncluster_score, onecluster_score) # and zero is the worse score of the NCluster matrix
+                score = 1 - (score / worst_score)                   # and the OneCluster matrix
+            else:
+                worst_score = min(ncluster_score, onecluster_score)
+                score = (score - worst_score) / (1 - worst_score)
+            scores.append(score)
+
         return np.mean(scores)
     else:
-        return func(pc_pred, pc_truth, full_matrix=full_matrix)
+        score = func(pc_pred, pc_truth, full_matrix=full_matrix)
+        ncluster_score = func(ncluster, pc_truth, full_matrix=full_matrix)
+        onecluster_score = func(onecluster, pc_truth, full_matrix=full_matrix)
+        if method in ['pseudoV', 'sym_pseudoV']: # normalize the scores to be between 0 and 1 where 1 is the true matrix
+            worst_score = max(ncluster_score, onecluster_score) # and zero is the worse score of the NCluster matrix
+            score = 1 - (score / worst_score)                   # and the OneCluster matrix
+        else:
+            worst_score = min(ncluster_score, onecluster_score)
+            score = (score - worst_score) / (1 - worst_score)
+        return score
 
 def calculate2_orig(pred,truth, full_matrix=True):
     n = truth.shape[0]
