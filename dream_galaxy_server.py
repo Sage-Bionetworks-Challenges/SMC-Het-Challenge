@@ -55,8 +55,13 @@ class FormHandler(GalaxyProxy):
 
 
     def get(self):
-        workflow = self.request.arguments['workflow'][0]
-        self.write(self.page.render(workflow=workflow))
+        if 'workflow' not in self.request.arguments:
+            with open(os.path.join(TEMPLATE_DIR, "submit.html")) as handle:
+                page = Template(handle.read())
+            self.write(page.render(message="<h1>Missing Workflow Selection</h1>", dest="."))
+        else:
+            workflow = self.request.arguments['workflow'][0]
+            self.write(self.page.render(workflow=workflow))
                 
 
 class ValidateHandler(GalaxyProxy):
@@ -84,7 +89,7 @@ class ValidateHandler(GalaxyProxy):
             message = "<h1>Checking</h1> %s" % (json.dumps(self.submitter.submission))
         else:
             message = "Already Working on submission"
-        self.write(self.page.render(message=message))
+        self.write(self.page.render(message=message, dest="monitor"))
         
 class SubmitHandler(GalaxyProxy):
 
@@ -113,7 +118,7 @@ class SubmitHandler(GalaxyProxy):
             message = "<h1>Submitting</h1> %s" % (json.dumps(self.submitter.submission))
         else:
             message = "Already Working on submission"
-        self.write(self.page.render(message=message))
+        self.write(self.page.render(message=message, dest="monitor"))
                 
 class MonitorHandler(tornado.web.RequestHandler):
 

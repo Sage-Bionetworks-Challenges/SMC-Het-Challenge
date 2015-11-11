@@ -255,6 +255,52 @@ def tag_clean(tag):
     else:
         raise ValueError("Docker tag %s doesn't specify a version." % (tag))
     """
+
+def workflow_package(name, workflow, api_base, apikey, outdir):
+    output_paths = {
+        "workflow" : None,
+        "tools" : [],
+        "images" : []
+    }
+    print "Downloading Workflow"
+    workflow_file = os.path.join(outdir,"%s.ga" % (name))
+    with open(workflow_file, "w") as handle:
+        handle.write( json.dumps(workflow, indent=4) )
+    output_paths['workflow'] = workflow_file
+
+    for step_id, step in workflow['steps'].items():
+        if step['type'] == 'tool':
+            tool_id = step['tool_id']
+            if tool_id != EVAL_TOOL_ID:
+                tool_version = step['tool_version']
+                tool_info_url = api_base + "tools/%s?key=%s" % (tool_id, apikey)
+                print "tool info url", tool_info_url
+                tool_desc = requests.get(tool_info_url).json()
+                print tool_desc
+                """
+                tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, apikey)
+                print "Downloading Tool:", tool_id, tool_url
+                r = requests.get(tool_url, stream=True)
+                if r.status_code == 200:
+                    tarpath = os.path.join(workdir, tool_id + "." + tool_version + ".tar.gz")
+                    with open( tarpath, "wb") as f:
+                        for chunk in r.iter_content():
+                            f.write(chunk)
+                    output_paths['tools'].append(tarpath)
+                    docker_tag = get_tool_archive_docker_tag(tarpath)
+                    if docker_tag is None:
+                        print "Can't determine Docker image for tool: %s" % (tool_id)
+                        raise Exception("Unable to find docker image for: %s" % (tool_id))
+                    print "Docker Image:", docker_tag
+                    docker_file = os.path.join(workdir, "docker_%s.tar" % tag_clean(docker_tag))
+                    if docker_file not in output_paths['images']:
+                        call_docker_save(tag=docker_tag, output=docker_file)
+                        output_paths['images'].append(docker_file)
+                else:
+                    print "Skipping Tool", tool_id, r.status_code
+                """
+    return output_paths
+
 def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=False, gce_info=False):
 
     workflow_url, workflow = main_check(workflow_url, apikey)
@@ -276,34 +322,8 @@ def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=Fa
     output_paths['workflow'] = workflow_file
 
     api_base = "%s://%s/api/" % (galaxy_url.scheme, galaxy_url.netloc)
-    for step_id, step in workflow['steps'].items():
-        if step['type'] == 'tool':
-            tool_id = step['tool_id']
-            if tool_id != EVAL_TOOL_ID:
-                tool_version = step['tool_version']
-                requests.get(api_base + "tools/%s" % (tool_id)).text
-                tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, apikey)
-                print "Downloading Tool:", tool_id, tool_url
-                r = requests.get(tool_url, stream=True)
-                if r.status_code == 200:
-                    tarpath = os.path.join(workdir, tool_id + "." + tool_version + ".tar.gz")
-                    with open( tarpath, "wb") as f:
-                        for chunk in r.iter_content():
-                            f.write(chunk)
-                    output_paths['tools'].append(tarpath)
-                    docker_tag = get_tool_archive_docker_tag(tarpath)
-                    if docker_tag is None:
-                        print "Can't determine Docker image for tool: %s" % (tool_id)
-                        raise Exception("Unable to find docker image for: %s" % (tool_id))
-                    print "Docker Image:", docker_tag
-                    docker_file = os.path.join(workdir, "docker_%s.tar" % tag_clean(docker_tag))
-                    if docker_file not in output_paths['images']:
-                        call_docker_save(tag=docker_tag, output=docker_file)
-                        output_paths['images'].append(docker_file)
-                else:
-                    print "Skipping Tool", tool_id, r.status_code
-
-    print output_paths
+    
+    output_paths = workflow_package(name, workflow, api_base, apikey, workdir)
 
     if args.gce_info:
         instance_type = get_google_instance_type()
