@@ -106,16 +106,19 @@ class SubmitHandler(GalaxyProxy):
             meta = {}
             for k,v in self.request.arguments.items():
                 meta[k] = v[0]
-            self.submitter.submission = {
+            submission = {
                 'workflow' : self.galaxy + workflow_path + "/download",
                 'apikey' : self.apikey,
                 'synapse_email' : self.request.arguments['synapse_email'][0],
                 'synapse_apikey' : self.request.arguments['synapse_apikey'][0],   
+                'synapse_projectid' : self.request.arguments['synapse_projectid'][0],
                 'meta' : meta,
-                'flags' : "--no-upload",
-                'ok_message' : "Workflow Submitted"
+                'flags' : "--gce-info --submit",
+                'ok_message' : "Workflow Submitted",
             }
-            message = "<h1>Submitting</h1> %s" % (json.dumps(self.submitter.submission))
+            message = "<h1>Submitting</h1> %s" % (json.dumps(submission))
+            submission["start_message"] = message
+            self.submitter.submission = submission
         else:
             message = "Already Working on submission"
         self.write(self.page.render(message=message, dest="monitor"))
@@ -146,13 +149,14 @@ class Submitter(threading.Thread):
                 if not os.path.exists(WORK_DIR):
                     os.mkdir(WORK_DIR)
                 
-                with open(os.path.join(WORK_DIR, "submission.json"), "w") as handle:
+                with open(os.path.join(WORK_DIR, "meta.json"), "w") as handle:
                     handle.write(json.dumps(self.submission['meta']))
                 
                 cmd_line_template = "{submit_cmd} \
 --meta {meta_path} \
 --synapse_email {synapse_email} \
 --synapse_key {synapse_key} \
+--project-id {synapse_projectid} \
 --meta {meta_path} \
 --apikey {apikey} \
 --workdir {workdir} \
@@ -161,16 +165,18 @@ class Submitter(threading.Thread):
                 
                 cmd_line = cmd_line_template.format(
                     submit_cmd=os.path.join(BASE_DIR, "dream_galaxy_submit"),
-                    meta_path=os.path.join(WORK_DIR, "submission.json"),
+                    meta_path=os.path.join(WORK_DIR, "meta.json"),
                     synapse_email=self.submission.get('synapse_email', "test@test.com"),
                     synapse_key=self.submission.get('synapse_apikey', "NA"),
+                    synapse_projectid=self.submission.get('synapse_projectid', "syn123"),
                     apikey=self.submission['apikey'],
                     workdir=WORK_DIR,
                     flags=self.submission['flags'],
                     workflow=self.submission['workflow']
                 )
                 
-                self.log = "Running: %s\n" % (cmd_line)
+                self.log = self.submission.get("start_message", "")
+                self.log += "Running: %s\n" % (cmd_line)
                 proc = subprocess.Popen(cmd_line, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE )
                 def watch_and_log(stream):
                     while True:

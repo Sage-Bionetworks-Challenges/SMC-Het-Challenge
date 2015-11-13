@@ -192,6 +192,7 @@ def give_synapse_permissions(syn, synapse_object, principal_id):
             'UPDATE',
             'UPDATE_SUBMISSION',
             'READ_PRIVATE_SUBMISSION']})
+    print "ACL", acl
     syn.store(acl)
     return acl
 
@@ -210,7 +211,7 @@ def find_or_add_to_synapse(paths, folder):
                 entity = row['entity.id']
                 print "Tool previously uploaded: %s as %s" % (os.path.basename(path), entity)
         if entity is None:
-            entity = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=False)
+            entity = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=True) #BUG: should createOrUpdate be False?
         entities.append(entity)
     return entities
 
@@ -220,6 +221,8 @@ def name_clean(name):
 
 
 def main_check(workflow_url, apikey, **kwds):
+    print "Checking Workflow"
+    
     print "Downloading: %s" % (workflow_url)
 
     if not workflow_url.startswith("http://") or workflow_url.startswith("https://"):
@@ -241,8 +244,10 @@ def main_check(workflow_url, apikey, **kwds):
 
     if validate_workflow(workflow):
         raise Exception("Workflow failed validation")
+        
+    workflow_name = name_clean(workflow['name'])
     
-    return workflow_url, workflow
+    return workflow_url, workflow, workflow_name
 
 
 def tag_clean(tag):
@@ -289,46 +294,29 @@ def workflow_package(name, workflow, api_base, apikey, outdir):
                     pack_cmd = "tar -C %s -cvzf %s %s" % (os.path.dirname(archive_dir), archive_tar, archive_name)
                     print "Calling", pack_cmd
                     subprocess.check_call(pack_cmd, shell=True)
-                    docker_tag = get_tool_archive_docker_tag(archive_tar)
-                    if docker_tag is None:
-                        print "Can't determine Docker image for tool: %s" % (tool_id)
-                        raise Exception("Unable to find docker image for: %s" % (tool_id))
-                    print "Docker Image:", docker_tag
-                    docker_file = os.path.join(outdir, "docker_%s.tar" % tag_clean(docker_tag))
-                    if docker_tag not in output_paths['images']:
-                        call_docker_save(tag=docker_tag, output=docker_file)
-                        output_paths['images'][docker_tag] = docker_file
+                    output_paths['archives'][archive_name] = archive_tar
+
+                docker_tag = get_tool_archive_docker_tag(output_paths['archives'][archive_name])
+                if docker_tag is None:
+                    print "Can't determine Docker image for tool: %s" % (tool_id)
+                    raise Exception("Unable to find docker image for: %s" % (tool_id))
+                print "Docker Image:", docker_tag
+                docker_file = os.path.join(outdir, "docker_%s.tar" % tag_clean(docker_tag))
+                if docker_tag not in output_paths['images']:
+                    call_docker_save(tag=docker_tag, output=docker_file)
+                    output_paths['images'][docker_tag] = docker_file
     return output_paths
 
-def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=False, gce_info=False):
-
-    workflow_url, workflow = main_check(workflow_url, apikey)
-
-    galaxy_url = urlparse.urlparse(workflow_url)
-
+def main_sync(syn, workflow_url, apikey, project_id, workdir, no_upload=False, gce_info=False, **kwds):
     if not os.path.exists(workdir):
         os.mkdir(workdir)
 
-    output_paths = {
-        "workflow" : None,
-        "tools" : [],
-        "images" : []
-    }
-    name = name_clean(workflow['name'])
-    workflow_file = os.path.join(workdir,"%s.ga" % (name))
-    with open(workflow_file, "w") as handle:
-        handle.write( json.dumps(workflow, indent=4) )
-    output_paths['workflow'] = workflow_file
-
+    workflow_url, workflow, workflow_name = main_check(workflow_url, apikey)
+    galaxy_url = urlparse.urlparse(workflow_url)
     api_base = "%s://%s/api/" % (galaxy_url.scheme, galaxy_url.netloc)
     
-    output_paths = workflow_package(name, workflow, api_base, apikey, workdir)
+    output_paths = workflow_package(workflow_name, workflow, api_base, apikey, workdir)
 
-    if args.gce_info:
-        instance_type = get_google_instance_type()
-    else:
-        instance_type = "N/A"
-        
     if not no_upload:
         project = syn.get(project_id)
         image_folder_id = None
@@ -355,13 +343,14 @@ def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=Fa
             workflow_folder_id = workflow_folder.id
 
         workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
-        workflow_data = syn.store(workflow_data, createOrUpdate=False, instance_type=instance_type)
+        workflow_data = syn.store(workflow_data, createOrUpdate=True) #BUG: should createOrUpdate=False ?
 
-        tool_entities = find_or_add_to_synapse(output_paths['tools'].items(), tool_folder_id)
-        image_entities = find_or_add_to_synapse(output_paths['images'].items(), image_folder_id)
+        tool_entities = find_or_add_to_synapse(output_paths['archives'].values(), tool_folder_id)
+        image_entities = find_or_add_to_synapse(output_paths['images'].values(), image_folder_id)
+        print "Finished uploading"
         return {
             'paths':output_paths,
-            'workflow_entity': workflow_data,
+            'workflow_entity': workflow_data.id,
             'tool_entities': tool_entities,
             'image_entities': image_entities
         }
@@ -371,33 +360,35 @@ def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=Fa
         }
 
 
-def main_submit(syn, apikey, workflow, name, team_name, project_id, workdir, gce_info=False):
+def main_submit(syn, workflow_url, apikey, project_id, workdir, meta, gce_info=False, **kwds):
     """
-    This method takes an existing VCF file, uploads it to a personal project folder, and then
-    submits it to the Dream Mutation calling Challenge
     """
+    submission = {}    
+    with open(meta) as handle:
+        meta_data = json.loads(handle.read())
+    if 'synapse_apikey' in meta_data:
+        del meta_data['synapse_apikey']
+    if 'synapse_email' in meta_data:
+        del meta_data['synapse_email']
+    for k,v in meta_data.items():
+        submission[k] = v
 
-    if name is None or team_name is None or project_id is None:
-        print """Usage:
-dream_galaxy_submit http://<galaxy_server> <API key> --name "Name of Submission" --team-name "Team Name" --project-id syn12345
-"""
-        if name is None:
-            print "Please add --name"
-        if project_id is None:
-            print "Please add --project-id"
-        if team_name is None:
-            print "Please add --team-name"
-        sys.exit(0)
+    output = main_sync(syn, apikey=apikey, workflow_url=workflow_url, meta=meta, project_id=project_id, workdir=workdir)
+    print output
+    for k in ['workflow_entity', 'tool_entities', 'image_entities']:
+        submission[k] = output[k]
 
-    output = main_sync(syn, apikey=apikey, workflow=workflow, name=name, team_name=team_name, project_id=project_id, workdir=workdir)
+    if args.gce_info:
+        submission['instance_type'] = get_google_instance_type()
+
+    print "Submitting %s" % (submission)
 
     ## When you submit, you grant permissions to the Admin team
     give_synapse_permissions(syn, project_id, CHALLENGE_ADMIN_TEAM_ID)
-
+    syn.setAnnotations(output['workflow_entity'], submission)
     print "Submitting workflow %s saved as %s for evaluation." % (name, synapseclient.utils.id_of(output['workflow_entity']))
-    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity'], name=name, teamName=team_name)
+    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity']) #, name=meta['name'], teamName=meta['team_name'])
     print "Created submission ID: %s" % submission.id
-
 
 if __name__ == "__main__":
 
