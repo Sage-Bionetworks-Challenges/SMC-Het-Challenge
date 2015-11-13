@@ -1,33 +1,98 @@
 <!DOCTYPE html>
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"></head><body>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<script>
+
+var button_sections = {
+  "method" : "Method Selection",
+  "inference" : "Inference method Selection",
+  "prior" : "Prior Information Section",
+  "cnv" : "CNA information usage Description Section",
+  "totalcn" : "Total CN usage Description Section",
+  "ccf" : "Cancer cell fraction usage Description Section",
+  "multiplicity" : "multiplicity method Description section",
+  "posthoc" : "posthoc mutation assignment section",
+  "cluster_number" : "Cluster number description section",
+  "weak" : "weak parsimony section",
+  "phylogeny" : "phylogeny method section",
+  "noise" : "noise model section",
+  "source" : "source code information section",
+  "peer" : "peer reviewed publication status information",
+  "nonpeer" : "non-peer reviewed publication status information",
+}
+
+var text_sections = {
+  "synapse_email" : "Synapse Email section",
+  "synapse_apikey" : "Synapse API Key section",
+  "synapse_projectid" : "Synapse Project ID section"
+}
+
+function validateForm() {
+    errors = []
+    for (var sec in text_sections) {
+      var t = document.getElementById(sec).value;
+      if (t.length < 3 ) {
+        errors.push("Please Fill in " + text_sections[sec])
+      }
+    }
+    if (errors.length > 0) {
+      alert(errors.join("\n"));
+      return false;
+    }
+    
+    for (var sec in button_sections ) {
+      var radios = document.getElementsByName(sec);
+      var i = 0;
+      for (j=0; j < radios.length; j++) {
+          if (radios[j].checked) {
+            i++;        
+          }
+      }
+      if (i == 0) {
+        errors.push("Please Fill in " + button_sections[sec])
+      }
+    }
+    if (errors.length > 0) {
+      alert(errors.join("\n"));
+      return false;
+    }
+}
+</script>
+</head><body>
 <h1>SMC-Het Algorithm description</h1>
 <div style="margin: 35px;">
-<form action="submit" method="post">
+<form name="challenge_submission" action="submit" method="post" onsubmit="return validateForm()">
 
 <input type="hidden" name="workflow" value="{{ workflow }}"/>
 
 <div style="border: 1px solid black; margin: 20px; padding: 10px;">
   <h2>Submission Account</h2>
   <div>
-    Go to <a href="https://www.synapse.org" target="_blank">Synapse</a>, login, go
-    to your profile page, then go to the settings tab and find the 'Show API Key'
-    copy the code and code into the follow field
+    After creating a Synapse account, go to <a href="https://www.synapse.org/#!Profile:v/settings" target="_blank">Synapse</a>
+    and find the 'Show API Key' copy the code and code into the follow field
   </div>
   <div style="margin: 25px;">
     Synapse Email
     <div>
-      <input type="text" name="synapse_email" size="75"/>
+      <input type="text" id="synapse_email" name="synapse_email" size="75"/>
     </div>
   </div>
   <div style="margin: 25px;">
     Synapse API Key
     <div>
-      <input type="text" name="synapse_apikey" size="75"/>
+      <input type="text" id="synapse_apikey" name="synapse_apikey" size="100"/>
+    </div>
+  </div>
+  <div style="margin: 25px;">
+    Synapse Project ID
+    <div>
+      <input type="text" id="synapse_projectid" name="synapse_projectid" size="25"/>
     </div>
   </div>
 </div>
 
-Is your method probabilistic?<br>
+<h2>Is your method probabilistic?</h2>
 <input type="radio" name="method" value="probabilistic">Probabilistic<br>
 <input type="radio" name="method" value="nonprobabilistic">Non-probabilistic<br>
 <input type="radio" name="method" value="other">Other (please clarify)
@@ -75,7 +140,7 @@ Is your method probabilistic?<br>
 <input type="radio" name="posthoc" value="no">All at once<br>
 <input type="radio" name="posthoc" value="yes">Posthoc assignment<br>
 
-<br>How do you chose the number of clusters?<br>
+<br>How do you choose the number of clusters?<br>
 <input type="radio" name="cluster_number" value="pllh">Penalized likelihood (e.g. BIC, AIC or Variational Bayes)<br>
 <input type="radio" name="cluster_number" value="nonparametric">Non-parametric Bayesian method (e.g. Dirichlet process prior)<br>
 <input type="radio" name="cluster_number" value="data">Data-driven (e.g. cross-validation, cluster separation)<br>
@@ -105,7 +170,7 @@ Is your method probabilistic?<br>
 <br>Is the source code for your method available?  If yes, please provide a link to where the code is available.<br>
 <input type="radio" name="source" value="yes">The source code at the following URL:
 <input type="text" name="source_url" value=""><br>
-<input type="radio" name="srouce" value="no">Source code is not available<br>
+<input type="radio" name="source" value="no">Source code is not available<br>
 
 <br>What is the peer-reviewed publishing status of your method?  If it has been published please provide a DOI or PMID.<br>
 <input type="radio" name="peer" value="published">The method has been described in a published peer-reviewed publication<br>
@@ -116,10 +181,13 @@ Is your method probabilistic?<br>
 DOI/PMID (if applicable): <input type="text" name="peer_url" value=""><br>
 
 <br>Has a description of your method appeared in a non-peer-reviewed format?  If yes, please provide a link.<br>
-<input type="radio" name="nonpeer" value="preprint">The method has been described in a manuscript available on a pre-print server (e.g. arXiv, bio-arXiv)<br>
+<input type="radio" name="nonpeer" value="no">The method has not been described in a non-peer reviewed format<br>
+<input type="radio" name="nonpeer" value="preprint">The method has been described in a manuscript available on a pre-print server (e.g. arXiv, bioRxiv)<br>
 <input type="radio" name="nonpeer" value="website">The method is described on a website or source-code repository.<br>
 Link to pre-print or website: <input type="text" name="nonpeer_url" value=""><br>
 <br>
+Is there anything else you would like to include about your approach? If so, please include it below:<br>
+<textarea name="misc" rows=10 cols=50></textarea><br>
 <input type="submit" value="Submit">
 </form>
 </div>

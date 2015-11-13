@@ -71,6 +71,13 @@ def validate_workflow(workflow):
         print "Labeled Input dataset not found"
         return 1
 
+    for step in workflow['steps'].values():
+        if step['type'] == 'data_input':
+            name = step['inputs'][0]['name']
+            if name not in INPUT_NAMES and not name.startswith("syn"):
+                print "Unrecognized input, %s" % (name)
+                return 1
+
     return 0
 
 """
@@ -211,6 +218,33 @@ def find_or_add_to_synapse(paths, folder):
 def name_clean(name):
     return re.sub(r'[^\w]', "_", name)
 
+
+def main_check(workflow_url, apikey, **kwds):
+    print "Downloading: %s" % (workflow_url)
+
+    if not workflow_url.startswith("http://") or workflow_url.startswith("https://"):
+        print "Please provide URL to Galaxy Workflow"
+        raise Exception("Invalid Galaxy workflow URL: %s" % ())
+
+    #if there provided the URL for the share page add a '/json' to the end
+    if not workflow_url.endswith("/json") and not workflow_url.endswith("/download"):
+        workflow_url = workflow_url + "/json"
+    if workflow_url.endswith("/download"):
+        workflow_url += "?key=%s" % (apikey)
+
+
+    #Download the Workflow JSON
+    print "Downloading Workflow", workflow_url
+    #try:
+    req = requests.get(workflow_url)
+    workflow = req.json()
+
+    if validate_workflow(workflow):
+        raise Exception("Workflow failed validation")
+    
+    return workflow_url, workflow
+
+
 def tag_clean(tag):
     return re.sub(r':', "_", tag)
     """
@@ -221,36 +255,59 @@ def tag_clean(tag):
     else:
         raise ValueError("Docker tag %s doesn't specify a version." % (tag))
     """
-def main_sync(syn, apikey, workflow, meta, project_id, workdir, no_upload=False, gce_info=False):
 
-    print "Downloading: %s" % (workflow)
+def workflow_package(name, workflow, api_base, apikey, outdir):
+    output_paths = {
+        "workflow" : None,
+        "archives" : {},
+        "images" : {}
+    }
+    print "Downloading Workflow"
+    workflow_file = os.path.join(outdir,"%s.ga" % (name))
+    with open(workflow_file, "w") as handle:
+        handle.write( json.dumps(workflow, indent=4) )
+    output_paths['workflow'] = workflow_file
+    print "ENV:", os.environ
+    for step_id, step in workflow['steps'].items():
+        if step['type'] == 'tool':
+            tool_id = step['tool_id']
+            if tool_id != EVAL_TOOL_ID:
+                tool_version = step['tool_version']
+                tool_info_url = api_base + "tools/%s?key=%s" % (tool_id, apikey)
+                print "tool info url", tool_info_url
+                tool_desc = requests.get(tool_info_url).json()
+                print tool_desc
+                config_file = tool_desc['config_file']
+                archive_dir = os.path.dirname(config_file)
+                archive_name = os.path.basename(archive_dir)
+                if archive_name not in output_paths['archives']:
+                    build_cmd = "planemo docker_build %s" % (config_file)
+                    print "Calling", build_cmd
+                    subprocess.check_call(build_cmd, shell=True)
 
-    if not workflow.startswith("http://") or workflow.startswith("https://"):
-        print "Please provide URL to Galaxy Workflow"
-        raise Exception("Invalid Galaxy workflow URL: %s" % ())
+                    archive_tar = os.path.join(outdir, "%s.tar.gz" % (archive_name))
+                    pack_cmd = "tar -C %s -cvzf %s %s" % (os.path.dirname(archive_dir), archive_tar, archive_name)
+                    print "Calling", pack_cmd
+                    subprocess.check_call(pack_cmd, shell=True)
+                    docker_tag = get_tool_archive_docker_tag(archive_tar)
+                    if docker_tag is None:
+                        print "Can't determine Docker image for tool: %s" % (tool_id)
+                        raise Exception("Unable to find docker image for: %s" % (tool_id))
+                    print "Docker Image:", docker_tag
+                    docker_file = os.path.join(outdir, "docker_%s.tar" % tag_clean(docker_tag))
+                    if docker_tag not in output_paths['images']:
+                        call_docker_save(tag=docker_tag, output=docker_file)
+                        output_paths['images'][docker_tag] = docker_file
+    return output_paths
+
+def main_sync(syn, workflow_url, apikey, meta, project_id, workdir, no_upload=False, gce_info=False):
+
+    workflow_url, workflow = main_check(workflow_url, apikey)
+
+    galaxy_url = urlparse.urlparse(workflow_url)
 
     if not os.path.exists(workdir):
         os.mkdir(workdir)
-
-    #if there provided the URL for the share page add a '/json' to the end
-    if not workflow.endswith("/json") and not workflow.endswith("/download"):
-        workflow = workflow + "/json"
-    if workflow.endswith("/download"):
-        workflow += "?key=%s" % (apikey)
-
-    galaxy_url = urlparse.urlparse(workflow)
-
-    #Download the Workflow JSON
-    print "Downloading Workflow", workflow
-    #try:
-    req = requests.get(workflow)
-    workflow = req.json()
-    #except ValueError:
-    #    sys.stderr.write("Unexpected Value: %s" % (req.text))
-    #    raise Exception("Unable to download workflow")
-
-    if validate_workflow(workflow):
-        raise Exception("Workflow failed validation")
 
     output_paths = {
         "workflow" : None,
@@ -264,34 +321,8 @@ def main_sync(syn, apikey, workflow, meta, project_id, workdir, no_upload=False,
     output_paths['workflow'] = workflow_file
 
     api_base = "%s://%s/api/" % (galaxy_url.scheme, galaxy_url.netloc)
-    for step_id, step in workflow['steps'].items():
-        if step['type'] == 'tool':
-            tool_id = step['tool_id']
-            if tool_id != EVAL_TOOL_ID:
-                tool_version = step['tool_version']
-                requests.get(api_base + "tools/%s" % (tool_id)).text
-                tool_url = api_base + "tools/%s/download?key=%s" % (tool_id, apikey)
-                print "Downloading Tool:", tool_id, tool_url
-                r = requests.get(tool_url, stream=True)
-                if r.status_code == 200:
-                    tarpath = os.path.join(workdir, tool_id + "." + tool_version + ".tar.gz")
-                    with open( tarpath, "wb") as f:
-                        for chunk in r.iter_content():
-                            f.write(chunk)
-                    output_paths['tools'].append(tarpath)
-                    docker_tag = get_tool_archive_docker_tag(tarpath)
-                    if docker_tag is None:
-                        print "Can't determine Docker image for tool: %s" % (tool_id)
-                        raise Exception("Unable to find docker image for: %s" % (tool_id))
-                    print "Docker Image:", docker_tag
-                    docker_file = os.path.join(workdir, "docker_%s.tar" % tag_clean(docker_tag))
-                    if docker_file not in output_paths['images']:
-                        call_docker_save(tag=docker_tag, output=docker_file)
-                        output_paths['images'].append(docker_file)
-                else:
-                    print "Skipping Tool", tool_id, r.status_code
-
-    print output_paths
+    
+    output_paths = workflow_package(name, workflow, api_base, apikey, workdir)
 
     if args.gce_info:
         instance_type = get_google_instance_type()
@@ -326,8 +357,8 @@ def main_sync(syn, apikey, workflow, meta, project_id, workdir, no_upload=False,
         workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
         workflow_data = syn.store(workflow_data, createOrUpdate=False, instance_type=instance_type)
 
-        tool_entities = find_or_add_to_synapse(output_paths['tools'], tool_folder_id)
-        image_entities = find_or_add_to_synapse(output_paths['images'], image_folder_id)
+        tool_entities = find_or_add_to_synapse(output_paths['tools'].items(), tool_folder_id)
+        image_entities = find_or_add_to_synapse(output_paths['images'].items(), image_folder_id)
         return {
             'paths':output_paths,
             'workflow_entity': workflow_data,
@@ -374,12 +405,14 @@ if __name__ == "__main__":
     #Stack.addJobTreeOptions(parser)
     parser.add_argument("--synapse_email", help="Synapse UserName", default=None)
     parser.add_argument("--synapse_key", help="Synapse APIKey", default=None)
-    parser.add_argument("--workflow", required=True, help="Galaxy Workflow Address")
+    parser.add_argument("--workflow", dest="workflow_url", required=True, help="Galaxy Workflow Address")
     parser.add_argument("--apikey", help="Galaxy API Key", default=None)
     
     parser.add_argument("--meta", help="Submission Metadata", required=True)
 
     parser.add_argument("--project-id", help="The SYN id of your personal private working directory")
+
+    parser.add_argument("--check", action="store_true", default=False)
 
     parser.add_argument("--submit", action="store_true", default=False)
     parser.add_argument("--no-upload", action="store_true", default=False)
@@ -389,7 +422,7 @@ if __name__ == "__main__":
     parser.add_argument("-w", "--workdir", default="work")
 
     args = parser.parse_args()
-    if not args.no_upload:
+    if not args.no_upload and not args.check:
         syn = synapseclient.Synapse()
         if args.synapse_email is not None and args.synapse_key is not None:
             syn.login(email=args.synapse_email, apiKey=args.synapse_key)
@@ -409,8 +442,10 @@ if __name__ == "__main__":
             print "Need Galaxy API key: --apikey"
 
     submit = args.submit
+    run_check = args.check
     kwds=dict(vars(args))
     del kwds['submit']
+    del kwds['check']
     del kwds['synapse_email']
     del kwds['synapse_key']
     if os.path.exists(CONFIG_FILE):
@@ -420,7 +455,9 @@ if __name__ == "__main__":
         for k,v in data.items():
             if k not in kwds:
                 kwds[k] = v
-    if submit:
+    if run_check:
+        main_check(**kwds)
+    elif submit:
         main_submit(syn, **kwds)
     else:
         main_sync(syn, **kwds)
