@@ -193,7 +193,7 @@ def give_synapse_permissions(syn, synapse_object, principal_id):
             'UPDATE_SUBMISSION',
             'READ_PRIVATE_SUBMISSION']})
     print "ACL", acl
-    syn.store(acl)
+    syn._storeACL(synapse_object, acl)
     return acl
 
 def find_or_add_to_synapse(paths, folder):
@@ -366,13 +366,12 @@ def main_submit(syn, workflow_url, apikey, project_id, workdir, meta, gce_info=F
     submission = {}    
     with open(meta) as handle:
         meta_data = json.loads(handle.read())
-    if 'synapse_apikey' in meta_data:
-        del meta_data['synapse_apikey']
-    if 'synapse_email' in meta_data:
-        del meta_data['synapse_email']
     for k,v in meta_data.items():
-        submission[k] = v
-
+        if k not in ['workflow', 'synapse_apikey', 'synapse_email', 'name', 'teamName']:
+            submission[k] = v
+    name = meta_data['name']
+    teamName = meta_data['teamName']
+    
     output = main_sync(syn, apikey=apikey, workflow_url=workflow_url, meta=meta, project_id=project_id, workdir=workdir)
     print output
     for k in ['workflow_entity', 'tool_entities', 'image_entities']:
@@ -384,10 +383,10 @@ def main_submit(syn, workflow_url, apikey, project_id, workdir, meta, gce_info=F
     print "Submitting %s" % (submission)
 
     ## When you submit, you grant permissions to the Admin team
-    give_synapse_permissions(syn, project_id, CHALLENGE_ADMIN_TEAM_ID)
-    syn.setAnnotations(output['workflow_entity'], submission)
+    syn.setAnnotations(syn.get(output['workflow_entity']), submission)
+    give_synapse_permissions(syn, syn.get(project_id), CHALLENGE_ADMIN_TEAM_ID)
     print "Submitting workflow %s saved as %s for evaluation." % (name, synapseclient.utils.id_of(output['workflow_entity']))
-    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity']) #, name=meta['name'], teamName=meta['team_name'])
+    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity'], name=name, teamName=teamName)
     print "Created submission ID: %s" % submission.id
 
 if __name__ == "__main__":

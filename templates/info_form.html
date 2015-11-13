@@ -25,7 +25,9 @@ var button_sections = {
 var text_sections = {
   "synapse_email" : "Synapse Email section",
   "synapse_apikey" : "Synapse API Key section",
-  "synapse_projectid" : "Synapse Project ID section"
+  "synapse_projectid" : "Synapse Project ID section",
+  "name" : "Submission Name",
+  "teamName" : "Team Name"
 }
 
 function validateForm() {
@@ -88,6 +90,18 @@ function validateForm() {
     Synapse Project ID
     <div>
       <input type="text" id="synapse_projectid" name="synapse_projectid" size="25"/>
+    </div>
+  </div>
+  <div style="margin: 25px;">
+    Submission Name
+    <div>
+      <input type="text" id="name" name="name" size="50"/>
+    </div>
+  </div>
+  <div style="margin: 25px;">
+    Team Name
+    <div>
+      <input type="text" id="teamName" name="teamName" size="50"/>
     </div>
   </div>
 </div>
