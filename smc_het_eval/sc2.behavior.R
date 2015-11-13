@@ -32,6 +32,7 @@ std.values <- c(0, 0.01,0.03,0.05,0.1,0.15,0.2)
 #     display - logical for whether to print the plot or not
 # OUPUT:
 #     bp - barplot created
+#     scenarios - scenarios that are being evaluated
 plot.SC2.certainty.scoring <- function(method="pseudoV", display=T){
   data <- read.csv(file=paste(tsv.dir, "2B_prob_scoring_", method, ".tsv", sep=""), sep=",", header=T)
   data.reformat <- data.frame(matrix(nrow=0, ncol=3))
@@ -81,13 +82,13 @@ plot.SC2.certainty.scoring <- function(method="pseudoV", display=T){
     lwd=3,
     xlimits=xlimits,
     ylimits=ylimits,
-    key = legend
+    #key = legend
     )
   if(display){
     print(sp)
   }
   
-  return(sp)
+  return(list(sp=sp, scenarios=groups, ymin=min(unlist(ydata))))
 }
 
 
@@ -99,8 +100,9 @@ plot.SC2.certainty.scoring <- function(method="pseudoV", display=T){
 #     method - The scoring metric that was used to create the tsv data
 #     display - logical for whether to print the plot or not
 # OUPUT:
-#     bp - barplot created
-plot.SC2.certainty.scoring.err <- function(method="pseudoV", display=T, std=0.05){
+#     sp - scatterplot created
+#     scenarios - scenarios tested
+plot.SC2.certainty.scoring.err <- function(std=0.05, method="pseudoV", display=T){
   if(std == 0){
     return(plot.SC2.certainty.scoring(method=method, display=display))
   } 
@@ -153,11 +155,75 @@ plot.SC2.certainty.scoring.err <- function(method="pseudoV", display=T, std=0.05
     lwd=3,
     xlimits=xlimits,
     ylimits=ylimits,
-    key = legend
+    #key = legend
   )
   if(display){
     print(sp)
   }
   
-  return(sp)
+  return(list(sp=sp, scenarios=groups, ymin=min(unlist(ydata))))
+}
+
+##### plot.SC2.certainty.multi #############################################################
+# Create a plot of the effect on using probabilty scoring for multiple scenrios for a given
+# scoring method
+#
+# INPUT:
+#     method - The scoring metric that was used to create the tsv data
+#     display - logical for whether to print the plot or not
+#     err - logical for whether to plot the error or non-err
+# OUPUT:
+#     bp - barplot created
+plot.SC2.certainty.multi <- function(method='sym_pseudoV', display=T, err=T){
+  if(err){
+    # retieve plots
+    data <- lapply(std.values, plot.SC2.certainty.scoring.err, method=method, display=F)
+    plots <- lapply(data, function(x){x$sp})
+    ymin <- sapply(data, function(x){x$ymin})
+    ymin <- min(ymin)
+    scenarios <- data[[1]]$scenarios
+    
+    print(scenarios)
+    
+    # calculate multiplot inputs
+    n.plots <- length(plots)
+    plot.col <- default.colours(length(scenarios))
+    
+    ylimits <- c(0.9*ymin, 1)
+    print(ylimits)
+    
+    legend <- legend.grob(
+      list(
+        legend = list(
+          colours = plot.col,
+          title = 'Scenarios',
+          labels = scenarios,
+          size = 3,
+          title.cex=1,
+          label.cex = 1
+          )
+        )
+      )
+    
+    mp <- create.multiplot(
+      plots,
+      plot.layout = c(2, ceiling(n.plots/2.0)),
+      filename = paste(plot.dir, 'SC2_', method, '_change_certainty.png'),
+      main = paste('Change in', method, 'Score with Certainty of Clustering with Different Amounts of Error'),
+      main.cex = 1.6,
+      xaxis.cex=1,
+      yaxis.cex = 1,
+      xlab.label = 'Certainty',
+      ylab.label = 'Score',
+      ylimits = c(0,1),
+      print.new.legend=T,
+      retrieve.plot.labels=F,
+      legend = list(right=list(fun=legend))
+      )
+    
+    if(display){
+      print(mp)
+    }
+    return(mp)
+  }
 }

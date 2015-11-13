@@ -300,7 +300,7 @@ def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True,
             error_data = {}
         for sc in TwoBscenarios:
             if verbose:
-                print '  Scenario: ' + sc
+                print('  Scenario: ' + sc)
             ccm = get_ccm(sc,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
             ccm_ones = (ccm == 1)
             ccms = [ccm]
@@ -610,7 +610,6 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters
     :param return: (if scenario is 'Truth') the true co-clustering matrix and the clusters used to generate this matrix
                     (otherwise) the co-clustering matrix fro the given scenario
     '''
-    # TODO: make this more generalizable by calculating CCM from size and number of clusters
 
     if t_clusters is None:
         t_clusters = np.zeros((n_clusters*size_clusters,n_clusters))
@@ -951,7 +950,7 @@ if __name__ == '__main__':
             "aupr",
             "mcc"]
     '''
-    methods_2B = ["pseudoV", "sym_pseudoV"]
+    methods_2B = ['default']
     for m in methods_2B:
         print 'Scoring 2B Behavior with method ' + m + '...'
         scoring2B_behavior(tst_betas=False, method=m)
