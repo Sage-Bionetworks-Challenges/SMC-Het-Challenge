@@ -347,12 +347,21 @@ def main_sync(syn, workflow_url, apikey, project_id, workdir, no_upload=False, g
 
         tool_entities = find_or_add_to_synapse(output_paths['archives'].values(), tool_folder_id)
         image_entities = find_or_add_to_synapse(output_paths['images'].values(), image_folder_id)
+    
+        data_entities = []
+        for step in workflow['steps'].values():
+            if step['type'] == 'data_input':
+                name = step['inputs'][0]['name']
+                if name.startswith("syn"):
+                    data_entities.append(name)
+
         print "Finished uploading"
         return {
             'paths':output_paths,
             'workflow_entity': workflow_data.id,
             'tool_entities': tool_entities,
-            'image_entities': image_entities
+            'image_entities': image_entities,
+            'data_entities' : data_entities
         }
     else:
         return {
@@ -374,7 +383,7 @@ def main_submit(syn, workflow_url, apikey, project_id, workdir, meta, gce_info=F
     
     output = main_sync(syn, apikey=apikey, workflow_url=workflow_url, meta=meta, project_id=project_id, workdir=workdir)
     print output
-    for k in ['workflow_entity', 'tool_entities', 'image_entities']:
+    for k in ['workflow_entity', 'tool_entities', 'image_entities', 'data_entities']:
         submission[k] = output[k]
 
     if args.gce_info:
