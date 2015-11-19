@@ -1,13 +1,22 @@
 #### sc2.behavior.R #############################################################
-# Analyze the behavior of different scoring metrics for Sub Challenge 3
+# Analyze the behavior of different scoring metrics for Sub Challenge 2
+
+# Scoring metrics analyzed include: sum of squared error (original metric), 
+#   square-root, pseudoV, symmetric pseudoV, spearman, pearson, 
+#   Area Under the Precision Recall curve (AUPR), Matthews Correlation Coefficient (MCC)
+# **Default metric is an average of MCC, Pearson and pseudoV**
+
+# For more details on each metric look in SMCScoring.py
 
 #### PREAMBLE ###################################################################
 library(BoutrosLab.plotting.general)
 
 # Directories for tsv files and plots respectively
-setwd("~/Documents/SMC-Het/SMC-Het-Challenge/smc_het_eval")
 tsv.dir = "scoring_metric_data/text_files/"
 plot.dir = "scoring_metric_data/metric_behaviour_plots/"
+# Directory that the script is running in (should be <SMC-Het-Challenge git repo>/smc_het_eval)
+script.dir <- dirname(sys.frame(1)$ofile)
+setwd(script.dir)
 
 # Lists and dictionaries with info on the metrics and the rankings
 method.names <- c("orig",
@@ -19,7 +28,91 @@ method.names <- c("orig",
                   "aupr",
                   "mcc")
 
+# Values to use for the standard deviation of the error in the co-clustering probabilities
 std.values <- c(0, 0.01,0.03,0.05,0.1,0.15,0.2)
+
+##### plot.SC2.amit ##########################################################################
+# plot all the figures that Amit made. These include: 
+
+plot.SC2.amit <- function(method='default'){
+  # Scoring behavior for different 'mistake scenarios' including:
+  #     - splitting one cluster into two
+  #     - merging two clusters into one
+  #     - assigning all mutations to the same cluster
+  #     - assigning each mutation to its own cluster
+  #     - adding an extra cluster with mutations from each true cluster (either small or large)
+  d = read.csv(file=paste(tsv_dir, "scoring2A_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  
+  png(file=paste(plot_dir, "2A_Cases_", method, ".png", sep=""))
+  print(
+    ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+      geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+      theme(legend.position="none") + ylab("2 Metric") +
+      xlab("Case") + ggtitle(paste("2A Cases - Metric =", method)) + coord_flip(ylim=c(0,1))
+  )
+  dev.off()
+  
+  # Scoring behavior for different 'mistake scenarios' but with 10 true clusters (instead of
+  # 3 as is the case above)
+  d = read.csv(file=paste(tsv_dir, "scoring2A_big_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  
+  png(file=paste(plot_dir, "2A_Big_Cases_", method, ".png", sep=""))
+  print(
+    ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+      geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+      theme(legend.position="none") + ylab("2 Metric") +
+      xlab("Case") + ggtitle(paste("2A Cases with 10 Clusters - Metric =", method)) + coord_flip(ylim=c(0,1))
+  )
+  dev.off()
+  
+  # Scoring behavior when predicted CCM is created by reassigning mutations to another random cluster
+  # (with varying probability)
+  d = read.csv(paste(tsv_dir, "scoring2A_random_reassignment_", method, ".tsv", sep=""),sep="\t",header=FALSE)
+  colnames(d) = c("Error","Metric")
+  png(file=paste(plot_dir, "2A_random_", method, ".png", sep=""))
+  
+  print(
+    ggplot(d, aes(x=as.ordered(Error), y=as.numeric(Metric))) + 
+      geom_jitter(aes(color=as.ordered(Error)),position = position_jitter(height = 0, width=0.05)) +
+      stat_summary(fun.y=median, fun.ymin=median, fun.ymax=median, geom="crossbar", width=0.7) +
+      theme(legend.position="none") + xlab("Error Probability") + ylab("2 Metric") + 
+      ggtitle(paste("2A Random Error - Metric =", method))
+  )
+  dev.off()
+  
+  # Scoring behavior when predicted CCM is created by reassigning mutations to the closest cluster
+  # (with varying probability)
+  d = read.csv(paste(tsv_dir, "scoring2A_closest_reassignment_", method, ".tsv", sep=""),sep="\t",header=FALSE)
+  colnames(d) = c("Error","Metric")
+  
+  png(file=paste(plot_dir, "2A_closest_", method, ".png", sep=""))
+  print(
+    ggplot(d, aes(x=as.ordered(Error), y=as.numeric(Metric))) + 
+      geom_jitter(aes(color=as.ordered(Error)),position = position_jitter(height = 0, width=0.05)) +
+      stat_summary(fun.y=median, fun.ymin=median, fun.ymax=median, geom="crossbar", width=0.7) +
+      theme(legend.position="none") + xlab("Error Probability") + ylab("2 Metric") + 
+      ggtitle(paste("2A Closest Error - Metric =", method))
+  )
+  dev.off()
+  
+#   # Scoring behavior when predicted CCM is created by adding random zero-mean beta error
+#   # to the true CCM matrix entries (with different values for the concentration parameter in the beta error) 
+#   d = read.csv(paste(tsv_dir, "scoring2B_beta_", method, ".tsv", sep=""),sep="\t",header=FALSE)
+#   colnames(d) = c("Error","Metric")
+#   
+#   png(file=paste(plot_dir, "2B_beta_", method, ".png", sep=""))
+#   print(
+#     ggplot(d, aes(x=as.ordered(Error), y=as.numeric(Metric))) + 
+#       geom_jitter(aes(color=as.ordered(Error)),position = position_jitter(height = 0, width=0.05)) +
+#       stat_summary(fun.y=median, fun.ymin=median, fun.ymax=median, geom="crossbar", width=0.7) +
+#       theme(legend.position="none") + xlab("Concentration Parameter") + ylab("2 Metric") + 
+#       ggtitle(paste("2B Beta Noise - Metric =", method))
+#   )
+#   dev.off()
+}
+
 
 ##### plot.SC2.certainty.scoring #############################################################
 # TODO: make interactive plots?

@@ -39,8 +39,13 @@ def validate1A(data):
 
     return numeric
 
-def calculate1A(pred,truth):
-    return 1 - abs(truth - pred)
+def calculate1A(pred,truth, err='abs'):
+    if err is 'abs':
+        return 1 - abs(truth - pred)
+    elif err is 'sqr':
+        return 1 - ((truth - pred) ** 2)
+    else:
+        raise KeyError('Invalid error penalty for scoring SC 1A. Choose one of "abs" or "sqr".')
 
 def validate1B(data):
     data = data.split('\n')
@@ -61,8 +66,13 @@ def validate1B(data):
         raise ValidationError("Number of lineages was greater than 20: %d" % numeric)
     return numeric
 
-def calculate1B(pred,truth):
-    return (truth + 1 - min(truth+1,abs(pred-truth))) / float(truth+1)
+def calculate1B(pred,truth, method='normalized'):
+    if method is 'normalized':
+        return (truth + 1 - min(truth+1,abs(pred-truth))) / float(truth+1)
+    elif method is 'orig':
+        return abs(truth - pred) / float(truth)
+    else:
+        raise KeyError('Invalid method for scoring SC 1B. Choose one of "orig" or "normalized".')
 
 def validate1C(data, nssms):
     data = data.split('\n')
@@ -107,13 +117,21 @@ def validate1C(data, nssms):
         raise ValidationError("Total number of reported mutations is %d. Should be %d" % (reported_nssms,nssms))
     return zip([int(x[1]) for x in data2], [float(x[2]) for x in data2])
 
-def calculate1C(pred,truth):
+def calculate1C(pred,truth, err='abs'):
     pred.sort(key = lambda x: x[1])
     truth.sort(key = lambda x: x[1])
     #itertools.chain(*x) flattens a list of lists
     predvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in pred])))
     truthvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in truth])))
-    se = abs(truthvs - predvs)
+
+    # calculate the score using the given error penalty
+    if err is 'abs':
+        se = abs(truthvs - predvs)
+    elif err is 'sqr':
+        se = ((truthvs - predvs) ** 2)
+    else:
+        raise KeyError('Invalid error penalty for scoring SC 1C. Choose one of "abs" or "sqr".')
+
     return sum(1-se)/float(len(truthvs))
 
 def validate2A(data,nssms,return_ccm=True):
