@@ -477,7 +477,7 @@ def scoring3A_behavior_all(verbose=True):
         for fm in [True, False]:
             for pc in ['none', 'less', 'more']:
                 scoring3A_behavior(method=method, verbose=verbose,pc_amount=pc, full_matrix=fm)
-                print 'Done %s - More PC: %s - Full Matrix: %s' % (method,pc,fm)
+                print 'Done %s - Pseudo Counts: %s - Full Matrix: %s' % (method,pc,fm)
 
 def scoring3A_weight_behavior(methods=["pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"], verbose=False, res=None):
     '''Create the data on how the weights used in subchallenge 3 affect the score using the given scoring methods
@@ -965,32 +965,40 @@ def scoringtotal_behavior(verbose=False):
 
 
 if __name__ == '__main__':
-    '''
-    methods_2B = ["orig",
+    methods ={
+        '1A':['abs', 'sqr'],
+        '1B':['orig', 'normalized'],
+        '1C':['abs', 'sqr'],
+        '2':["orig",
             "sqrt",
             "pseudoV",
             "sym_pseudoV",
             "spearman",
             "pearson",
             "aupr",
-            "mcc"]
-    methods_2B = ['default']
-    for m in methods_2B:
+            "mcc"],
+    }
+
+    for m in methods['1A']:
+        print 'Scoring 1A Behavior with method ' + m + '...'
+        scoring1A_behavior(m)
+
+    for m in methods['1B']:
+        print 'Scoring 1B Behavior with method ' + m + '...'
+        scoring1B_behavior(m)
+
+    for m in methods['1C']:
+        print 'Scoring 1C Behavior with method ' + m + '...'
+        scoring1C_behavior(m)
+
+    for m in methods['2']:
         print 'Scoring 2B Behavior with method ' + m + '...'
-        scoring2B_behavior(tst_betas=False, method=m)
+        scoring2B_behavior(method=m, verbose=True)
+        scoring2A_behavior(method=m, verbose=True)
 
-    scoring1A_behavior('sqr')
-    scoring1B_behavior('orig')
-    scoring1C_behavior('sqr')
-    '''
-    scoring2A_behavior(method='pseudoV', verbose=True)
-    '''
-    methods_3A = ("orig", "orig_nc", "pseudoV", "pseudoV_nc", "simpleKL_nc",
-                 "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc",
-                ["pseudoV_nc", "mcc_nc", "spearman_nc"], ["pseudoV_nc", "mcc_nc", "pearson_nc"])
-    for m in methods_3A:
-        print('Calculating metric %s...' % m)
-        scoring3A_behavior(method=m, verbose=True)
+    print 'Scoring 3A Behavior...'
+    scoring3A_behavior_all(verbose=True)
 
-    scoringtotal_behavior(True)
-    '''
+    print 'Scoring 3A Behavior using multiplke metrics with different weights...'
+    scoring3A_weight_behavior(verbose=True)
+
