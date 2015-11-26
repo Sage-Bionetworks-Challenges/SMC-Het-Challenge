@@ -6,7 +6,7 @@
 
 #### PREAMBLE #################################################
 library(BoutrosLab.plotting.general)
-library(pROC)
+library(BoutrosLab.statistics.classification)
 
 #### SIMULATION PARAMETERS ####################################
 # flag for whether to print information about the simulation status
@@ -371,7 +371,7 @@ evaluate <- function(data, title=""){
                mcc.metric(data),
                pearson.metric(data),
                spearman.metric(data),
-               aupr.metric(data).
+               aupr.metric(data),
                sqrt(data))
   # names of the different metrics
   sim.names <- c("Combinatorial.Equal.Weight", 
@@ -1152,7 +1152,9 @@ aupr.metric <- function(data){
   ccm.t.v <- unlist(ccms$ccm.t)
   ccm.p.v <- unlist(ccms$ccm.p)
   
-  aupr <- roc(ccm.t.v, ccm.p.v)$auc
+  aupr <- run.roc.analysis.pROC(ccm.t.v, ccm.p.v)$auc
+  # If using pROC directly:
+  # aupr <- roc(ccm.t.v, ccm.p.v)$auc
   return(aupr)
 }
 
