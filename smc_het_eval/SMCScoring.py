@@ -272,10 +272,11 @@ def calculate2_sqrt(pred,truth, full_matrix=True):
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
+        count = (n**2 - n)
     else: # make matrix upper triangular
         pred_cp = np.triu(pred)
         truth_cp = np.triu(truth)
-    count = (n**2 - n )/2.0
+        count = (n**2 - n )/2.0
     res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return np.sqrt(1 - res)
@@ -335,8 +336,8 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
-    pred_cp[pred_cp<rnd] = rnd
-    truth_cp[truth_cp<rnd] = rnd
+    pred_cp = (1 - rnd) * pred_cp + rnd
+    truth_cp = (1 - rnd) * truth_cp + rnd
 
     # normalize data
     pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
@@ -794,9 +795,9 @@ def add_pseudo_counts(ccm,ad=None,num=None):
     if ad is not None:
         new_ad = np.zeros([size + num]*2)
         new_ad[:size, :size] = np.copy(ad)
-        new_ad[(size+num/2):(size+3*num/4),:(size+num/2)] = 1
-        new_ad[:(size+num/2),(size+3*num/4):(size+num)] = 1
-        ad = new_ad
+        new_ad[(size+num/2):(size+3*num/4),:(size)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
+        new_ad[:(size),(size+3*num/4):(size+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
+        ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
     return ccm
