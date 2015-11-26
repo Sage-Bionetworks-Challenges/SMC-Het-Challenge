@@ -1,8 +1,12 @@
 # Simulation from the V-measure paper to test the desirable
 # properties of the different metrics empirically.
+#
+# V-meausre paper: "V-measure: A conditional entropy-based external cluster
+#     evaluaqtion measure" by Andrew Rosenberg and Julia Hirschberg (2007)
 
 #### PREAMBLE #################################################
 library(BoutrosLab.plotting.general)
+library(pROC)
 
 #### SIMULATION PARAMETERS ####################################
 # flag for whether to print information about the simulation status
@@ -366,7 +370,9 @@ evaluate <- function(data, title=""){
                1 - (pv$sym / 4000),
                mcc.metric(data),
                pearson.metric(data),
-               spearman.metric(data))
+               spearman.metric(data),
+               aupr.metric(data).
+               sqrt(data))
   # names of the different metrics
   sim.names <- c("Combinatorial.Equal.Weight", 
                  "Combinatorial.Unequal.Weight", 
@@ -374,7 +380,9 @@ evaluate <- function(data, title=""){
                  "Pseudo.V.Sym",
                  "MCC",
                  "Pearson",
-                 "Spearman")
+                 "Spearman",
+                 "AUPR",
+                 "Sqrt")
   if(title != ""){
     sim.res <- c(title, sim.res)
     names(sim.res) <- c("Name", sim.names)
@@ -1130,6 +1138,41 @@ combinatorial.metric <- function(t, f, data){
   return((t * tpr(data) + f * tnr(data)) / (t + f))
 }
 
+#### aupr.metric ##############################################
+# Calculate the area under the precision recall curve between 
+# the predicted matrix and the true matrix
+#
+# INPUT:
+#   data - matrix of size (K.u+K.n x C) that gives the number of
+#       elements of each class that are assigned to each cluster
+# OUTPUT:
+#     aupr - Area Under the Precision Recall curve
+aupr.metric <- function(data){
+  ccms <- get.ccm(data) # co-clustering matrices, both true and predicted
+  ccm.t.v <- unlist(ccms$ccm.t)
+  ccm.p.v <- unlist(ccms$ccm.p)
+  
+  aupr <- roc(ccm.t.v, ccm.p.v)$auc
+  return(aupr)
+}
 
-
+#### sqrt.metric ##############################################
+# Calculate the average absolute difference between the predicted
+# and truth matrix (normalized between 0 and 1 where 1 is a perfect score)
+#
+# INPUT:
+#   data - matrix of size (K.u+K.n x C) that gives the number of
+#       elements of each class that are assigned to each cluster
+# OUTPUT:
+#     sqrt - metric score
+sqrt.metric <- function(data){
+  ccms <- get.ccm(data) # co-clustering matrices, both true and predicted
+  ccm.t <- ccms$ccm.t
+  ccm.p <- ccms$ccm.p
+  
+  n <- length(ccm.t)
+  count <- (n^2 - n)
+  sqrt <- 1 - (sum(abs(ccm.t - ccm.p)) / count)
+  return(sqrt)
+}
 
