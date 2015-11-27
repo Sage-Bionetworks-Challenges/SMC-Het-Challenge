@@ -258,11 +258,13 @@ def calculate2_orig(pred,truth, full_matrix=True):
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
+        count = (n**2 - n )
+
     else: # make matrix upper triangular
         inds = np.triu_indices(n,k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
-    count = (n**2 - n )/2.0
+        count = (n**2 - n )/2.0
     res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return 1 - res
@@ -323,9 +325,6 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
 
 
 def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
-    min_pred_nonzero = np.min(pred[np.nonzero(pred)])
-    min_truth_nonzero = np.min(truth[np.nonzero(truth)])
-
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
