@@ -599,7 +599,7 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
                 worst_score = max(ncluster_score[i], onecluster_score[i]) # worst of NCluster and OneCluster scores
                 res[i] = 1 - (res[i] / worst_score) # normalize the score
             else: # normalization for methods where a smaller score is worse
-                worst_score = min(ncluster_score, onecluster_score)
+                worst_score = min(ncluster_score[i], onecluster_score[i])
                 res[i] = (res[i] - worst_score) / (1 - worst_score)
 
 
