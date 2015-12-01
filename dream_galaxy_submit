@@ -396,7 +396,7 @@ def main_submit(syn, workflow_url, apikey, project_id, workdir, meta, gce_info=F
     syn.setAnnotations(syn.get(output['workflow_entity']), submission)
     give_synapse_permissions(syn, syn.get(project_id), CHALLENGE_ADMIN_TEAM_ID)
     print "Submitting workflow %s saved as %s for evaluation." % (name, synapseclient.utils.id_of(output['workflow_entity']))
-    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity'], name=name, teamName=teamName)
+    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity'], name=name)
     print "Created submission ID: %s" % submission.id
 
 if __name__ == "__main__":
