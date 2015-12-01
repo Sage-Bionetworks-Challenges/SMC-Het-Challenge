@@ -39,6 +39,54 @@ for(group.name in names(case.groups)){
   i <- i + length(group)
 }
 
+##### plot.SC3.amit ############################################################
+# SC 3 plots that are modelled after Amit's plots for SC 2
+plot.SC3.amit <- function(){
+  d = read.csv(file=paste(tsv_dir, "scoring3A_split_cases.tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  png(file=paste(plot_dir, "3A_Split_Cases_pseudoV.png", sep=""))
+  print(
+    ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+      geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+      theme(legend.position="none") + ylab("3 Metric") +
+      xlab("Case") + ggtitle("3A Split Cases") + coord_flip()#ylim=c(0.8,1))
+  )
+  dev.off()
+  
+  d = read.csv(file=paste(tsv_dir, "scoring3A_merge_cases.tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  png(file=paste(plot_dir, "3A_Merge_Cases_pseudoV.png", sep=""))
+  print(
+    ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+      geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+      theme(legend.position="none") + ylab("3 Metric") +
+      xlab("Case") + ggtitle("3A Merge Cases") + coord_flip()#ylim=c(0.8,1))
+  )
+  dev.off()
+  
+  d = read.csv(file=paste(tsv_dir, "scoring3A_parent_cases.tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  png(file=paste(plot_dir, "3A_Parent_Cases_pseudoV.png", sep=""))
+  print(
+    ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+      geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+      theme(legend.position="none") + ylab("3 Metric") +
+      xlab("Case") + ggtitle("3A Incorrect Parent Cases") + coord_flip()#ylim=c(0.8,1))
+  )
+  dev.off()
+  
+  d = read.csv(file=paste(tsv_dir, "scoring3A_other_cases.tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  png(file=paste(plot_dir, "3A_Other_Cases_pseudoV.png", sep=""))
+  print(
+    ggplot(d,aes(y=Metric,x=as.factor(Case))) + 
+      geom_bar(aes(fill=as.factor(Case)),stat="identity",width=.6) + 
+      theme(legend.position="none") + ylab("3 Metric") +
+      xlab("Case") + ggtitle("3A Other Cases - Not Merge, Split or Incorrect Parent") + coord_flip()#ylim=c(0.75,1))
+  )
+  dev.off()
+}
+
 ##### plot.SC3.all #############################################################
 # TODO: make interactive plots?
 # TODO: combine the plots

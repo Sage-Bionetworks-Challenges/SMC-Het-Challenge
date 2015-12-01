@@ -4,34 +4,34 @@ import csv
 
 tsv_dir = './scoring_metric_data/text_files/' # directory to save tsv's to
 
-def scoring1A_behavior():
+def scoring1A_behavior(method='abs'):
     guesses = np.array(range(0,101))/100.0
     truths = np.array(range(10,110,10))/100.0
     res = []
     for i in range(len(truths)):
         for j in range(len(guesses)):
-            res.append( [truths[i],guesses[j],calculate1A(guesses[j],truths[i])] )
+            res.append( [truths[i],guesses[j],calculate1A(guesses[j],truths[i], method)] )
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring1A_behavior.tsv', 'w')
+    f = open(tsv_dir + 'scoring1A_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
 
 
-def scoring1B_behavior():
+def scoring1B_behavior(method='normalized'):
     guesses = np.array(range(1,11))
     truths = np.array(range(1,6))
     res = [] 
     for i in range(len(truths)):
         for j in range(len(guesses)):
-            res.append( [truths[i],guesses[j],calculate1B(guesses[j],truths[i])] )
+            res.append( [truths[i],guesses[j],calculate1B(guesses[j],truths[i], method)] )
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring1B_behavior.tsv', 'w')
+    f = open(tsv_dir + 'scoring1B_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
 
-def scoring1C_behavior():
+def scoring1C_behavior(method='abs'):
     # Baseline Truth
     t_phis = np.array([.85,.5,.3])
     t_nssms = np.array([200,200,200])
@@ -45,10 +45,10 @@ def scoring1C_behavior():
             phis = []
             for p in t_phis:
                 phis.append(np.random.beta(p*c,(1-p)*c))
-            res.append([c,phis,calculate1C(t_entry,zip(t_nssms,phis))])
+            res.append([c,phis,calculate1C(t_entry,zip(t_nssms,phis), method)])
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring1C_phi_ZM_behavior.tsv', 'w')
+    f = open(tsv_dir + 'scoring1C_phi_ZM_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
 
@@ -57,10 +57,10 @@ def scoring1C_behavior():
     sys_errors = np.concatenate((sys_errors,-sys_errors))
     res = []
     for sys_error in sys_errors:
-        res.append([sys_error, calculate1C(t_entry,zip(t_nssms,t_phis+sys_error))])
+        res.append([sys_error, calculate1C(t_entry,zip(t_nssms,t_phis+sys_error), method)])
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring1C_phi_sys_behavior.tsv', 'w')
+    f = open(tsv_dir + 'scoring1C_phi_sys_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
 
@@ -74,10 +74,10 @@ def scoring1C_behavior():
             #Randomly assign remainder
             rd[np.random.randint(0,len(rd))] += remainder
             rd = map(int,rd)
-            res.append([c,rd,calculate1C(t_entry,zip(rd,t_phis))])
+            res.append([c,rd,calculate1C(t_entry,zip(rd,t_phis), method)])
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring1C_nssm_behavior.tsv', 'w')
+    f = open(tsv_dir + 'scoring1C_nssm_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()            
 
@@ -87,25 +87,25 @@ def scoring1C_behavior():
     phis = [(.85+.5)/2.0, .3]
     nssms = [400,200]
     entry = zip(nssms,phis)
-    res.append(["Collapse12", calculate1C(t_entry,entry)])
+    res.append(["Collapse12", calculate1C(t_entry,entry, method)])
     
     # Collapse last two clusters
     phis = [.85, (.5+.3)/2.0]
     nssms = [200,400]
     entry = zip(nssms,phis)
-    res.append(["Collapse23", calculate1C(t_entry,entry)])
+    res.append(["Collapse23", calculate1C(t_entry,entry, method)])
 
     # Collapse all clusters
     phis = [.55]
     nssms=[600]
     entry = zip(nssms,phis)
-    res.append(["Collapse123", calculate1C(t_entry,entry)])
+    res.append(["Collapse123", calculate1C(t_entry,entry, method)])
 
     # Assume all SSMs are clonal
     phis = [.85]
     nssms=[600]
     entry = zip(nssms,phis)
-    res.append(["All_Clonal", calculate1C(t_entry,entry)])
+    res.append(["All_Clonal", calculate1C(t_entry,entry, method)])
 
     # For splits, phis were calculated as +/- 0.05 from center.  
     # 0.05 was obtained empirically by calculating the mean of the top and bottom half of a binomial sample with depth = 50. e.g.:
@@ -119,178 +119,203 @@ def scoring1C_behavior():
     phis = [.9,.8, .5, .3]
     nssms = [100,100,200,200]
     entry = zip(nssms,phis)
-    res.append(["Split1", calculate1C(t_entry,entry)])
+    res.append(["Split1", calculate1C(t_entry,entry, method)])
 
     # Split cluster 2
     phis = [.85, .55,.45, .3]
     nssms = [200,100,100,200]
     entry = zip(nssms,phis)
-    res.append(["Split2", calculate1C(t_entry,entry)])
+    res.append(["Split2", calculate1C(t_entry,entry, method)])
     # Split cluster 3
     phis = [.85, .5,.35,.25]
     nssms = [200,200,100,100]
     entry = zip(nssms,phis)
-    res.append(["Split3", calculate1C(t_entry,entry)])
+    res.append(["Split3", calculate1C(t_entry,entry, method)])
     
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring1C_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring1C_cases_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()        
 
-def scoring2A_behavior():
+def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_reassign=True, method='default', verbose=False):
+    '''Test the scoring behaviour of different metrics for evaluating Sub-Challenge 2, under various conditions.
+
+    :param tst_big_mat: boolean for whether to test all the mistake scenarios with a larger number of clusters
+    :param tst_rand_reassign: boolean for whether to test reassigning a portion of mutations to a random new cluster
+    :param tst_closest_reassign: boolean for whether to test reassigning a portion of the mutations to the nearest cluster
+    :param method: scoring metric to use
+    :param verbose: boolean for whether to print output on the status of the function
+    '''
+
+    # Test the scoring behavior when the predicted CCM comes from one of the presepeficied 'mistake scenarios'
+    # i.e. mistakes in the co-clustering assignment that we expect people to make
+    if verbose:
+        print('Testing scoring for SC2 using the ' + method + ' scoring metric:')
+        print('Scoring behavior for mistake scenarios with 3 clusters...')
     size_clusters = 200 # true size of each cluster
     n_clusters = 3 # true number of clusters
     big_extra_num = 33 # number of mutations to add in the BigExtra case
     # True CCM:
     t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+    scenarios = ["SplitClusterBot", "MergeClusterBot", "OneCluster", "NCluster", "SmallExtra", "BigExtra"] # mistake scenarios to be tested
 
     # Cases:
     res = []
-    # Split a cluster
-    ccm = get_ccm('SplitClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res.append(["SplitCluster",calculate2(ccm,t_ccm)])
-
-    # Merge 2 clusters
-    ccm = get_ccm('MergeClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res.append(["MergeCluster",calculate2(ccm,t_ccm)])
-    
-    #All one cluster
-    ccm = get_ccm('OneCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res.append(["OneCluster",calculate2(np.ones(t_ccm.shape),t_ccm)])
-    # Each ssm own cluster
-    ccm = get_ccm('NCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res.append(["NClusters",calculate2(np.identity(t_ccm.shape[0]),t_ccm)])
-    
-    # Small extra cluster with some mutations from each cluster
-    ccm = get_ccm('SmallExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res.append(["SmallExtra", calculate2(ccm,t_ccm)])
-    
-    # Big extra cluster with some mutations from each cluster
-    ccm = get_ccm('BigExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res.append(["BigExtra", calculate2(ccm,t_ccm)])
+    for sc in scenarios:
+        # calculate the CCM
+        ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+        # calculate the score for the given scenario
+        res.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
-    f = open('scoring_metric_data/scoring2A_cases.tsv', 'w')
+    f = open(tsv_dir + 'scoring2A_cases_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()
-    
-    # Same thing but with more groups (all of the same size)
-    # True CCM:
-    n_clusters = 10 # true number of clusters
-    big_extra_num = 10
 
-    t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+    if tst_big_mat:
+        # Same thing but with more groups (all of the same size)
+        # True CCM:
+        n_clusters = 10 # true number of clusters
+        big_extra_num = 10
+        if verbose:
+            print('Scoring behavior for mistake scenarios with ' + str(n_clusters) + ' clusters...')
 
-    # Cases:
-    res_more_cl = []
-    # Split a cluster
-    ccm = get_ccm('SplitClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res_more_cl.append(["SplitCluster",calculate2(ccm,t_ccm)])
+        t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
 
-    # Merge 2 clusters
-    ccm = get_ccm('MergeClusterBot',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res_more_cl.append(["MergeCluster",calculate2(ccm,t_ccm)])
+        # Cases:
+        res_more_cl = []
 
-    #All one cluster
-    ccm = get_ccm('OneCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res_more_cl.append(["OneCluster",calculate2(np.ones(t_ccm.shape),t_ccm)])
-    # Each ssm own cluster
-    ccm = get_ccm('NCluster',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res_more_cl.append(["NClusters",calculate2(np.identity(t_ccm.shape[0]),t_ccm)])
+        for sc in scenarios:
+            # calculate the CCM
+            ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+            # calculate the score for the given scenario
+            res.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
-    # Small extra cluster with some mutations from each cluster
-    ccm = get_ccm('SmallExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res_more_cl.append(["SmallExtra", calculate2(ccm,t_ccm)])
+        res_more_cl = [map(str,x) for x in res_more_cl]
+        res_more_cl = ['\t'.join(x) for x in res_more_cl]
+        f = open(tsv_dir + 'scoring2A_big_cases_' + method + '.tsv', 'w')
+        f.write('\n'.join(res_more_cl))
+        f.close()
 
-    # Big extra cluster with some mutations from each cluster
-    ccm = get_ccm('BigExtra',t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-    res_more_cl.append(["BigExtra", calculate2(ccm,t_ccm)])
-    
-    res_more_cl = [map(str,x) for x in res_more_cl]
-    res_more_cl = ['\t'.join(x) for x in res_more_cl]
-    f = open('scoring_metric_data/scoring2A_big_cases.tsv', 'w')
-    f.write('\n'.join(res_more_cl))
-    f.close()
-    
-    # Random re-assignment to arbitrary cluster with p=0.01,.03,.05,.1,.15,.25,.5 x 100
-    res = []
-    p_errors = [0.01,0.03,0.05,.1,.15,.25,.5]
-    for p_err in p_errors:
-        for i in range(100):
-            clusters = np.copy(t_clusters)
-            for j in range(t_ccm.shape[0]):
-                if np.random.random() < p_err:
-                    cluster = np.argmax(clusters[j,:])
-                    if np.random.random() < 0.5:
-                        cluster -= 1
-                    else:
-                        cluster += 1
-                    cluster = cluster % 3
-                    clusters[j,:] = 0
-                    clusters[j,cluster] = 1
-            ccm = np.dot(clusters,clusters.T)
-            res.append([p_err,calculate2(ccm,t_ccm)])
-    res = [map(str,x) for x in res]
-    res = ['\t'.join(x) for x in res]
-    f = open('scoring2A_random_reassignment.tsv', 'w')
-    f.write('\n'.join(res))
-    f.close()
-    
-    # Random re-assignment to closest cluster with p=0.01,.03,.05,.1,.15,.25,.5 x 100
-    res = []
-    p_errors = [0.01,0.03,0.05,.1,.15,.25,.5]
-    for p_err in p_errors:
-        for i in range(100):
-            clusters = np.copy(t_clusters)
-            for j in range(t_ccm.shape[0]):
-                if np.random.random() < p_err:
-                    cluster = np.argmax(clusters[j,:])
-                    if cluster == 2 or cluster == 0:
-                        cluster = 1
-                    else:
-                        if np.random.random() < 0.5:
-                            cluster = 2
-                        else:
-                            cluster = 0
-                    clusters[j,:] = 0
-                    clusters[j,cluster] = 1
-            ccm = np.dot(clusters,clusters.T)
-            res.append([p_err,calculate2(ccm,t_ccm)])
-    res = [map(str,x) for x in res]
-    res = ['\t'.join(x) for x in res]
-    f = open('scoring2A_closest_reassignment.tsv', 'w')
-    f.write('\n'.join(res))
-    f.close()
+    if tst_rand_reassign or tst_closest_reassign:
+        # Random re-assignment to arbitrary cluster and/or closest cluster with p=0.01,.03,.05,.1,.15,.25,.5 x 100
+        if verbose:
+            print('Scoring behavior of random reassignments to different clusters...')
+            print('    Types of reassignments to perform:')
+        res = {}
+        if tst_rand_reassign:
+            print('       - to random cluster')
+            res['rand'] = []
+        if tst_closest_reassign:
+            print('        - to closest cluster')
+            res['closest'] = []
+
+        # Testing parameters
+        p_errors = [0.01,0.03,0.05,.1,.15,.25,.5] # probability that a mutation is reassigned
+        n_iter = 5 # number of iterations to perform for each p_err value
+        size_clusters = 200 # true size of each cluster
+        n_clusters = 5 # true number of clusters
+
+        t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters)
+
+        for p_err in p_errors:
+            if verbose:
+                print('     Using a probability of reassignment of ' + str(p_err) + ':')
+            for i in range(n_iter):
+                if verbose:
+                    print('          Iteration ' + str(i+1) + ' of ' + str(n_iter) + '...')
+
+                clusters = {}
+                if tst_rand_reassign:
+                    clusters['rand'] = np.copy(t_clusters)
+                if tst_closest_reassign:
+                    clusters['closest'] = np.copy(t_clusters)
+
+                for j in range(t_ccm.shape[0]):
+                    if np.random.random() < p_err:
+                        if tst_rand_reassign:
+                            cluster = np.argmax(clusters['rand'][j,:])
+                            if np.random.random() < 0.5:
+                                cluster -= 1
+                            else:
+                                cluster += 1
+                            cluster = cluster % n_clusters
+
+                            clusters['rand'][j,:] = 0
+                            clusters['rand'][j,cluster] = 1
+
+                        if tst_closest_reassign:
+                            cluster = np.argmax(clusters['closest'][j,:])
+                            if cluster == (n_clusters - 1):
+                                cluster = (n_clusters - 2)
+                            elif cluster == 0:
+                                cluster = 1
+                            else:
+                                if np.random.random() < 0.5:
+                                    cluster = (cluster + 1)
+                                else:
+                                    cluster = (cluster - 1)
+                            clusters['closest'][j,:] = 0
+                            clusters['closest'][j,cluster] = 1
+                if tst_rand_reassign:
+                    ccm = np.dot(clusters['rand'],clusters['rand'].T)
+                    res['rand'].append([p_err,calculate2(ccm,t_ccm, method=method)])
+                if tst_closest_reassign:
+                    ccm = np.dot(clusters['closest'],clusters['closest'].T)
+                    res['closest'].append([p_err,calculate2(ccm,t_ccm, method=method)])
+
+        # Output the results
+        if tst_rand_reassign:
+            res['rand'] = [map(str,x) for x in res['rand']]
+            res['rand'] = ['\t'.join(x) for x in res['rand']]
+            f = open(tsv_dir + 'scoring2A_random_reassignment_' + method + '.tsv', 'w')
+            f.write('\n'.join(res['rand']))
+            f.close()
+        if tst_closest_reassign:
+            res['closest'] = [map(str,x) for x in res['closest']]
+            res['closest'] = ['\t'.join(x) for x in res['closest']]
+            f = open(tsv_dir + 'scoring2A_closest_reassignment_' + method + '.tsv', 'w')
+            f.write('\n'.join(res['closest']))
+            f.close()
+
     
 def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True, method='pseudoV', verbose=True):
     if tst_betas:
+        if verbose:
+            print 'Testing adding beta error to the true CCM:'
         t_ccm, t_clusters = get_ccm('Truth',size_clusters=200, n_clusters=3, big_extra_num=33)
 
         n_uniq = len(np.triu_indices(t_ccm.shape[0],k=1)[0])
         res = []
         concentrations = [1000,100,50,25,10,5,3,1]
+        n_iter = 5 # number of iterations to perform for each concentration value
+
         for c in concentrations:
-            for i in range(50):
+            if verbose:
+                print ('       Beta Error with concentration param = ' + str(c) + '...')
+            for i in range(n_iter):
+                if verbose:
+                    print('           Iteration ' + str(i+1) + ' of ' + str(n_iter) + '...')
+
                 ccm = np.copy(t_ccm)
-                ccm[np.triu_indices(t_ccm.shape[0],k=1)] -= np.random.beta(1,c,n_uniq)
-                #ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = ccm[np.triu_indices(t_ccm.shape[0],k=1)]
-                ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = 0
+                ccm[np.triu_indices(t_ccm.shape[0],k=1)] -= np.random.beta(1,c,n_uniq) # subtract beta error from the upper triangular part of the true CCM
+                ccm[np.tril_indices(t_ccm.shape[0],k=-1)] = 0 # ensure the matrix is symmetrical
                 ccm = ccm + ccm.T
-                np.fill_diagonal(ccm,1)
-                ccm = np.abs(ccm)
+                np.fill_diagonal(ccm,1) # ensure the matrix has 1's along the diagonal
+                ccm = np.abs(ccm) # ensure the matrix has values between 0 and 1
                 res.append([c,calculate2(ccm,t_ccm)])
         res = [map(str,x) for x in res]
         res = ['\t'.join(x) for x in res]
-        f = open('scoring_metric_data/scoring2B_beta.tsv', 'w')
+        f = open(tsv_dir + 'scoring2B_beta.tsv', 'w')
         f.write('\n'.join(res))
         f.close()
 
     if tst_prob_mod:
         size_clusters = 200
         n_clusters = 3
-        big_extra_num = 1
+        big_extra_num = 33
 
         t_ccm, t_clusters = get_ccm('Truth', size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
 
@@ -312,7 +337,7 @@ def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True,
 
             if tst_prob_mod_err:
                 stds = [0.01,0.03,0.05,0.1,0.15,0.2]
-                errs = {} # error matrix for each std valyue - keep error matrix the same for all probablistic ccm's
+                errs = {} # error matrix for each std value - keep error matrix the same for all probabalistic ccm's
                 data_err = {} # ccm's for each certainty level with including small errors
                 for std in stds:
                     err = np.random.normal(0,std,ccm.shape) # add some random error to each entry in the matrix
@@ -452,7 +477,7 @@ def scoring3A_behavior_all(verbose=True):
         for fm in [True, False]:
             for pc in ['none', 'less', 'more']:
                 scoring3A_behavior(method=method, verbose=verbose,pc_amount=pc, full_matrix=fm)
-                print 'Done %s - More PC: %s - Full Matrix: %s' % (method,pc,fm)
+                print 'Done %s - Pseudo Counts: %s - Full Matrix: %s' % (method,pc,fm)
 
 def scoring3A_weight_behavior(methods=["pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"], verbose=False, res=None):
     '''Create the data on how the weights used in subchallenge 3 affect the score using the given scoring methods
@@ -940,32 +965,40 @@ def scoringtotal_behavior(verbose=False):
 
 
 if __name__ == '__main__':
-    '''
-    methods_2B = ["orig",
+    methods ={
+        '1A':['abs', 'sqr'],
+        '1B':['orig', 'normalized'],
+        '1C':['abs', 'sqr'],
+        '2':["orig",
             "sqrt",
             "pseudoV",
             "sym_pseudoV",
             "spearman",
             "pearson",
             "aupr",
-            "mcc"]
-    '''
-    methods_2B = ['default']
-    for m in methods_2B:
+            "mcc"],
+    }
+
+    for m in methods['1A']:
+        print 'Scoring 1A Behavior with method ' + m + '...'
+        scoring1A_behavior(m)
+
+    for m in methods['1B']:
+        print 'Scoring 1B Behavior with method ' + m + '...'
+        scoring1B_behavior(m)
+
+    for m in methods['1C']:
+        print 'Scoring 1C Behavior with method ' + m + '...'
+        scoring1C_behavior(m)
+
+    for m in methods['2']:
         print 'Scoring 2B Behavior with method ' + m + '...'
-        scoring2B_behavior(tst_betas=False, method=m)
+        scoring2B_behavior(method=m, verbose=True)
+        scoring2A_behavior(method=m, verbose=True)
 
-    '''
-    scoring1A_behavior()
-    scoring1B_behavior()
-    scoring1C_behavior()
-    scoring2A_behavior()
-    methods_3A = ("orig", "orig_nc", "pseudoV", "pseudoV_nc", "simpleKL_nc",
-                 "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc",
-                ["pseudoV_nc", "mcc_nc", "spearman_nc"], ["pseudoV_nc", "mcc_nc", "pearson_nc"])
-    for m in methods_3A:
-        print('Calculating metric %s...' % m)
-        scoring3A_behavior(method=m, verbose=True)
+    print 'Scoring 3A Behavior...'
+    scoring3A_behavior_all(verbose=True)
 
-    scoringtotal_behavior(True)
-    '''
+    print 'Scoring 3A Behavior using multiplke metrics with different weights...'
+    scoring3A_weight_behavior(verbose=True)
+

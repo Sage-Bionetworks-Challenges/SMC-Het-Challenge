@@ -39,8 +39,13 @@ def validate1A(data):
 
     return numeric
 
-def calculate1A(pred,truth):
-    return 1 - abs(truth - pred)
+def calculate1A(pred,truth, err='abs'):
+    if err is 'abs':
+        return 1 - abs(truth - pred)
+    elif err is 'sqr':
+        return 1 - ((truth - pred) ** 2)
+    else:
+        raise KeyError('Invalid error penalty for scoring SC 1A. Choose one of "abs" or "sqr".')
 
 def validate1B(data):
     data = data.split('\n')
@@ -61,8 +66,13 @@ def validate1B(data):
         raise ValidationError("Number of lineages was greater than 20: %d" % numeric)
     return numeric
 
-def calculate1B(pred,truth):
-    return (truth + 1 - min(truth+1,abs(pred-truth))) / float(truth+1)
+def calculate1B(pred,truth, method='normalized'):
+    if method is 'normalized':
+        return (truth + 1 - min(truth+1,abs(pred-truth))) / float(truth+1)
+    elif method is 'orig':
+        return abs(truth - pred) / float(truth)
+    else:
+        raise KeyError('Invalid method for scoring SC 1B. Choose one of "orig" or "normalized".')
 
 def validate1C(data, nssms):
     data = data.split('\n')
@@ -107,13 +117,21 @@ def validate1C(data, nssms):
         raise ValidationError("Total number of reported mutations is %d. Should be %d" % (reported_nssms,nssms))
     return zip([int(x[1]) for x in data2], [float(x[2]) for x in data2])
 
-def calculate1C(pred,truth):
+def calculate1C(pred,truth, err='abs'):
     pred.sort(key = lambda x: x[1])
     truth.sort(key = lambda x: x[1])
     #itertools.chain(*x) flattens a list of lists
     predvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in pred])))
     truthvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in truth])))
-    se = abs(truthvs - predvs)
+
+    # calculate the score using the given error penalty
+    if err is 'abs':
+        se = abs(truthvs - predvs)
+    elif err is 'sqr':
+        se = ((truthvs - predvs) ** 2)
+    else:
+        raise KeyError('Invalid error penalty for scoring SC 1C. Choose one of "abs" or "sqr".')
+
     return sum(1-se)/float(len(truthvs))
 
 def validate2A(data,nssms,return_ccm=True):
@@ -185,10 +203,12 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     :param pseudo_counts: logical for how many psuedo counts to add to the matrices
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
+    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+
     pc_pred = add_pseudo_counts(np.copy(pred), num=pseudo_counts) # add pseudo counts to the matrices
     pc_truth = add_pseudo_counts(np.copy(truth), num=pseudo_counts) # use np.copy so that original values are not altered
-    ncluster = add_pseudo_counts(mb.get_ccm('NCluster', truth), num=pseudo_counts)
-    onecluster = add_pseudo_counts(mb.get_ccm('OneCluster', truth), num=pseudo_counts)
+    ncluster = add_pseudo_counts(mb.get_ccm('NCluster', truth), num=pseudo_counts) # predicted CCM when every mutations is in its own cluster
+    onecluster = add_pseudo_counts(mb.get_ccm('OneCluster', truth), num=pseudo_counts) # predicted CCM when all mutations are in the same cluster
 
     func_dict = {"orig" : calculate2_orig,
             "sqrt" : calculate2_sqrt,
@@ -206,12 +226,16 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
 
         for m in ['pseudoV', 'pearson', 'mcc']:
             score = func_dict[m](pc_pred, pc_truth, full_matrix=full_matrix)
+
+            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
             ncluster_score = func_dict[m](ncluster, pc_truth, full_matrix=full_matrix)
             onecluster_score = func_dict[m](onecluster, pc_truth, full_matrix=full_matrix)
-            if method in ['pseudoV', 'sym_pseudoV']: # normalize the scores to be between 0 and 1 where 1 is the true matrix
-                worst_score = max(ncluster_score, onecluster_score) # and zero is the worse score of the NCluster matrix
-                score = 1 - (score / worst_score)                   # and the OneCluster matrix
-            else:
+            if method in larger_is_worse_methods: # normalize scores where a larger score is worse
+                # normalize the scores to be between 0 and 1 where 1 is the true matrix
+                # and zero is the worse score of the NCluster matrix and the OneCluster matrix
+                worst_score = max(ncluster_score, onecluster_score)
+                score = 1 - (score / worst_score)
+            else: # normalize scores where a smaller score is worse
                 worst_score = min(ncluster_score, onecluster_score)
                 score = (score - worst_score) / (1 - worst_score)
             scores.append(score)
@@ -221,9 +245,9 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
         score = func(pc_pred, pc_truth, full_matrix=full_matrix)
         ncluster_score = func(ncluster, pc_truth, full_matrix=full_matrix)
         onecluster_score = func(onecluster, pc_truth, full_matrix=full_matrix)
-        if method in ['pseudoV', 'sym_pseudoV']: # normalize the scores to be between 0 and 1 where 1 is the true matrix
+        if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
             worst_score = max(ncluster_score, onecluster_score) # and zero is the worse score of the NCluster matrix
-            score = 1 - (score / worst_score)                   # and the OneCluster matrix
+            score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
         else:
             worst_score = min(ncluster_score, onecluster_score)
             score = (score - worst_score) / (1 - worst_score)
@@ -234,11 +258,13 @@ def calculate2_orig(pred,truth, full_matrix=True):
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
+        count = (n**2 - n )
+
     else: # make matrix upper triangular
         inds = np.triu_indices(n,k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
-    count = (n**2 - n )/2.0
+        count = (n**2 - n )/2.0
     res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return 1 - res
@@ -248,10 +274,11 @@ def calculate2_sqrt(pred,truth, full_matrix=True):
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
+        count = (n**2 - n)
     else: # make matrix upper triangular
         pred_cp = np.triu(pred)
         truth_cp = np.triu(truth)
-    count = (n**2 - n )/2.0
+        count = (n**2 - n )/2.0
     res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return np.sqrt(1 - res)
@@ -298,9 +325,6 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
 
 
 def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
-    min_pred_nonzero = np.min(pred[np.nonzero(pred)])
-    min_truth_nonzero = np.min(truth[np.nonzero(truth)])
-
     if full_matrix:
         pred_cp = np.copy(pred)
         truth_cp = np.copy(truth)
@@ -311,8 +335,8 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
-    pred_cp[pred_cp<rnd] = rnd
-    truth_cp[truth_cp<rnd] = rnd
+    pred_cp = (1 - rnd) * pred_cp + rnd
+    truth_cp = (1 - rnd) * truth_cp + rnd
 
     # normalize data
     pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
@@ -531,7 +555,7 @@ def validate3B(data, ccm, nssms):
 def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
     return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,np.dot(truth_ca,truth_ca.T),truth_ad)
 
-def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc", weights=None, verbose=False, pseudo_counts=True, full_matrix=True):
+def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", weights=None, verbose=False, pseudo_counts=True, full_matrix=True):
     """Calculate the score for subchallenge 3 using the given metric or a weighted average of the
     given metrics, if more than one are specified.
 
@@ -546,18 +570,39 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc", weights
     :param full_matrix: boolean for whether to use the full CCM/AD matrix when calculating the score
     :return: score for the given submission to subchallenge 3 using the given metric
     """
+    larger_is_worse_methods = ['sym_pseudoV_nc', 'pseudoV_nc', 'pseudoV', "simpleKL_nc"] # methods where a larger score is worse
+
     if pseudo_counts:
         if isinstance(pseudo_counts, int):
             pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad), num=pseudo_counts) # add pseudo counts to the matrices
             pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad), num=pseudo_counts) # use np.copy so that original values are not altered
+            ncluster_ccm, ncluster_ad = add_pseudo_counts(mb.get_ccm('NClusterOneLineage', truth_ccm), mb.get_ad('NClusterOneLineage', truth_ad), num=pseudo_counts) # predicted matrices for each mutation being in their own cluster
+            onecluster_ccm, onecluster_ad = add_pseudo_counts(mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad), num=pseudo_counts) # predicted matrices for all mutations being in the same cluster
         else:
-            pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad), num=pseudo_counts) # add pseudo counts to the matrices
-            pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad), num=pseudo_counts) # use np.copy so that original values are not     else:
+            pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad))
+            pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad))
+            ncluster_ccm, ncluster_ad = add_pseudo_counts(mb.get_ccm('NClusterOneLineage', truth_ccm), mb.get_ad('NClusterOneLineage', truth_ad))
+            onecluster_ccm, onecluster_ad = add_pseudo_counts(mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad))
     else:
         pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad = pred_ccm, pred_ad, truth_ccm, truth_ad
+        ncluster_ccm, ncluster_ad = mb.get_ccm('NClusterOneLineage', truth_ccm), mb.get_ad('NClusterOneLineage', truth_ad)
+        onecluster_ccm, onecluster_ad = mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad)
 
     if isinstance(method, list):
         res = [calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose) for m in method] # calculate the score for each method
+
+        # normalize the scores to be between (worst of NCluster score and OneCluster score) and (Truth score)
+        ncluster_score = [calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose, full_matrix=full_matrix) for m in method]
+        onecluster_score = [calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose, full_matrix=full_matrix) for m in method]
+        for i in range(len(method)):
+            if method[i] in larger_is_worse_methods: # normalization for methods where a larger score is worse
+                worst_score = max(ncluster_score[i], onecluster_score[i]) # worst of NCluster and OneCluster scores
+                res[i] = 1 - (res[i] / worst_score) # normalize the score
+            else: # normalization for methods where a smaller score is worse
+                worst_score = min(ncluster_score[i], onecluster_score[i])
+                res[i] = (res[i] - worst_score) / (1 - worst_score)
+
+
         if weights is None: # if weights are not specified or if they cannot be normalized then default to equal weights
             weights = [1] * len(method)
         elif sum(weights) == 0:
@@ -568,6 +613,16 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc", weights
         score = sum(np.multiply(res, weights))
     else:
         score =  calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
+
+        # normalize the score to be between (worst of NCluster score and OneCluster score) and (Truth score) - similar to above
+        ncluster_score = calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
+        onecluster_score = calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
+        if method in larger_is_worse_methods:
+            worst_score = max(ncluster_score, onecluster_score)
+            score = 1 - (score / worst_score)
+        else:
+            worst_score = min(ncluster_score, onecluster_score)
+            score = (score - worst_score) / (1 - worst_score)
     return score
 
 
@@ -633,10 +688,10 @@ def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose
     
 # Use one of the SC2 metrics without using the co-clustering matrix
 def calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV", full_matrix=True):
-    methods_SC2 = {"pseudoV_nc": calculate2_pseudoV_norm,
-               "simpleKL_nc": calculate2_simpleKL_norm,
+    methods_SC2 = {"pseudoV_nc": calculate2_pseudoV,
+               "simpleKL_nc": calculate2_simpleKL,
                "sqrt_nc": calculate2_sqrt,
-               "sym_pseudoV_nc": calculate2_sym_pseudoV_norm,
+               "sym_pseudoV_nc": calculate2_sym_pseudoV,
                "pearson_nc": calculate2_pearson,
                 "spearman_nc": calculate2_spearman,
                "aupr_nc":calculate2_aupr,
@@ -739,9 +794,9 @@ def add_pseudo_counts(ccm,ad=None,num=None):
     if ad is not None:
         new_ad = np.zeros([size + num]*2)
         new_ad[:size, :size] = np.copy(ad)
-        new_ad[(size+num/2):(size+3*num/4),:(size+num/2)] = 1
-        new_ad[:(size+num/2),(size+3*num/4):(size+num)] = 1
-        ad = new_ad
+        new_ad[(size+num/2):(size+3*num/4),:(size)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
+        new_ad[:(size),(size+3*num/4):(size+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
+        ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
     return ccm
