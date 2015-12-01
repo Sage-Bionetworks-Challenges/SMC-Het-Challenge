@@ -211,7 +211,8 @@ def find_or_add_to_synapse(paths, folder):
                 entity = row['entity.id']
                 print "Tool previously uploaded: %s as %s" % (os.path.basename(path), entity)
         if entity is None:
-            entity = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=True) #BUG: should createOrUpdate be False?
+            entity_obj = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=True) #BUG: should createOrUpdate be False?
+            entity = entity_obj.id
         entities.append(entity)
     return entities
 
