@@ -5,12 +5,12 @@
 #     evaluaqtion measure" by Andrew Rosenberg and Julia Hirschberg (2007)
 
 #### PREAMBLE #################################################
-library(BoutrosLab.plotting.general)
-library(BoutrosLab.statistics.classification)
+#library(BoutrosLab.plotting.general)
+#library(BoutrosLab.statistics.classification)
 
 #### SIMULATION PARAMETERS ####################################
 # flag for whether to print information about the simulation status
-output = F
+output = T
 # number of iterations to perform for each set of parameters
 n.iter = 1
 # number of elements in each class
@@ -269,14 +269,8 @@ fn.help <- function(col){
 # tpr - True Positive Rate
 
 tpr <- function(data){
-  # NOTE: notation: lower case => local variable
-  c <- dim(data)[[2]]
-  n.c <- sum(data[,1])
-  
-  # number of pairs of elements that should be in the 
-  # same cluster
-  tp.expected <- (n.c*(n.c-1)*c)
-  tpr <- tp(data) / tp.expected
+  TP <- tp(data)
+  tpr <- TP / (TP + fn(data)) 
   return(tpr)
 }
 
@@ -290,14 +284,8 @@ tpr <- function(data){
 # OUTPUT:
 # tnr - True Negative Rate
 tnr <- function(data){
-  # NOTE: notation: lower case => local variable
-  c <- dim(data)[[2]]
-  n.c <- sum(data[,1])
-  
-  # number of pairs of elements that should be assigned to
-  # different clusters
-  tn.expected <- (n.c * (n.c * (c-1)) * c)
-  tnr <- 1 - (fn(data) / tn.expected)
+  TN <- tn(data)
+  tnr <- TN / (TN + fp(data))
   return(tnr)
 }
 
@@ -362,32 +350,20 @@ get.param.str <- function(param.vals=NULL){
 #     metric that contains the result of evaluating the clustering
 #     assignment using that metric
 evaluate <- function(data, title=""){
-  pv <- pseudo.v.metric(data,0.01)
   # calculate each of the desired metrics for the given simulation data
-  sim.res <- c(combinatorial.metric(1,1,data), 
-               combinatorial.metric(2,1,data), 
-               1 - (pv$normal / 4000), # scale these so that they can be compared to other metrics
-               1 - (pv$sym / 4000),
-               mcc.metric(data),
-               pearson.metric(data),
-               spearman.metric(data),
-               aupr.metric(data),
-               sqrt(data))
-  # names of the different metrics
-  sim.names <- c("Combinatorial.Equal.Weight", 
-                 "Combinatorial.Unequal.Weight", 
-                 "Pseudo.V", 
-                 "Pseudo.V.Sym",
-                 "MCC",
-                 "Pearson",
-                 "Spearman",
-                 "AUPR",
-                 "Sqrt")
+  pv <- pseudo.v.metric(data,0.01)# pseudoV and symmetric pseudoV measures
+  sim.res <- c("Combinatorial.Equal.Weight" = combinatorial.metric(1,1,data), 
+               "Combinatorial.Unequal.Weight" = combinatorial.metric(2,1,data), 
+               "Pseudo.V" = 1 - (pv$normal / 4000), # scale these so that they can be compared to other metrics
+               "Pseudo.V.Sym" = 1 - (pv$sym / 4000),
+               "MCC" = mcc.metric(data),
+               "Pearson" = pearson.metric(data),
+               "Spearman" = spearman.metric(data),
+               "AUPR" = aupr.metric(data),
+               "Sqrt" = sqrt.metric(data))
+  
   if(title != ""){
-    sim.res <- c(title, sim.res)
-    names(sim.res) <- c("Name", sim.names)
-  } else{
-    names(sim.res) <- sim.names
+    sim.res <- c(c("Name" = title), sim.res)
   }
   return(sim.res)
 }
@@ -434,7 +410,10 @@ create.data <- function(n.iter.value = NULL, #why is this here...
     epsilon <<- epsilon1 + epsilon2
   }
   
-  # Safety checks for when parameters are 0
+  # Safety checks for when # of clusters of either type is 0 or total # of clusters is 1
+  if(K.n + K.u == 0){
+    stop('No clusters were specified')
+  }
   if(K.n == 0){
     epsilon2 <<- 0
     epsilon <<- epsilon1
@@ -443,7 +422,12 @@ create.data <- function(n.iter.value = NULL, #why is this here...
     epsilon1 <<- 0
     epsilon2 <<- 1
     epsilon <<- 1
+  } else if(K.u == 1){
+    epsilon1 <<- 0
+    epsilon2 <<- 0
+    epsilon <<- 0
   }
+  
   
   # useful cluster/class pair assignments
   #     kc.pairs[i,j] = 1 => i and j are paired
@@ -495,16 +479,18 @@ create.data <- function(n.iter.value = NULL, #why is this here...
 #    K.n.values - values of K.n to iterate over for the simulation
 #    e1.values - values of epsilon1 to iterate over for the simulation
 #    e2.values - values of epsilon2 to iterate over for the simulation
+#    directory - path to directory in which to save the simulation data;
+#               if NULL then do not save the data to text files 
 # OUTPUT:
 #    res - nested list of lists with each dimension corresponding to
 #       one of the iterated parameters from the input
 
 run.sim <- function(C = 5,
-                    K.u.values=1:8, 
-                    K.n.values=0:6, 
+                    K.u.values=2:8, 
+                    K.n.values=0:1, 
                     e1.values=c(0,0.033,0.066,0.1), 
                     e2.values=c(0,0.066,0.133,0.2),
-                    filename = NULL
+                    directory = NULL
                     ){
   C <<- C
   res <- list()
@@ -526,9 +512,21 @@ run.sim <- function(C = 5,
                                                                      return(eval)
                                                                    }
                                              )
+                                             print(sim.params)
+                                             if(!is.null(directory)){
+                                               dir.create(directory, showWarnings = F)
+                                             }
+                                             write.csv(data.frame(t(sim.res.tot)), 
+                                                       paste(directory, 
+                                                             '/simres_C=', C, 
+                                                             '_nC=', n.C,
+                                                             '_ku=', k.u, 
+                                                             '_kn=', k.n, 
+                                                             '_e1=', e1, 
+                                                             '_e2=', e2, '.tsv', sep=""), 
+                                                       row.names=F)
                                              gc()
-                                             apply(data.frame(sim.res.tot), 1, mean)
-                                             
+                                             return(apply(data.frame(sim.res.tot), 1, mean))
                                            })
                                     names(res4) <- e2.values
                                     res4
@@ -540,11 +538,6 @@ run.sim <- function(C = 5,
                   res2
                 })
   names(res) <- K.u.values
-  
-  if(!is.null(filename)){
-    write.table(res, filename)
-  }
-  
   return(res)
 }
 
@@ -623,7 +616,7 @@ filter.help <- function(res, value, param){
 
 
 #### parse.data ############################################
-# Parse simulation results to extract the dat in a usable
+# Parse simulation results to extract the data in a usable
 # form for a scatterplot. 
 #
 # INPUT:
@@ -1177,4 +1170,3 @@ sqrt.metric <- function(data){
   sqrt <- 1 - (sum(abs(ccm.t - ccm.p)) / count)
   return(sqrt)
 }
-
