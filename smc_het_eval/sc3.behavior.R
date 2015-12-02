@@ -190,6 +190,8 @@ plot.multi.SC3 <- function(){
 #             ordering and the desired ordering summed over all cases
 #           sq - square of the difference in ranks bewteen the scoring metric ordering 
 #             and the desired ordering summed over all cases and then square rooted
+#           spearman - spearman rank correlation between the scoring metric ordering 
+#             and the desired ordering
 #     is.good.greater - logical denoting if the given metric gives good submissions 
 #         larger scores (TRUE) or bad submissions larger scores (FALSE)
 ordering.diff <- function(method="sym_pseudoV", ordering="Copeland", penalty="spearman"){
@@ -212,11 +214,61 @@ ordering.diff <- function(method="sym_pseudoV", ordering="Copeland", penalty="sp
   return(diff)
 }
 
+# Calculate the difference between the actual ordering and the ideal ordering for
+# a weighted average between 3 different metrics, using varying weights for each metric
+#
+# INPUT:
+#     method - string giving the scoring metric to use
+#     ordering - string giving the data column to order by. This is the ordering that
+#         the metric ranking will be compared to
+#     penalty - penalty to use when comparing the two orderings
+#         Options:
+#           abs - absolute value of the difference in ranks bewteen the scoring metric
+#             ordering and the desired ordering summed over all cases
+#           sq - square of the difference in ranks bewteen the scoring metric ordering 
+#             and the desired ordering summed over all cases and then square rooted
+#           spearman - spearman rank correlation between the scoring metric ordering 
+#             and the desired ordering
+#     is.good.greater - logical denoting if the given metric gives good submissions 
+#         larger scores (TRUE) or bad submissions larger scores (FALSE)
+ordering.diff.weights <- function(method=c("pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"), ordering="Copeland", penalty="spearman"){
+  # All Cases SC3
+  rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
+  d = read.csv(file=paste(tsv_dir, "weights3A_all_cases_", paste(method, collapse="_"), ".tsv", sep=""), sep="\t",header=F)
+  # make the header more readable
+  header <- sapply(d[1,], as.character)
+  colnames(d) <- header
+  d <- d[-1,]
+  
+  weight.diff <- sapply(header[-1], function(col){
+    d.wght <- d[,c('Case',col)]
+    colnames(d.wght) <- c('Case', 'Metric')
+    
+    d.wght$Metric <- as.numeric(levels(d.wght$Metric))[d.wght$Metric] # change the metric column from a factor to a numeric value
+    
+    d.wght <- merge(rank, d.wght, by="Case")
+    actual.order <- order(order(d.wght[,"Metric"]))
+    ideal.order <- order(order(d.wght[,ordering]))# order the columns based on the given value
+    
+    if(penalty=="abs"){
+      diff <- sum(abs(actual.order - ideal.order))
+    } else if(penalty == 'sq'){
+      diff <- sqrt(sum((actual.order - ideal.order)^2))
+    } else if(penalty == 'spearman'){
+      n <- length(actual.order)
+      diff <- (6 * (sum((actual.order - ideal.order)^2) / (n * (n^2 - 1))))
+    }
+    print(as.numeric(levels(d[,col]))[d[,col]])
+    print(c(col, diff))
+    return(diff)
+  })
+  names(weight.diff) <- rev(header[-1])
+  return(weight.diff)
+}
+
 #### main #########################################################################################
 # Analyze the different metric behaviors
 main <- function(){
-  
-  
   for(p in penalties){
     diff.tot <- data.frame(matrix(nrow=0, ncol=length(method.names)))
     
@@ -262,6 +314,43 @@ plot.diff <- function(diff.tot){
                  col=diff.colours,
                  sample.order = "increasing",
                  ylimits = c(0,1.1*max(ydata))
+  )
+  
+  print(bp)
+  return(bp)
+}
+
+#### plot.diff.weights #################################################################################
+# Plot the differences between the metric rankings and the desired rankings for
+# a weighted average between 3 different metrics, using varying weights for each metric
+#
+# INPUT:
+#   diff.tot - data frame containing the differences between a desired ranking and a metric
+#       ranking for each desired ranking (each persons personal ranking and the aggregate ranking)
+#       and each metric ranking.
+# OUTPUT:
+#   bp - barplot created from the given data
+plot.diff.weights <- function(method=c("pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"), ordering="Copeland", penalty="spearman"){
+  diff.tot <- ordering.diff.weights(method=method, ordering=ordering, penalty=penalty)
+  diff.colours <- colour.gradient("red", length(diff.tot))
+  # data for bar plot
+  xdata <- names(diff.tot)
+  ydata <-  diff.tot
+  d <- data.frame(xdata=xdata, ydata=ydata)
+  bp <- create.barplot(ydata ~ xdata, 
+                       data.frame(diff.tot),
+                       main = "Difference Between Metric Rankings and Desired Rankings",
+                       main.cex = 1.5,
+                       xaxis.rot = 60,
+                       xaxis.cex = 1,
+                       yaxis.cex = 1,
+                       xlab.label = "Metric",
+                       xlab.cex = 1.5,
+                       ylab.label = "Rank Difference",
+                       ylab.cex = 1.5,
+                       col=diff.colours,
+                       sample.order = "increasing",
+                       ylimits = c(0,1.1*max(ydata))
   )
   
   print(bp)
