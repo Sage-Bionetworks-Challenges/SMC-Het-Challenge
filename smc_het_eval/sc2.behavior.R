@@ -32,10 +32,12 @@ method.names <- c("orig",
 std.values <- c(0, 0.01,0.03,0.05,0.1,0.15,0.2)
 
 ##### plot.SC2.amit ##########################################################################
+# For Scoring Design Paper - Supplementary
 # plot all the figures that Amit made. These include: 
 
 plot.SC2.amit <- function(method='default'){
-  # Scoring behavior for different 'mistake scenarios' including:
+  # For Scoring Design Paper - Main Paper
+  # Scoring behavior for different 'mistake scenarios' including
   #     - splitting one cluster into two
   #     - merging two clusters into one
   #     - assigning all mutations to the same cluster
@@ -53,6 +55,7 @@ plot.SC2.amit <- function(method='default'){
   )
   dev.off()
   
+  # For Scoring Design Paper - Supplementary
   # Scoring behavior for different 'mistake scenarios' but with 10 true clusters (instead of
   # 3 as is the case above)
   d = read.csv(file=paste(tsv_dir, "scoring2A_big_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
@@ -67,6 +70,7 @@ plot.SC2.amit <- function(method='default'){
   )
   dev.off()
   
+  # For Scoring Design Paper - Supplementary
   # Scoring behavior when predicted CCM is created by reassigning mutations to another random cluster
   # (with varying probability)
   d = read.csv(paste(tsv_dir, "scoring2A_random_reassignment_", method, ".tsv", sep=""),sep="\t",header=FALSE)
@@ -82,6 +86,7 @@ plot.SC2.amit <- function(method='default'){
   )
   dev.off()
   
+  # For Scoring Design Paper - Not included
   # Scoring behavior when predicted CCM is created by reassigning mutations to the closest cluster
   # (with varying probability)
   d = read.csv(paste(tsv_dir, "scoring2A_closest_reassignment_", method, ".tsv", sep=""),sep="\t",header=FALSE)
@@ -97,24 +102,26 @@ plot.SC2.amit <- function(method='default'){
   )
   dev.off()
   
-#   # Scoring behavior when predicted CCM is created by adding random zero-mean beta error
-#   # to the true CCM matrix entries (with different values for the concentration parameter in the beta error) 
-#   d = read.csv(paste(tsv_dir, "scoring2B_beta_", method, ".tsv", sep=""),sep="\t",header=FALSE)
-#   colnames(d) = c("Error","Metric")
-#   
-#   png(file=paste(plot_dir, "2B_beta_", method, ".png", sep=""))
-#   print(
-#     ggplot(d, aes(x=as.ordered(Error), y=as.numeric(Metric))) + 
-#       geom_jitter(aes(color=as.ordered(Error)),position = position_jitter(height = 0, width=0.05)) +
-#       stat_summary(fun.y=median, fun.ymin=median, fun.ymax=median, geom="crossbar", width=0.7) +
-#       theme(legend.position="none") + xlab("Concentration Parameter") + ylab("2 Metric") + 
-#       ggtitle(paste("2B Beta Noise - Metric =", method))
-#   )
-#   dev.off()
+  # For Scoring Design Paper - Supplementary (maybe)
+  # Scoring behavior when predicted CCM is created by adding random zero-mean beta error
+  # to the true CCM matrix entries (with different values for the concentration parameter in the beta error) 
+  d = read.csv(paste(tsv_dir, "scoring2B_beta_", method, ".tsv", sep=""),sep="\t",header=FALSE)
+  colnames(d) = c("Error","Metric")
+  
+  png(file=paste(plot_dir, "2B_beta_", method, ".png", sep=""))
+  print(
+    ggplot(d, aes(x=as.ordered(Error), y=as.numeric(Metric))) + 
+      geom_jitter(aes(color=as.ordered(Error)),position = position_jitter(height = 0, width=0.05)) +
+      stat_summary(fun.y=median, fun.ymin=median, fun.ymax=median, geom="crossbar", width=0.7) +
+      theme(legend.position="none") + xlab("Concentration Parameter") + ylab("2 Metric") + 
+      ggtitle(paste("2B Beta Noise - Metric =", method))
+  )
+  dev.off()
 }
 
 
 ##### plot.SC2.certainty.scoring #############################################################
+# For Scoring Design Paper - Supplementary (if at all)
 # TODO: make interactive plots?
 # TODO: combine the plots
 # Create a plot of the effect on using probabilty scoring for multiple scenrios for a given
@@ -186,8 +193,9 @@ plot.SC2.certainty.scoring <- function(method="pseudoV", display=T){
 
 
 ##### plot.SC2.certainty.scoring.err #############################################################
+# For Scoring Design Paper - Supplementary
 # Create a plot of the effect on using probabilty scoring for multiple scenrios for a given
-# scoring method
+# scoring method while also adding some random error to the probabilities
 #
 # INPUT:
 #     method - The scoring metric that was used to create the tsv data
@@ -258,8 +266,9 @@ plot.SC2.certainty.scoring.err <- function(std=0.05, method="pseudoV", display=T
 }
 
 ##### plot.SC2.certainty.multi #############################################################
-# Create a plot of the effect on using probabilty scoring for multiple scenrios for a given
-# scoring method
+# For Scoring Design Paper - Supplementary
+# Create a plot of the effect of using probabilty scoring for multiple scenarios for a given
+# scoring method (multiplot of plot.SC2.certainty.scoring or plot.SC2.certainty.scoring.err plots)
 #
 # INPUT:
 #     method - The scoring metric that was used to create the tsv data

@@ -5,7 +5,7 @@
 library(BoutrosLab.plotting.general)
 
 # Directories for tsv files and plots respectively
-setwd("~/Documents/SMC-Het-Challenge/smc_het_eval")
+setwd("~/Documents/SMC-Het/SMC-Het-Challenge/smc_het_eval")
 tsv_dir = "scoring_metric_data/text_files/"
 plot_dir = "scoring_metric_data/metric_behaviour_plots/"
 
@@ -108,7 +108,7 @@ plot.SC3.amit <- function(){
 #     bp - barplot created
 plot.SC3.all <- function(method="pseudoV", ordering="Aggregate", display=T){
   # All Cases SC3
-  rank <- read.csv(file=paste(tsv_dir, "Rankings of phylogeny mistakes.csv", sep=""), sep=",", header=TRUE)
+  rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
   d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
   colnames(d) = c("Case","Metric")
   d <- merge(rank, d, by="Case")
@@ -194,7 +194,7 @@ plot.multi.SC3 <- function(){
 #         larger scores (TRUE) or bad submissions larger scores (FALSE)
 ordering.diff <- function(method="pseudoV", ordering="Aggregate", penalty="abs", is.good.greater=F){
   # All Cases SC3
-  rank <- read.csv(file=paste(tsv_dir, "Rankings of phylogeny mistakes.csv", sep=""), sep=",", header=TRUE)
+  rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
   d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
   colnames(d) = c("Case","Metric")
   d <- merge(rank, d, by="Case")
@@ -209,6 +209,8 @@ ordering.diff <- function(method="pseudoV", ordering="Aggregate", penalty="abs",
     diff <- sum(abs(actual.order - ideal.order))
   } else if(penalty == 'sq'){
     diff <- sqrt(sum((actual.order - ideal.order)^2))
+  } else if(penalty == 'spearman'){
+    
   }
   return(diff)
 }
