@@ -10,13 +10,13 @@ tsv_dir = "scoring_metric_data/text_files/"
 plot_dir = "scoring_metric_data/metric_behaviour_plots/"
 
 # Lists and dictionaries with info on the metrics and the rankings
-penalties <- c("abs", "sq")
-method.names <- c("orig", "orig_no_cc", "pseudoV", "pseudoV_no_cc", "simpleKL_no_cc", 
-                  "sqrt_no_cc", "sym_pseudoV_no_cc", "pearson_no_cc", "aupr_no_cc", "mcc_no_cc")
+penalties <- c("abs", "sq", "spearman")
+method.names <- c("orig", "orig_nc", "pseudoV", "pseudoV_nc", 
+                  "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc")
 
-ordering.names <- c("Aggregate", "Paul", "Nathan", "Dave", "Adriana", "Peter", "Quaid")
-method.is.good.greater <- list("orig"=T, "orig_no_cc"=T, "pseudoV"=F, "pseudoV_no_cc"=F, "simpleKL_no_cc"=F, 
-                               "sqrt_no_cc"=T, "sym_pseudoV_no_cc"=F, "pearson_no_cc"=T, "aupr_no_cc"=T, "mcc_no_cc"=T)
+ordering.names <- c("Copeland", "Paul", "Nathan", "Dave", "Adriana", "Peter", "Quaid")
+method.is.good.greater <- list("orig"=T, "orig_nc"=T, "pseudoV"=F, "pseudoV_nc"=F, "simpleKL_nc"=F, 
+                               "sqrt_nc"=T, "sym_pseudoV_nc"=F, "pearson_nc"=T, "aupr_nc"=T, "mcc_nc"=T)
 case.groups <- list("NCluster"=c("NClusterOneLineage", "NClusterTwoLineages", "NClusterCorrectLineage"),
                     "OneCluster"=c("OneCluster"),
                     "Phelogeny"=c("ParentIsNieceWithChildren", "ParentIsSiblingWithChildren", "ParentIsCousin", 
@@ -98,7 +98,7 @@ plot.SC3.amit <- function(){
 #     ordering - What parameter to order the cases by. The cases will be sorted in
 #         descending order according to the given parameter
 #         Options:
-#             Aggregate - the aggregate ranking of the cases (from good to bad)
+#             Copeland - the aggregate ranking of the cases (from good to bad) using Coplend score
 #             Nathan, Paul, Dave, Adriana, Peter - an individuals ranking of the cases
 #             Std Dev - the standard deviation of the ranking order across all participants
 #             Case - alphabetical ordering of the cases
@@ -106,10 +106,10 @@ plot.SC3.amit <- function(){
 #     display - logical for whether to print the plot or not
 # OUPUT:
 #     bp - barplot created
-plot.SC3.all <- function(method="pseudoV", ordering="Aggregate", display=T){
+plot.SC3.all <- function(method="pseudoV", ordering="Copeland", display=T){
   # All Cases SC3
   rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
-  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
+  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, "_more_pc_full.tsv", sep=""), sep="\t",header=FALSE)
   colnames(d) = c("Case","Metric")
   d <- merge(rank, d, by="Case")
   d <- merge(df.case.groups, d, by="Case")
@@ -192,25 +192,22 @@ plot.multi.SC3 <- function(){
 #             and the desired ordering summed over all cases and then square rooted
 #     is.good.greater - logical denoting if the given metric gives good submissions 
 #         larger scores (TRUE) or bad submissions larger scores (FALSE)
-ordering.diff <- function(method="pseudoV", ordering="Aggregate", penalty="abs", is.good.greater=F){
+ordering.diff <- function(method="sym_pseudoV", ordering="Copeland", penalty="spearman"){
   # All Cases SC3
   rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
-  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, ".tsv", sep=""), sep="\t",header=FALSE)
+  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, "_more_pc_full.tsv", sep=""), sep="\t",header=FALSE)
   colnames(d) = c("Case","Metric")
   d <- merge(rank, d, by="Case")
-  if(is.good.greater){
-    actual.order <- order(d[,"Metric"])
-  } else{
-    actual.order <- order(-d[,"Metric"])
-  }
-  ideal.order <- order(d[,ordering])# order the columns based on the given value
+  actual.order <- order(order(d[,"Metric"]))
+  ideal.order <- order(order(d[,ordering]))# order the columns based on the given value
   
   if(penalty=="abs"){
     diff <- sum(abs(actual.order - ideal.order))
   } else if(penalty == 'sq'){
     diff <- sqrt(sum((actual.order - ideal.order)^2))
   } else if(penalty == 'spearman'){
-    
+    n <- length(actual.order)
+    diff <- (6 * (sum((actual.order - ideal.order)^2) / (n * (n^2 - 1))))
   }
   return(diff)
 }
@@ -247,10 +244,10 @@ main <- function(){
 #   bp - barplot created from the given data
 plot.diff <- function(diff.tot){
   diff.colours <- colour.gradient("red", dim(diff.tot)[2])
-  diff.tot <- diff.tot[,order(diff.tot["Aggregate",])]
+  diff.tot <- diff.tot[,order(diff.tot["Copeland",])]
   # data for bar plot
   xdata <- colnames(diff.tot)
-  ydata <-  diff.tot["Aggregate",]
+  ydata <-  diff.tot["Copeland",]
   bp <- create.barplot(ydata ~ xdata, 
                  diff.tot,
                  main = "Difference Between Metric Rankings and Desired Rankings",
