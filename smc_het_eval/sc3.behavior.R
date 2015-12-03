@@ -11,8 +11,12 @@ plot_dir = "scoring_metric_data/metric_behaviour_plots/"
 
 # Lists and dictionaries with info on the metrics and the rankings
 penalties <- c("abs", "sq", "spearman")
-method.names <- c("orig", "orig_nc", "pseudoV", "pseudoV_nc", 
-                  "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc")
+method.names <- list("orig", "orig_nc", "pseudoV", "pseudoV_nc", 
+                  "sqrt_nc", "sym_pseudoV_nc", "pearson_nc", "aupr_nc", "mcc_nc", 
+                  c('pseudoV_nc', 'mcc_nc', 'pearson_nc'),
+                  c('pseudoV_nc', 'pearson_nc', 'sym_pseudoV_nc'),
+                  c('aupr_nc', 'sqrt_nc', 'sym_pseudoV_nc'),
+                  c('aupr_nc', 'sqrt_nc', 'sym_pseudoV_nc', 'pearson_nc'))
 
 ordering.names <- c("Copeland", "Paul", "Nathan", "Dave", "Adriana", "Peter", "Quaid")
 method.is.good.greater <- list("orig"=T, "orig_nc"=T, "pseudoV"=F, "pseudoV_nc"=F, "simpleKL_nc"=F, 
@@ -104,13 +108,20 @@ plot.SC3.amit <- function(){
 #             Case - alphabetical ordering of the cases
 #             Metric - the metric score of the cases
 #     display - logical for whether to print the plot or not
+#     pc - number of pseudo counts to use with the method
+#         Options:
+#           more - sqrt(n) pseudo counts where n = # of SSMs
+#           less - log(n) pseudo counts
+#           none - no pseudo counts
+#     full - logical for whether to consider the full CCM, and AD matrix for the method (as opposed to just the upper triangular part)
 # OUPUT:
 #     bp - barplot created
-plot.SC3.all <- function(method="pseudoV", ordering="Copeland", display=T){
+plot.SC3.all <- function(method="pseudoV", ordering="Copeland", display=T, pc='more', m_size='full'){
   # All Cases SC3
+  
   rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
-  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, "_more_pc_full.tsv", sep=""), sep="\t",header=FALSE)
-  colnames(d) = c("Case","Metric")
+  d <- get.scoring.data(method=method, pc=pc, m_size=m_size)
+  
   d <- merge(rank, d, by="Case")
   d <- merge(df.case.groups, d, by="Case")
   d <- d[order(d[,ordering]),] # order the columns based on the given value
@@ -150,6 +161,42 @@ plot.SC3.all <- function(method="pseudoV", ordering="Copeland", display=T){
     print(bp)
   }
   return(list(bp=bp, xlims=xlims))
+}
+
+# Helper function for reading in scoring data for all mistake scenarios 
+# for a given method and parameter settings
+# INPUT:
+#     method - The scoring metric that was used to create the tsv data
+#     ordering - What parameter to order the cases by. The cases will be sorted in
+#         descending order according to the given parameter
+#         Options:
+#             Copeland - the aggregate ranking of the cases (from good to bad) using Coplend score
+#             Nathan, Paul, Dave, Adriana, Peter - an individuals ranking of the cases
+#             Std Dev - the standard deviation of the ranking order across all participants
+#             Case - alphabetical ordering of the cases
+#             Metric - the metric score of the cases
+#     display - logical for whether to print the plot or not
+#     pc - number of pseudo counts to use with the method
+#         Options:
+#           more - sqrt(n) pseudo counts where n = # of SSMs
+#           less - log(n) pseudo counts
+#           none - no pseudo counts
+#     full - logical for whether to consider the full CCM, and AD matrix for the method (as opposed to just the upper triangular part)
+# OUPUT:
+get.scoring.data <- function(method="sym_pseudoV_nc", ordering="Copeland", display=T, pc='more', m_size='full'){
+  # find the correct file extension
+  if(pc == 'more'){ # pseudo count extension
+    pc_ext = '_more_pc'
+  } else if(pc == 'less'){
+    pc_ext = ''
+  } else{
+    pc_ext = '_no_pc'
+  }
+  m_size_ext = paste('_', m_size, sep='')
+  
+  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", paste(method, collapse='_'), pc_ext, m_size_ext, ".tsv", sep=""), sep="\t",header=FALSE)
+  colnames(d) = c("Case","Metric")
+  return(d)
 }
 
 #### plot.multi.SC3 ####################################################
@@ -192,13 +239,22 @@ plot.multi.SC3 <- function(){
 #             and the desired ordering summed over all cases and then square rooted
 #           spearman - spearman rank correlation between the scoring metric ordering 
 #             and the desired ordering
+#     pc - number of pseudo counts to use with the method
+#         Options:
+#           more - sqrt(n) pseudo counts where n = # of SSMs
+#           less - log(n) pseudo counts
+#           none - no pseudo counts
+#     full - size of matrices (for co-clustering and ancestor-descendant) to use with the method
+#         Options:
+#           full - full matrix
+#           triu - upper triangular part of the matrix 
 #     is.good.greater - logical denoting if the given metric gives good submissions 
 #         larger scores (TRUE) or bad submissions larger scores (FALSE)
-ordering.diff <- function(method="sym_pseudoV", ordering="Copeland", penalty="spearman"){
-  # All Cases SC3
+ordering.diff <- function(method="sym_pseudoV", ordering="Copeland", penalty="spearman", pc='more', m_size='full'){
+  # All Cases SC3                   
   rank <- read.csv(file=paste(tsv_dir, "aggregate_scenario_rankings.csv", sep=""), sep=",", header=TRUE)
-  d = read.csv(file=paste(tsv_dir, "scoring3A_all_cases_", method, "_more_pc_full.tsv", sep=""), sep="\t",header=FALSE)
-  colnames(d) = c("Case","Metric")
+  d <- get.scoring.data(method=method, pc=pc, m_size=m_size)
+  
   d <- merge(rank, d, by="Case")
   actual.order <- order(order(d[,"Metric"]))
   ideal.order <- order(order(d[,ordering]))# order the columns based on the given value
@@ -320,17 +376,111 @@ plot.diff <- function(diff.tot){
   return(bp)
 }
 
+#### plot.diff.pc #################################################################################
+# Plot the differences between the metric rankings and the desired rankings for different pseudo count levels
+#
+# INPUT:
+#     method - string giving the scoring metric to use
+#     ordering - string giving the data column to order by. This is the ordering that
+#         the metric ranking will be compared to
+#     penalty - penalty to use when comparing the two orderings
+#         Options:
+#           abs - absolute value of the difference in ranks bewteen the scoring metric
+#             ordering and the desired ordering summed over all cases
+#           sq - square of the difference in ranks bewteen the scoring metric ordering 
+#             and the desired ordering summed over all cases and then square rooted
+#           spearman - spearman rank correlation between the scoring metric ordering 
+#             and the desired ordering
+# OUTPUT:
+#   bp - barplot created from the given data
+plot.diff.pc <- function(methods=method.names, ordering="Copeland", penalty="spearman"){
+  pseudo_counts <- c('more', 'less', 'none') # possible pseudo count values
+  m_sizes <- c('full', 'triu') # possible matrix sizes to use when evaluating SC3
+  params <- expand.grid(m_sizes, pseudo_counts) # combine both into a data frame
+  
+  diff.tot <- lapply(methods,  
+                    function(m){
+                      res <- apply(params, 1,
+                                   function(p){
+                                     ordering.diff(m, pc=p[2], m_size=p[1])
+                                   })
+                      df <- data.frame(res, method=paste(m, collapse='+'), params=apply(params, 1, function(p){paste(p, collapse='.PC')}))
+                      return(df)
+                    })
+  diff.tot <- do.call('rbind', diff.tot)
+
+  diff.colours <- default.colours(dim(params)[1]) # barplot colours for each parameter setting
+  diff.groups <- levels(unique(diff.tot$params))
+  
+  print(unique(diff.tot$params))
+  legend <- list(
+    right = list(
+      fun = draw.key,
+      args = list(
+        key = list(
+          points = list(
+            col = 'black',
+            pch = 22,
+            cex = 2,
+            fill = diff.colours
+          ),
+          text = list(
+            lab = diff.groups
+          ),
+          padding.text = 3,
+          cex = 1
+        )
+      ),
+      x = 0.65,
+      y = 0.95
+    )
+  )
+  
+  # data for bar plot
+  xdata <- diff.tot$method
+  ydata <-  diff.tot$res
+  bp <- create.barplot(ydata ~ xdata, 
+                       diff.tot,
+                       groups=params,
+                       main = "Difference Between Metric Rankings and Desired Rankings",
+                       main.cex = 1.5,
+                       xaxis.rot = 60,
+                       xaxis.cex = 1,
+                       yaxis.cex = 1,
+                       xlab.label = "Metric",
+                       xlab.cex = 1.5,
+                       ylab.label = "Rank Difference",
+                       ylab.cex = 1.5,
+                       col=diff.colours,
+                       legend = legend,
+                       #sample.order = "increasing",
+                       ylimits = c(0,1.1*max(ydata))
+  )
+  
+  print(bp)
+  return(bp)
+}
+
 #### plot.diff.weights #################################################################################
 # Plot the differences between the metric rankings and the desired rankings for
 # a weighted average between 3 different metrics, using varying weights for each metric
 #
 # INPUT:
-#   diff.tot - data frame containing the differences between a desired ranking and a metric
-#       ranking for each desired ranking (each persons personal ranking and the aggregate ranking)
-#       and each metric ranking.
+#     methods - list of methods to consider (methods are either strings representing a single method or 
+#         vectors of strings representing a combination of metrics)
+#     ordering - string giving the data column to order by. This is the ordering that
+#         the metric ranking will be compared to
+#     penalty - penalty to use when comparing the two orderings
+#         Options:
+#           abs - absolute value of the difference in ranks bewteen the scoring metric
+#             ordering and the desired ordering summed over all cases
+#           sq - square of the difference in ranks bewteen the scoring metric ordering 
+#             and the desired ordering summed over all cases and then square rooted
+#           spearman - spearman rank correlation between the scoring metric ordering 
+#             and the desired ordering
 # OUTPUT:
 #   bp - barplot created from the given data
-plot.diff.weights <- function(method=c("pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"), ordering="Copeland", penalty="spearman"){
+plot.diff.weights <- function(methods=c("pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"), ordering="Copeland", penalty="spearman"){
   diff.tot <- ordering.diff.weights(method=method, ordering=ordering, penalty=penalty)
   diff.colours <- colour.gradient("red", length(diff.tot))
   # data for bar plot
@@ -356,3 +506,5 @@ plot.diff.weights <- function(method=c("pseudoV_nc", "pearson_nc", "sym_pseudoV_
   print(bp)
   return(bp)
 }
+
+
