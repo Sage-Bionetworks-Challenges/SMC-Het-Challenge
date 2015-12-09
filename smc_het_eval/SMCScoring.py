@@ -212,8 +212,8 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
 
     func_dict = {"orig" : calculate2_orig,
             "sqrt" : calculate2_sqrt,
-            "pseudoV": calculate2_pseudoV_norm,
-            "sym_pseudoV": calculate2_sym_pseudoV_norm,
+            "pseudoV": calculate2_pseudoV,
+            "sym_pseudoV": calculate2_sym_pseudoV,
             "spearman": calculate2_spearman,
             "pearson": calculate2_pearson,
             "aupr": calculate2_aupr,
@@ -268,6 +268,7 @@ def calculate2_orig(pred,truth, full_matrix=True):
     res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return 1 - res
+
 
 def calculate2_sqrt(pred,truth, full_matrix=True):
     n = truth.shape[0]
@@ -555,7 +556,7 @@ def validate3B(data, ccm, nssms):
 def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
     return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,np.dot(truth_ca,truth_ca.T),truth_ad)
 
-def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", weights=None, verbose=False, pseudo_counts=True, full_matrix=True):
+def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", weights=None, verbose=False, pseudo_counts=True, full_matrix=True, in_mat=2):
     """Calculate the score for subchallenge 3 using the given metric or a weighted average of the
     given metrics, if more than one are specified.
 
@@ -568,9 +569,16 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
     :param verbose: boolean for whether to display information about the score calculations
     Only used if 'method' is a list - in this case must be a list of numbers of the same length as 'method'.
     :param full_matrix: boolean for whether to use the full CCM/AD matrix when calculating the score
+    :param in_mat: number representing which matrices to use in calculating the SC3 scoring metric
+        Options:
+            1 - use all input matrics i.e. CCM, ADM, ADM^T and CM
+            2 - use all except co-clustering matrix (CCM)
+            3 - use all except ancestor descendant matrix (ADM)
+            4 - use all except ADM^T
+            5 - use all except cousin matrix (CM)
     :return: score for the given submission to subchallenge 3 using the given metric
     """
-    larger_is_worse_methods = ['sym_pseudoV_nc', 'pseudoV_nc', 'pseudoV', "simpleKL_nc"] # methods where a larger score is worse
+    larger_is_worse_methods = ['sym_pseudoV_nc', 'sym_pseudoV', 'pseudoV_nc', 'pseudoV', "simpleKL_nc", 'simpleKL'] # methods where a larger score is worse
 
     if pseudo_counts:
         if isinstance(pseudo_counts, int):
@@ -589,11 +597,14 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
         onecluster_ccm, onecluster_ad = mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad)
 
     if isinstance(method, list):
-        res = [calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose) for m in method] # calculate the score for each method
+        res = [calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad,
+                                    method=m, verbose=verbose, in_mat=in_mat) for m in method] # calculate the score for each method
 
         # normalize the scores to be between (worst of NCluster score and OneCluster score) and (Truth score)
-        ncluster_score = [calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose, full_matrix=full_matrix) for m in method]
-        onecluster_score = [calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad, method=m, verbose=verbose, full_matrix=full_matrix) for m in method]
+        ncluster_score = [calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad,
+                                               method=m, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat) for m in method]
+        onecluster_score = [calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad,
+                                                 method=m, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat) for m in method]
         for i in range(len(method)):
             if method[i] in larger_is_worse_methods: # normalization for methods where a larger score is worse
                 worst_score = max(ncluster_score[i], onecluster_score[i]) # worst of NCluster and OneCluster scores
@@ -612,11 +623,14 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
         weights = np.array(weights) / float(sum(weights)) # normalize the weights
         score = sum(np.multiply(res, weights))
     else:
-        score =  calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
+        score =  calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad,
+                                      method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
 
         # normalize the score to be between (worst of NCluster score and OneCluster score) and (Truth score) - similar to above
-        ncluster_score = calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
-        onecluster_score = calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad, method=method, verbose=verbose, full_matrix=full_matrix)
+        ncluster_score = calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad,
+                                              method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
+        onecluster_score = calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad,
+                                                method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
         if method in larger_is_worse_methods:
             worst_score = max(ncluster_score, onecluster_score)
             score = 1 - (score / worst_score)
@@ -625,8 +639,19 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
             score = (score - worst_score) / (1 - worst_score)
     return score
 
+# dictionary of method names and their corresponding metric functions
+method_funcs = {"pseudoV": calculate2_pseudoV,
+               "simpleKL": calculate2_simpleKL,
+               "sqrt": calculate2_sqrt,
+               "sym_pseudoV": calculate2_sym_pseudoV,
+               "pearson": calculate2_pearson,
+                "spearman": calculate2_spearman,
+               "aupr":calculate2_aupr,
+                "mcc": calculate2_pearson,
+                "orig": calculate2_orig
+    }
 
-def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc", verbose=False, full_matrix=True):
+def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, method="orig_nc", verbose=False, full_matrix=True, in_mat=2):
     """Calculate the score for subchallenge 3 using the given metric
 
     :param pred_ccm: predicted co-clustering matrix
@@ -636,67 +661,15 @@ def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, method="orig_nc
     :param method: method to use when evaluating the submission
     :param verbose: boolean for whether to display information about the score calculations
     :param full_matrix: boolean for whether to use the full CCM/AD matrix when calculating the score
+    :param in_mat: number representing which matrices to use in calculating the SC3 scoring metric
+        Options:
+            1 - use all input matrics i.e. CCM, ADM, ADM^T and CM
+            2 - use all except co-clustering matrix (CCM)
+            3 - use all except ancestor descendant matrix (ADM)
+            4 - use all except ADM^T
+            5 - use all except cousin matrix (CM)
     :return: score for the given submission to subchallenge 3 using the given metric
     """
-    func = {"orig" : calculate3_orig,
-               "orig_nc": calculate3_orig_nc,
-               "pseudoV": calculate3_pseudoV,
-    }.get(method, calculate3_other_nc)
-    return func(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=verbose, method=method, full_matrix=full_matrix)
-
-# Include a method field to make code more easily generalizable
-def calculate3_orig(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig", full_matrix=True):
-    n = truth_ccm.shape[0]
-    indices = np.triu_indices(n,k=1)
-    cc_res = np.sum(np.abs(pred_ccm[indices] - truth_ccm[indices])*truth_ccm[indices])
-    ad_res = np.sum(np.abs(pred_ad.flatten() - truth_ad.flatten()) * truth_ad.flatten())
-    truth_cous = 1 - truth_ccm[indices] - truth_ad[indices] - truth_ad.T[indices]
-    pred_cous = 1 - pred_ccm[indices] - pred_ad[indices] - pred_ad.T[indices]
-    cous_res = np.sum(np.abs(pred_cous - truth_cous) * truth_cous)
-    count = (n**2 - n )*2.0
-    res = (cc_res + ad_res + cous_res ) / count
-    return 1 - res
-
-# Include a method field to make code more easily generalizable
-def calculate3_orig_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, verbose=False, method="orig_nc", full_matrix=True):
-    n = truth_ccm.shape[0]
-    indices = np.triu_indices(n,k=1)
-    ad_res = np.sum(np.abs(pred_ad.flatten() - truth_ad.flatten()) * truth_ad.flatten())
-    truth_cous = 1 - truth_ccm[indices] - truth_ad[indices] - truth_ad.T[indices]
-    pred_cous = 1 - pred_ccm[indices] - pred_ad[indices] - pred_ad.T[indices]
-    cous_res = np.sum(np.abs(pred_cous - truth_cous) * truth_cous)
-    count = (n**2 - n )*2.0 - np.sum(truth_ccm)
-    res = (ad_res + cous_res ) / count
-    return 1 - res
-    
-# Use the pseudoV measure
-# Include a method field to make code more easily generalizable
-def calculate3_pseudoV(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV", full_matrix=True):
-    # calculate the result without the co-clustering matrix
-    res = calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=rnd, verbose=verbose, method="pseudoV_nc",)
-        
-    cpred_ccm = np.copy(pred_ccm)
-    ctruth_ccm = np.copy(truth_ccm)
-    
-    # Calculate the normalized pseudo V measure for each
-    cc_res = calculate2_pseudoV_norm(cpred_ccm, ctruth_ccm, rnd)
-    
-    res =  (cc_res / 4.0) + (3 * res / 4.0 )
-    if verbose:
-        print("CC: %s" % str(cc_res))
-    return res
-    
-# Use one of the SC2 metrics without using the co-clustering matrix
-def calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbose=False, method="pseudoV", full_matrix=True):
-    methods_SC2 = {"pseudoV_nc": calculate2_pseudoV,
-               "simpleKL_nc": calculate2_simpleKL,
-               "sqrt_nc": calculate2_sqrt,
-               "sym_pseudoV_nc": calculate2_sym_pseudoV,
-               "pearson_nc": calculate2_pearson,
-                "spearman_nc": calculate2_spearman,
-               "aupr_nc":calculate2_aupr,
-                "mcc_nc": calculate2_pearson
-    }
     # Get the cousin matrices
     truth_cous = 1 - truth_ccm - truth_ad - truth_ad.T
     pred_cous = 1 - pred_ccm - pred_ad - pred_ad.T
@@ -706,28 +679,40 @@ def calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbos
         if(np.amax(pred_cous) > 1 or np.amin(pred_cous) < 0):
             Warning("Cousin Predicted is wrong. Maximum matrix entry is greater than 1 or minimum matrix entry is less than 0")
 
-    # Calculate the metric measure for each matrix
-    func = methods_SC2[method]
-    if method in ("pseudoV_nc",
-               "simpleKL_nc",
-               "sym_pseudoV_nc"):
-        ad_res = func(pred_ad, truth_ad, rnd, full_matrix=full_matrix)
-        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), rnd, full_matrix=full_matrix)
-        cous_res = func(pred_cous, truth_cous, rnd, full_matrix=full_matrix)
-        results = (ad_res, ad_res_t, cous_res)
-    elif method in ("pearson_nc",
-                    "spearman_nc",
-                    "mcc_nc"):
-
-        ad_res = func(pred_ad, truth_ad, full_matrix=full_matrix)
-        ad_res_t = None
-        cous_res = func(pred_cous, truth_cous, full_matrix=full_matrix)
-        results = (ad_res, cous_res)
+    # Calculate the metric measure for each specified matrix
+    func = method_funcs[method]
+    results = []
+    ccm_res, ad_res, ad_res_t, cous_res = [float('nan')] * 4
+    if method in ("pseudoV",
+               "simpleKL",
+               "sym_pseudoV"):
+        if in_mat != 2:
+            ccm_res = func(pred_ccm, truth_ccm, rnd, full_matrix=full_matrix)
+            results.append(ccm_res)
+        if in_mat != 3:
+            ad_res = func(pred_ad, truth_ad, rnd, full_matrix=full_matrix)
+            results.append(ad_res)
+        if in_mat != 4:
+            ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), rnd, full_matrix=full_matrix)
+            results.append(ad_res_t)
+        if in_mat != 5:
+            cous_res = func(pred_cous, truth_cous, rnd, full_matrix=full_matrix)
+            results.append(cous_res)
     else:
-        ad_res = func(pred_ad, truth_ad, full_matrix=full_matrix)
-        ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), full_matrix=full_matrix)
-        cous_res = func(pred_cous, truth_cous, full_matrix=full_matrix)
-        results = (ad_res, ad_res_t, cous_res)
+        if in_mat != 2:
+            ccm_res = func(pred_ccm, truth_ccm, full_matrix=full_matrix)
+            results.append(ccm_res)
+        if in_mat != 3:
+            ad_res = func(pred_ad, truth_ad, full_matrix=full_matrix)
+            results.append(ad_res)
+        if in_mat != 4 or method in ('mcc',
+                                     'pearson',
+                                     'spearman'):
+            ad_res_t = func(np.transpose(pred_ad), np.transpose(truth_ad), full_matrix=full_matrix)
+            results.append(ad_res_t)
+        if in_mat != 5:
+            cous_res = func(pred_cous, truth_cous, full_matrix=full_matrix)
+            results.append(cous_res)
 
     res =  0
     n = 0
@@ -739,8 +724,8 @@ def calculate3_other_nc(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, verbos
         res = res / float(n)
 
     if verbose:
-        print("%s for Matrices\nAD: %s, AD Transpose: %s, Cousin: %s\nResult: %s" %
-              (method, str(ad_res),str(ad_res_t),str(cous_res), str(res)))
+        print("%s for Matrices\nCC: %s, AD: %s, AD Transpose: %s, Cousin: %s\nResult: %s" %
+              (method, str(ccm_res), str(ad_res),str(ad_res_t),str(cous_res), str(res)))
     return res
 
 def parseVCFSimple(data):
