@@ -7,6 +7,12 @@
 #### PREAMBLE #################################################
 #library(BoutrosLab.plotting.general)
 #library(BoutrosLab.statistics.classification)
+library(pROC)
+script.dir <- dirname(sys.frame(1)$ofile)
+plots.dir <- './scoring_metric_data/sim_plots/'
+text.dir <- './scoring_metric_data/sim_text/'
+setwd(script.dir)
+
 
 #### SIMULATION PARAMETERS ####################################
 # flag for whether to print information about the simulation status
@@ -141,12 +147,12 @@ assign.noise.help <- function(class.elem, toassign){
 get.ccm <- function(data){
   k <- dim(data)[[1]]
   c <- dim(data)[[2]]
-  n.c <- sum(data[,1])
-  ccm.t <- ccm.p <- data.frame(matrix(0,nrow=n.c*c,ncol=n.c*c))
+  n.c <- apply(data, 2, sum) # number of elements in each class, could be slightly different due to rounding
+  ccm.t <- ccm.p <- data.frame(matrix(0,nrow=sum(data),ncol=sum(data)))
   
   # Assign values to ccm.t
   for(i in 1:c){
-    ccm.t[(((i-1)*n.c)+1):(i*n.c),(((i-1)*n.c)+1):(i*n.c)] <- 1
+    ccm.t[(sum(n.c[1:(i-1)])+1):sum(n.c[1:i]),(sum(n.c[1:(i-1)])+1):sum(n.c[1:i])] <- 1
   }
   
   # Assign values to ccm.p
@@ -159,13 +165,19 @@ get.ccm <- function(data){
     for(j in 1:c){ # class index
       if(data[i,j] > 0){
         if(i > 1){
-          start <- sum(data[1:(i-1),j]) + 1
+          start <- sum(data[0:(i-1),j]) + 1
         } else{
           start <- 1
         }
-        k.elem <- c(k.elem, 
-                    ((j-1) * n.c + start):
-                      ((j-1) * n.c + start + data[i,j] - 1))
+        
+        if(j > 1){
+          k.elem <- c(k.elem, 
+                      (sum(n.c[1:(j-1)]) + start):
+                        (sum(n.c[1:(j-1)]) + start + data[i,j] - 1))
+        } else{
+          k.elem <- c(k.elem, 
+                      (start):(start + data[i,j] - 1))
+        }
       }
     }
     ccm.p[k.elem,k.elem] <- 1
@@ -485,65 +497,67 @@ create.data <- function(n.iter.value = NULL, #why is this here...
 #    res - nested list of lists with each dimension corresponding to
 #       one of the iterated parameters from the input
 
-run.sim <- function(C = 5,
-                    K.u.values=2:8, 
+run.sim <- function(C.values = 4:5,
+                    K.u.values=7:10, 
                     K.n.values=0:1, 
                     e1.values=c(0,0.033,0.066,0.1), 
                     e2.values=c(0,0.066,0.133,0.2),
-                    directory = NULL
+                    directory = text.dir
                     ){
-  C <<- C
   res <- list()
-  res <- lapply(K.u.values,
-                function(k.u){
-                  res2 <- lapply(K.n.values,
-                         function(k.n){
-                           res3 <- lapply(e1.values,
-                                  function(e1){
-                                    res4 <- lapply(e2.values,
-                                           function(e2){
-                                             #print.sim()
-                                             sim.res.tot <- sapply(1:n.iter, 
-                                                                   function(x){
-                                                                     print(get.param.str())
-                                                                     data <- create.data(,,,k.u,k.n,e1,e2)
-                                                                     eval <- evaluate(data)
-                                                                     print("...Complete")
-                                                                     return(eval)
-                                                                   }
-                                             )
-                                             print(sim.params)
-                                             if(!is.null(directory)){
-                                               dir.create(directory, showWarnings = F)
-                                             }
-                                             write.csv(data.frame(t(sim.res.tot)), 
-                                                       paste(directory, 
-                                                             '/simres_C=', C, 
-                                                             '_nC=', n.C,
-                                                             '_ku=', k.u, 
-                                                             '_kn=', k.n, 
-                                                             '_e1=', e1, 
-                                                             '_e2=', e2, '.tsv', sep=""), 
-                                                       row.names=F)
-                                             gc()
-                                             return(apply(data.frame(sim.res.tot), 1, mean))
-                                           })
-                                    names(res4) <- e2.values
-                                    res4
-                                  })
-                           names(res3) <- e1.values
-                           res3
-                         })
-                  names(res2) <- K.n.values
-                  res2
-                })
-  names(res) <- K.u.values
+  for(c in C.values){
+    C <<- c
+    res <- lapply(K.u.values,
+                  function(k.u){
+                    res2 <- lapply(K.n.values,
+                           function(k.n){
+                             res3 <- lapply(e1.values,
+                                    function(e1){
+                                      res4 <- lapply(e2.values,
+                                             function(e2){
+                                               #print.sim()
+                                               sim.res.tot <- sapply(1:n.iter, 
+                                                                     function(x){
+                                                                       print(get.param.str())
+                                                                       data <- create.data(,,,k.u,k.n,e1,e2)
+                                                                       eval <- evaluate(data)
+                                                                       print("...Complete")
+                                                                       return(eval)
+                                                                     }
+                                               )
+                                               print(sim.params)
+                                               if(!is.null(directory)){
+                                                 dir.create(directory, showWarnings = F)
+                                                 write.csv(data.frame(t(sim.res.tot)), 
+                                                           paste(directory, 
+                                                                 'simres_C=', C, 
+                                                                 '_nC=', n.C,
+                                                                 '_ku=', k.u, 
+                                                                 '_kn=', k.n, 
+                                                                 '_e1=', e1, 
+                                                                 '_e2=', e2, '.tsv', sep=""), 
+                                                           row.names=F)
+                                               }
+                                               gc()
+                                               return(apply(data.frame(sim.res.tot), 1, mean))
+                                             })
+                                      names(res4) <- e2.values
+                                      res4
+                                    })
+                             names(res3) <- e1.values
+                             res3
+                           })
+                    names(res2) <- K.n.values
+                    res2
+                  })
+    names(res) <- K.u.values
+  }
   return(res)
 }
 
 #### DATA OUTPUT/ANALYSIS ###################################
 
-#### parse.data #############################################
+#### filter.data #############################################
 # Extract simulation data with the given parameter values 
 # fixed. If a parameter value is not specified then all values
 # of that parameter are returned.
@@ -592,7 +606,7 @@ filter.data <- function(res,
   return(res)
 }
 
-# Helper function for parsing data
+# Helper function for filtering data
 # INPUT:
 #    res - nested list of lists of simulation results, 
 #       may be lower dimension than original simulation results
@@ -971,11 +985,262 @@ plot.sim.batch <- function(res, diff=F, metrics=NA){
       print(param.values)
       param.values[param] <- NA
       
-      filename <- paste("./scoring_metric_data/sim_plots/scoringmetricplot_param=",param, "_",get.param.str(param.values), ".png", sep="")
+      filename <- paste(plots.dir, "scoringmetricplot_param=",param, "_",get.param.str(param.values), ".png", sep="")
       
       plot.sim(res, param.values,metrics,diff, filename)
     }
   }  
+}
+
+#### test.properties #################################
+# Test metrics for the 4 desireable properties identified for 
+# SC2 and SC3 scoring metrics in SMC-Het. Wrapper function for
+# one of four helper functions for each of the 4 properties
+#
+# INPUT:
+#     prop - integer in {1,2,3,4}; index for the property to test
+#     metric - vector of metrics on which to test the property. 
+#       If NULL then all metrics are tested
+# OUTPUT:
+#     res - proportion of the time the given metrics satisfied
+#       the given property throughout the simulation
+test.properties <- function(prop=1, metric=NULL){
+  prop.funcs <- c(test.p1, test.p2, test.p3, test.p4) # functions for different properties
+  
+  prob.satisfied <- prop.funcs[1](metric = metric)
+  return(prob.satisfied)
+}
+
+# Test property 1 - the metric score gets better as the number of
+#                 predicted clusters increases if the number of predicted
+#                 clusters is less than the true number of clusters
+# 
+test.p1 <- function(metric=NULL,
+                    C.values = 4:7,
+                    K.u.values=2:10, 
+                    K.n.values=1:0, 
+                    e1.values=c(0,0.033,0.066,0.1), 
+                    e2.values=c(0,0.066,0.133,0.2),
+                    directory = text.dir){
+  # number of parameter settings being considered
+  count.tot <- 0
+  count.metrics <- NULL
+  
+  for(C in C.values){
+    K.u.values.less <- K.u.values[K.u.values <= C]
+    count.tot <- count.tot + (length(e1.values) * length(e2.values) * length(K.n.values) * (length(K.u.values.less)) * (length(K.u.values.less) - 1) / 2)
+    for(e1 in e1.values){ # for each parameter setting, not including K.u
+      for(e2 in e2.values){
+        for(k.n in K.n.values){
+          for(k.u.1 in K.u.values.less){ # for all K.u values <= C
+            for(k.u.2 in K.u.values.less[K.u.values.less > k.u.1]){ # and for all 'jump' sizes <= (C - k.u.1)          
+              d.1 <- read.csv(paste(directory,
+                                    'simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u.1, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1, 
+                                    '_e2=', e2, '.tsv', sep=""), header=T)
+              d.2 <- read.csv(paste(directory,  
+                                    'simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u.2, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1, 
+                                    '_e2=', e2, '.tsv', sep=""), header=T)
+              if(!is.null(metric)){ # look at only the metrics specified
+                d.1 <- d.1[metric]
+                d.2 <- d.2[metric]
+              }
+              diff <- d.2 - d.1 # difference in the metric scores between the two parameter settings
+              if(is.null(count.metrics)){ # setup to track the number of parameter settings that satisfy P1 if it hasn't been done already
+                count.metrics <- rep(0, length(diff))
+              }
+              count.metrics <- count.metrics + (diff > 0)
+              if(sum(diff <= 0) > 1){
+                print(paste('C:', C, 'Kn:', k.n, 'Ku1:', k.u.1, 'Ku2:', k.u.2, 'eps1:', e1, 'eps2', e2))
+                print(diff)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return(count.metrics / count.tot)
+}
+
+# Test property 2 - the metric score gets worse as the number of
+#                 predicted clusters increases if the number of predicted
+#                 clusters is greater than the true number of clusters
+# 
+test.p2 <- function(metric=NULL,
+                    C.values = 4:7,
+                    K.u.values=2:10, 
+                    K.n.values=0:1, 
+                    e1.values=c(0,0.033,0.066,0.1), 
+                    e2.values=c(0,0.066,0.133,0.2),
+                    directory = text.dir){
+  # number of parameter settings being considered
+  count.tot <- 0 
+  count.metrics <- NULL
+  
+  for(C in C.values){
+    K.u.values.more <- K.u.values[K.u.values >= C]
+    count.tot <- count.tot + (length(e1.values) * length(e2.values) * length(K.n.values) * (length(K.u.values.more)) * (length(K.u.values.more) - 1) / 2)
+    for(e1 in e1.values){ # for each parameter setting, not including K.u
+      for(e2 in e2.values){
+        for(k.n in K.n.values){
+          for(k.u.1 in K.u.values.more){ # for all K.u values >= C
+            for(k.u.2 in K.u.values.more[K.u.values.more > k.u.1]){ # and for all 'jump' sizes where K.u is increasing        
+              d.1 <- read.csv(paste(directory,
+                                    '/simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u.1, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1, 
+                                    '_e2=', e2, '.tsv', sep=""), header=T)
+              d.2 <- read.csv(paste(directory,  
+                                    '/simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u.2, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1, 
+                                    '_e2=', e2, '.tsv', sep=""), header=T)
+              if(!is.null(metric)){ # look at only the metrics specified
+                d.1 <- d.1[metric]
+                d.2 <- d.2[metric]
+              }
+              diff <- d.1 - d.2 # difference in the metric scores between the two parameter settings
+              if(is.null(count.metrics)){ # setup to track the number of parameter settings that satisfy P2 if it hasn't been done already
+                count.metrics <- rep(0, length(diff))
+              }
+              count.metrics <- count.metrics + (diff > 0) # if the difference is positive then it satisfies P2
+              
+              if(sum(diff <= 0) > 1){
+                print(paste('C:', C, 'Kn:', k.n, 'Ku1:', k.u.1, 'Ku2:', k.u.2, 'eps1:', e1, 'eps2', e2))
+                print(diff)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return(count.metrics / count.tot)
+}
+
+# Test property 3 - the metric score gets worse as epsilon1 (the proportion of
+#             items assigned to an incorrect useful cluster) increases
+test.p3 <- function(metric=NULL,
+                    C.values = 4:7,
+                    K.u.values=2:10,  
+                    K.n.values=0:1, 
+                    e1.values=c(0,0.033,0.066,0.1), 
+                    e2.values=c(0,0.066,0.133,0.2),
+                    directory = text.dir){
+  # number of parameter settings being considered
+  count.tot <- length(C.values) * length(e2.values) * length(K.n.values) * (length(K.u.values)) * length(e1.values) * (length(e1.values) - 1) / 2
+  count.metrics <- NULL
+  
+  for(C in C.values){
+    for(e2 in e2.values){ # for each parameter setting, not including K.u
+      for(k.n in K.n.values){
+        for(k.u in K.u.values){ 
+          for(e1.1 in e1.values){ # and for all 'jump' sizes where K.u is increasing  
+            for(e1.2 in e1.values[e1.values > e1.1]){
+              d.1 <- read.csv(paste(directory,
+                                    'simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1.1, 
+                                    '_e2=', e2, '.tsv', sep=""), header=T)
+              d.2 <- read.csv(paste(directory,  
+                                    'simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1.2, 
+                                    '_e2=', e2, '.tsv', sep=""), header=T)
+              
+              if(!is.null(metric)){ # look at only the metrics specified
+                d.1 <- d.1[metric]
+                d.2 <- d.2[metric]
+              }
+              diff <- d.1 - d.2 # difference in the metric scores between the two parameter settings
+              if(is.null(count.metrics)){ # setup to track the number of parameter settings that satisfy P3 if it hasn't been done already
+                count.metrics <- rep(0, length(diff))
+              }
+              count.metrics <- count.metrics + (diff > 0) # if the difference is positive then it satisfies P3
+            }
+          }
+        }
+      }
+    }
+  }
+  return(count.metrics / count.tot)
+}
+
+# Test property 4 - the metric score gets worse as epsilon2 (the proportion of
+#             items assigned to an incorrect noise cluster) increases
+test.p4 <- function(metric=NULL,
+                    C.values = 4:7,
+                    K.u.values=2:10, 
+                    K.n.values=0:1, 
+                    e1.values=c(0,0.033,0.066,0.1), 
+                    e2.values=c(0,0.066,0.133,0.2),
+                    directory = text.dir){
+  # number of parameter settings being considered
+  count.tot <- length(C.values) * length(e1.values) * length(K.n.values) * (length(K.u.values)) * length(e2.values) * (length(e2.values) - 1) / 2
+  count.metrics <- NULL
+  
+  for(C in C.values){
+    for(e1 in e1.values){ # for each parameter setting, not including K.u
+      for(k.n in K.n.values){
+        for(k.u in K.u.values){ 
+          for(e2.1 in e2.values){ # and for all 'jump' sizes where K.u is increasing  
+            for(e2.2 in e2.values[e2.values > e2.1]){
+              d.1 <- read.csv(paste(directory,
+                                    'simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1, 
+                                    '_e2=', e2.1, '.tsv', sep=""), header=T)
+              d.2 <- read.csv(paste(directory,  
+                                    'simres_C=', C, 
+                                    '_nC=', n.C,
+                                    '_ku=', k.u, 
+                                    '_kn=', k.n, 
+                                    '_e1=', e1, 
+                                    '_e2=', e2.2, '.tsv', sep=""), header=T)
+              
+              if(!is.null(metric)){ # look at only the metrics specified
+                d.1 <- d.1[metric]
+                d.2 <- d.2[metric]
+              }
+              diff <- d.1 - d.2 # difference in the metric scores between the two parameter settings
+              if(is.null(count.metrics)){ # setup to track the number of parameter settings that satisfy P4 if it hasn't been done already
+                count.metrics <- rep(0, length(diff))
+              }
+              if(k.n == 0){
+                p4.satisfied <- (abs(diff) < 0.005)  # if the difference is 0 and there are 0 noise clusters then P4 is satisfied
+              }
+              else{
+                p4.satisfied <-  (diff > 0) # if the difference is positive and there are > 0 noise clusters then P4 is satisfied 
+              }
+              if(sum(1 - p4.satisfied) > 1){
+                print(list(k.n,e2.1, e2.2, diff))
+              }
+              count.metrics <- count.metrics + p4.satisfied
+            }
+          }
+        }
+      }
+    }
+  }
+  return(count.metrics / count.tot)
 }
 
 #### EVALUATION METRICS #####################################
@@ -1018,7 +1283,7 @@ spearman.metric <- function(data){
   
   d <- rank.t - rank.p # differences in rank
   n <- length(d) # number of variables
-  row <- (6 * sum(d^2)) / (n * (n^2 - 1))
+  row <- 1 - (6 * sum(d^2)) / (n * (n^2 - 1))
   
   return(row)
 }
@@ -1145,9 +1410,9 @@ aupr.metric <- function(data){
   ccm.t.v <- unlist(ccms$ccm.t)
   ccm.p.v <- unlist(ccms$ccm.p)
   
-  aupr <- run.roc.analysis.pROC(ccm.t.v, ccm.p.v)$auc
+  #aupr <- run.roc.analysis.pROC(ccm.t.v, ccm.p.v)$auc
   # If using pROC directly:
-  # aupr <- roc(ccm.t.v, ccm.p.v)$auc
+  aupr <- roc(ccm.t.v, ccm.p.v)$auc
   return(aupr)
 }
 
