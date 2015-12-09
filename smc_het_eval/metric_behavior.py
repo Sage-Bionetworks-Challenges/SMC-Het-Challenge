@@ -401,7 +401,7 @@ def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True,
 
 
 
-def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True, pc_amount='more', full_matrix=True):
+def scoring3A_behavior(method="orig", verbose=False, weights=None, save=True, pc_amount='more', full_matrix=True, in_mat=2):
     '''Scoring behaviour of subchallenge 3 metrics
 
     Attributes:
@@ -409,7 +409,14 @@ def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True,
     :param verbose: boolean for whether to output details of the scoring metrics
     :param weights: weights to pass into the scoring function for calculating the weighted average of multiple metrics
     :param save: boolean for whether or not to save the results of the scoring behaviour to a tsv file
-    :param more_pc: booelane for whether to include more pseudo counts for each matrix
+    :param pc_amount: amount of pseudo counts to include for each matrix, 'more', 'less' or 'none'
+    :param in_mat: number representing which matrices to use in calculating the SC3 scoring metric
+        Options:
+            1 - use all input matrics i.e. CCM, ADM, ADM^T and CM
+            2 - use all except co-clustering matrix (CCM)
+            3 - use all except ancestor descendant matrix (ADM)
+            4 - use all except ADM^T
+            5 - use all except cousin matrix (CM)
     '''
     # True values for each attribute
     t_ccm, t_clusters = get_ccm("Truth")
@@ -427,6 +434,12 @@ def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True,
         n_pc = 0
         pc_ext = "_no_pc"
 
+    in_mat_ext = {1:'_all',
+                  2:'_nc',
+                  3:'_na',
+                  4:'_nat',
+                  5:'_ncous'}[in_mat]
+
     for scenario in scenarios:
         if verbose:
             print '\nScenario %s' % scenario
@@ -434,13 +447,13 @@ def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True,
         if scenario == 'Truth':
             res.append(['Truth',
                         calculate3(t_ccm,t_ad,t_ccm,t_ad,
-                                   method=method, verbose=verbose, weights=weights, pseudo_counts=n_pc, full_matrix=full_matrix)])
+                                   method=method, verbose=verbose, weights=weights, pseudo_counts=n_pc, full_matrix=full_matrix, in_mat=in_mat)])
         else:
             ccm = get_ccm(scenario, t_ccm=t_ccm)
             ad = get_ad(scenario, t_ad=t_ad)
             res.append([scenario,
                         calculate3(ccm,ad,t_ccm,t_ad,
-                                   method=method, verbose=verbose, weights=weights, pseudo_counts=n_pc, full_matrix=full_matrix)])
+                                   method=method, verbose=verbose, weights=weights, pseudo_counts=n_pc, full_matrix=full_matrix, in_mat=in_mat)])
 
 
     if save:
@@ -449,9 +462,9 @@ def scoring3A_behavior(method="orig_nc", verbose=False, weights=None, save=True,
         else:
             tri_ext = "_triu"
         if isinstance(method, list):
-            f = open(tsv_dir + 'scoring3A_all_cases_' + '_'.join(method) + pc_ext + tri_ext + '.tsv', 'w')
+            f = open(tsv_dir + 'scoring3A_all_cases_' + '_'.join([m + in_mat_ext for m in method]) + pc_ext + tri_ext + '.tsv', 'w')
         else:
-            f = open(tsv_dir + 'scoring3A_all_cases_' + method + pc_ext + tri_ext + '.tsv', 'w')
+            f = open(tsv_dir + 'scoring3A_all_cases_' + method + in_mat_ext +  pc_ext + tri_ext + '.tsv', 'w')
         out_res = [map(str,x) for x in res]
         out_res = ['\t'.join(x) for x in out_res]
         f.write('\n'.join(out_res))
@@ -470,16 +483,18 @@ def scoring3A_behavior_all(verbose=True):
                     'aupr_nc',
                     'sqrt_nc',
                     'sym_pseudoV_nc',
-                   ['pseudoV_nc', 'mcc_nc', 'pearson_nc'],
-                   ['pseudoV_nc', 'pearson_nc', 'sym_pseudoV_nc'],
-                   ['aupr_nc', 'sqrt_nc', 'sym_pseudoV_nc'],
-                   ['aupr_nc', 'sqrt_nc', 'sym_pseudoV_nc', 'pearson_nc']]:
+                   ['pseudoV', 'mcc', 'pearson'],
+                   ['pseudoV', 'pearson', 'sym_pseudoV'],
+                   ['aupr', 'sqrt', 'sym_pseudoV'],
+                   ['aupr', 'sqrt', 'sym_pseudoV', 'pearson']]:
         for fm in [True, False]:
             for pc in ['none', 'less', 'more']:
+                print 'Starting %s - Pseudo Counts: %s - Full Matrix: %s' % (method,pc,fm)
+
                 scoring3A_behavior(method=method, verbose=verbose,pc_amount=pc, full_matrix=fm)
                 print 'Done %s - Pseudo Counts: %s - Full Matrix: %s' % (method,pc,fm)
 
-def scoring3A_weight_behavior(methods=["pseudoV_nc", "pearson_nc", "sym_pseudoV_nc"], verbose=False, res=None):
+def scoring3A_weight_behavior(methods=["pseudoV", "pearson", "sym_pseudoV"], verbose=False, res=None, in_mat=2):
     '''Create the data on how the weights used in subchallenge 3 affect the score using the given scoring methods
 
     Attributes:
@@ -505,7 +520,14 @@ def scoring3A_weight_behavior(methods=["pseudoV_nc", "pearson_nc", "sym_pseudoV_
         else:
             wght_res[str(wght)] = scores
 
-    with open(tsv_dir + 'weights3A_all_cases_' + '_'.join(methods) + '.tsv', 'wb') as f:
+
+    in_mat_ext = {1:'_all',
+                  2:'_nc',
+                  3:'_na',
+                  4:'_nat',
+                  5:'_ncous'}[in_mat]
+
+    with open(tsv_dir + 'weights3A_all_cases_' + '_'.join([m + in_mat_ext for m in methods]) + '.tsv', 'wb') as f:
         fields = sorted(wght_res.keys())
         print fields
         w = csv.DictWriter(f, delimiter='\t', fieldnames=fields)
@@ -976,9 +998,16 @@ if __name__ == '__main__':
             "spearman",
             "pearson",
             "aupr",
-            "mcc"],
+            "mcc",
+            "default"],
+        '3': ['pseudoV',
+              'sym_pseudoV',
+              'pearson',
+              'aupr',
+              'sqrt',
+              'mcc',
+              'orig']
     }
-
     for m in methods['1A']:
         print 'Scoring 1A Behavior with method ' + m + '...'
         scoring1A_behavior(m)
@@ -993,12 +1022,17 @@ if __name__ == '__main__':
 
     for m in methods['2']:
         print 'Scoring 2B Behavior with method ' + m + '...'
-        scoring2B_behavior(method=m, verbose=True)
-        scoring2A_behavior(method=m, verbose=True)
+        scoring2B_behavior(method=m, verbose=True, tst_betas=False, tst_prob_mod_err=False)
+        scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=False)
 
     print 'Scoring 3A Behavior...'
     scoring3A_behavior_all(verbose=True)
 
-    print 'Scoring 3A Behavior using multiplke metrics with different weights...'
+    print 'Scoring 3A Behavior using multiple metrics with different weights...'
     scoring3A_weight_behavior(verbose=True)
+
+    for m in methods[3]:
+        for i in range(1,6):
+            scoring3A_behavior(method=m, in_mat=i, verbose = True)
+
 
