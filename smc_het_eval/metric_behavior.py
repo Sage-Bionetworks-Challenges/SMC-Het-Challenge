@@ -36,12 +36,13 @@ def scoring1C_behavior(method='abs'):
     t_phis = np.array([.85,.5,.3])
     t_nssms = np.array([200,200,200])
     t_entry = zip(t_nssms,t_phis)
+    n_iter = 100
 
     # Zero-mean noise in phi
     res = []
     concentration = [2, 5, 10, 100, 1000]
     for c in concentration:
-        for i in range(100):
+        for i in range(n_iter):
             phis = []
             for p in t_phis:
                 phis.append(np.random.beta(p*c,(1-p)*c))
@@ -64,10 +65,11 @@ def scoring1C_behavior(method='abs'):
     f.write('\n'.join(res))
     f.close()
 
+    # zero mean error in both phi and the number of SSMs
     res = []
     concentration = [2, 5, 10, 100, 1000]
     for c in concentration:
-        for i in range(100):
+        for i in range(n_iter):
             rd = np.random.dirichlet([c,c,c]) * sum(t_nssms)
             rd = map(round,rd)
             remainder = sum(t_nssms) - sum(rd)
@@ -79,7 +81,43 @@ def scoring1C_behavior(method='abs'):
     res = ['\t'.join(x) for x in res]
     f = open(tsv_dir + 'scoring1C_nssm_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
+    f.close()
+
+    concentration = [2, 5, 10, 100, 1000, None]
+    res = [[''] + ['beta_err_conc_nssm=' + str(x) for x in concentration]] # matrix of metric scores - phi error is in the rows, # SSMs error in the columns
+    for c_phi in concentration:
+        res_row = []
+        for c_nssm in concentration:
+            temp = []
+            for i in range(n_iter):
+                if not c_nssm is None: # if error should be added to the number of SSMs assigned to each subclone do it
+                    # Determine the proportion of SSMs to assign to each cluster
+                    rd_nssm = np.random.dirichlet([c_nssm,c_nssm,c_nssm]) * sum(t_nssms)
+                    rd_nssm = map(round,rd_nssm)
+                    remainder = sum(t_nssms) - sum(rd_nssm)
+                    # Randomly assign remainder
+                    rd_nssm[np.random.randint(0,len(rd_nssm))] += remainder
+                    rd_nssm = map(int,rd_nssm)
+                else:
+                    rd_nssm = t_nssms
+
+                if not c_phi is None: # similar for the phis
+                    phis = [np.random.beta(p*c_phi,(1-p)*c_phi) for p in t_phis]
+                else:
+                    phis  = t_phis
+
+
+                temp.append(calculate1C(t_entry,zip(rd_nssm,phis), method))
+            res_row.append(np.mean(temp))
+        res.append(res_row)
+    res = [map(str,x) for x in res]
+    res = [res[0]] + [['beta_err_conc_phi=' + str(concentration[i])] + res[i+1] for i in range(len(concentration))]
+    res = ['\t'.join(x) for x in res]
+
+    f = open(tsv_dir + 'scoring1C_interaction_behavior_' + method + '.tsv', 'w')
+    f.write('\n'.join(res))
     f.close()            
+
 
 
     res = []
@@ -305,10 +343,10 @@ def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True,
                 ccm = ccm + ccm.T
                 np.fill_diagonal(ccm,1) # ensure the matrix has 1's along the diagonal
                 ccm = np.abs(ccm) # ensure the matrix has values between 0 and 1
-                res.append([c,calculate2(ccm,t_ccm)])
+                res.append([c,calculate2(ccm,t_ccm, method=method)])
         res = [map(str,x) for x in res]
         res = ['\t'.join(x) for x in res]
-        f = open(tsv_dir + 'scoring2B_beta.tsv', 'w')
+        f = open(tsv_dir + 'scoring2B_beta_' + method + '.tsv', 'w')
         f.write('\n'.join(res))
         f.close()
 
@@ -473,26 +511,25 @@ def scoring3A_behavior(method="orig", verbose=False, weights=None, save=True, pc
     return res
 
 def scoring3A_behavior_all(verbose=True):
-    for method in ['pseudoV_nc',
-                    'pseudoV',
-                    'orig_nc',
+    for method in ['pseudoV',
                     'orig',
-                    'mcc_nc',
-                    'pearson_nc',
-                    'spearman_nc',
-                    'aupr_nc',
-                    'sqrt_nc',
-                    'sym_pseudoV_nc',
+                    'mcc',
+                    'pearson',
+                    'spearman',
+                    'aupr',
+                    'sqrt',
+                    'sym_pseudoV',
                    ['pseudoV', 'mcc', 'pearson'],
                    ['pseudoV', 'pearson', 'sym_pseudoV'],
                    ['aupr', 'sqrt', 'sym_pseudoV'],
                    ['aupr', 'sqrt', 'sym_pseudoV', 'pearson']]:
         for fm in [True, False]:
             for pc in ['none', 'less', 'more']:
-                print 'Starting %s - Pseudo Counts: %s - Full Matrix: %s' % (method,pc,fm)
+                for input in range(5):
+                    print 'Starting %s - Pseudo Counts: %s - Full Matrix: %s, Input Matrices Index: %s' % (method,pc,fm, input)
 
-                scoring3A_behavior(method=method, verbose=verbose,pc_amount=pc, full_matrix=fm)
-                print 'Done %s - Pseudo Counts: %s - Full Matrix: %s' % (method,pc,fm)
+                    scoring3A_behavior(method=method, verbose=verbose,pc_amount=pc, full_matrix=fm, in_mat=input+1)
+                    print 'Done %s - Pseudo Counts: %s - Full Matrix: %s, Input Matrices Index: %s' % (method,pc,fm, input)
 
 def scoring3A_weight_behavior(methods=["pseudoV", "pearson", "sym_pseudoV"], verbose=False, res=None, in_mat=2):
     '''Create the data on how the weights used in subchallenge 3 affect the score using the given scoring methods
@@ -1019,20 +1056,15 @@ if __name__ == '__main__':
     for m in methods['1C']:
         print 'Scoring 1C Behavior with method ' + m + '...'
         scoring1C_behavior(m)
-
     for m in methods['2']:
         print 'Scoring 2B Behavior with method ' + m + '...'
-        scoring2B_behavior(method=m, verbose=True, tst_betas=False, tst_prob_mod_err=False)
+        scoring2B_behavior(method=m, verbose=True, tst_betas=True, tst_prob_mod_err=False, tst_prob_mod=False)
         scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=False)
+
 
     print 'Scoring 3A Behavior...'
     scoring3A_behavior_all(verbose=True)
 
     print 'Scoring 3A Behavior using multiple metrics with different weights...'
     scoring3A_weight_behavior(verbose=True)
-
-    for m in methods[3]:
-        for i in range(1,6):
-            scoring3A_behavior(method=m, in_mat=i, verbose = True)
-
 
