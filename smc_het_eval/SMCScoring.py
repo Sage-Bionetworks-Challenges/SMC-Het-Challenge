@@ -750,7 +750,9 @@ def parseVCFScoring(data):
 
 def filterFPs(matrix, mask):
     if matrix.shape[0] == matrix.shape[1]:
-        return matrix[mask,:][:,mask]
+        print('Changed filtering')
+        matrix = matrix[mask,:][:,mask]
+        return matrix
     else:
         return matrix[mask,:]
 
@@ -868,6 +870,7 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         if tout[-1] == None or pout[-1] == None:
             return "NA"
     if challengeMapping[challenge]['filter_func']:
+        print('Filtering Challenge %s' % challenge)
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
