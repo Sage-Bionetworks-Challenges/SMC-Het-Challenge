@@ -774,6 +774,10 @@ def add_pseudo_counts(ccm,ad=None,num=None):
     elif num == 0:
         return ccm, ad
 
+    ccm = np.vstack([ccm, np.zeros([size,num])])
+    ccm = np.column_stack([ccm, np.zeros([size+num,num])])
+    print('Success')
+
     new_ccm = np.identity(size + num)
     new_ccm[:size, :size] = np.copy(ccm)
     ccm = new_ccm
