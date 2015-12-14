@@ -752,8 +752,7 @@ def filterFPs(matrix, mask):
     if matrix.shape[0] == matrix.shape[1]:
         print('Changed filtering 2')
         nonmask = list(set(range(matrix.shape[0])) - set(mask))
-        matrix = np.delete(matrix, nonmask, axis=0)
-        matrix = np.delete(matrix, nonmask, axis=1)
+        matrix = np.delete(matrix, nonmask, axis=2)
         return matrix
     else:
         return matrix[mask,:]
