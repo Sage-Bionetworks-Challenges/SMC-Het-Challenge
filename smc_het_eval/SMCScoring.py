@@ -205,8 +205,8 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     '''
     larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
 
-    pc_pred = add_pseudo_counts(np.copy(pred), num=pseudo_counts) # add pseudo counts to the matrices
-    pc_truth = add_pseudo_counts(np.copy(truth), num=pseudo_counts) # use np.copy so that original values are not altered
+    pc_pred = add_pseudo_counts(pred, num=pseudo_counts) # add pseudo counts to the matrices
+    pc_truth = add_pseudo_counts(truth, num=pseudo_counts) # use np.copy so that original values are not altered
     ncluster = add_pseudo_counts(mb.get_ccm('NCluster', truth), num=pseudo_counts) # predicted CCM when every mutations is in its own cluster
     onecluster = add_pseudo_counts(mb.get_ccm('OneCluster', truth), num=pseudo_counts) # predicted CCM when all mutations are in the same cluster
 
