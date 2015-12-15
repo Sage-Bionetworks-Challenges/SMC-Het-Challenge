@@ -5,6 +5,7 @@ import json
 import argparse
 import StringIO
 import scipy.stats
+import sys
 import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
@@ -771,10 +772,11 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         num = np.sqrt(size)
     elif num == 0:
         return ccm, ad
+    print(sys.getsizeof())
 
     ccm=np.vstack((ccm, np.zeros(shape=[num, size])))
     ccm=np.hstack((ccm, np.zeros(shape=[size+num, num])))
-    
+
     print('Success')
 
     new_ccm = np.identity(size + num)
