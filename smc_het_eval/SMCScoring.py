@@ -750,8 +750,6 @@ def parseVCFScoring(data):
 
 def filterFPs(matrix, mask):
     if matrix.shape[0] == matrix.shape[1]:
-        print('Changed filtering 2')
-        nonmask = list(set(range(matrix.shape[0])) - set(mask))
         return matrix[np.ix_(mask, mask)]
     else:
         return matrix[mask,:]
@@ -773,11 +771,7 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         num = np.sqrt(size)
     elif num == 0:
         return ccm, ad
-
-    ccm = np.vstack([ccm, np.zeros([size,num])])
-    ccm = np.column_stack([ccm, np.zeros([size+num,num])])
-    print('Success')
-
+    
     new_ccm = np.identity(size + num)
     new_ccm[:size, :size] = np.copy(ccm)
     ccm = new_ccm
