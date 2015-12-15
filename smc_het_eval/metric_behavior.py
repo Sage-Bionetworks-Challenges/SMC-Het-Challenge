@@ -229,7 +229,7 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
             # calculate the CCM
             ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
             # calculate the score for the given scenario
-            res.append([sc ,calculate2(ccm, t_ccm, method=method)])
+            res_more_cl.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
         res_more_cl = [map(str,x) for x in res_more_cl]
         res_more_cl = ['\t'.join(x) for x in res_more_cl]
