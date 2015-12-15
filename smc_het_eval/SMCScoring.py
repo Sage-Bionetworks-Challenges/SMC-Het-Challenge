@@ -772,7 +772,7 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         num = np.sqrt(size)
     elif num == 0:
         return ccm, ad
-    print(sys.getsizeof())
+    print(sys.getsizeof(ccm))
 
     ccm=np.vstack((ccm, np.zeros(shape=[num, size])))
     ccm=np.hstack((ccm, np.zeros(shape=[size+num, num])))
