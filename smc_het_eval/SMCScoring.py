@@ -329,8 +329,8 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
 
 def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
-        pred_cp = np.copy(pred)
-        truth_cp = np.copy(truth)
+        pred_cp = pred
+        truth_cp = truth
     else: # make matrix upper triangular
         pred_cp = np.triu(pred)
         truth_cp = np.triu(truth)
@@ -338,17 +338,24 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
-    pred_cp = (1 - rnd) * pred_cp + rnd
-    truth_cp = (1 - rnd) * truth_cp + rnd
+    size = pred_cp.size[0]
+    res = 0 # result to be returned
 
-    # normalize data
-    pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
-    truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
+    # do one row at a time to reduce memory usage
+    for x in range(size):
+        pred_row = (1 - rnd) * pred_cp[x,:] + rnd
+        truth_row = (1 - rnd) * truth_cp[x,:] + rnd
 
-    if sym:
-        return np.sum(truth_cp * np.log(truth_cp/pred_cp)) + np.sum(pred_cp * np.log(pred_cp/truth_cp))
-    else:
-        return np.sum(truth_cp * np.log(truth_cp/pred_cp))
+
+        pred_row = pred_row / np.sum(pred_row)
+        truth_row = truth_row / np.sum(truth_row)
+
+        if sym:
+            return np.sum(truth_row * np.log(truth_row/pred_row)) + np.sum(pred_row * np.log(pred_row/truth_row))
+        else:
+            return np.sum(truth_row * np.log(truth_row/pred_row))
+
+    return res
 
 def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
