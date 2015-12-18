@@ -338,6 +338,9 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
+    print('Prediction size: ' + str(pred_cp.shape))
+    print('Truth size: '+ str(truth_cp.shape))
+
     size = np.array(pred_cp.shape)[1]
     res = 0 # result to be returned
 
