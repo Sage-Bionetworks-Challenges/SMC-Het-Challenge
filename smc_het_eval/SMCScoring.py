@@ -738,7 +738,6 @@ def parseVCF1C(data):
         raise ValidationError("Input VCF contains no SSMs")
     return [[len(data)],[len(data)]]
 
-@profile
 def parseVCF2and3(data):
     data = data.split('\n')
     data = [x for x in data if x != '']
@@ -757,7 +756,6 @@ def filterFPs(matrix, mask):
     else:
         return matrix[mask,:]
 
-@profile
 def add_pseudo_counts(ccm,ad=None,num=None):
     """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
     subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
