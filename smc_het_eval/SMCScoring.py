@@ -9,6 +9,7 @@ import sys
 import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
+import memory_manage as mm
 
 
 class ValidationError(Exception):
@@ -729,7 +730,7 @@ def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, metho
               (method, str(ccm_res), str(ad_res),str(ad_res_t),str(cous_res), str(res)))
     return res
 
-def parseVCFSimple(data):
+def parseVCF1C(data):
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
@@ -737,7 +738,8 @@ def parseVCFSimple(data):
         raise ValidationError("Input VCF contains no SSMs")
     return [[len(data)],[len(data)]]
 
-def parseVCFScoring(data):
+@profile
+def parseVCF2and3(data):
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
@@ -755,6 +757,7 @@ def filterFPs(matrix, mask):
     else:
         return matrix[mask,:]
 
+@profile
 def add_pseudo_counts(ccm,ad=None,num=None):
     """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
     subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
@@ -772,23 +775,23 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         num = np.sqrt(size)
     elif num == 0:
         return ccm, ad
-    print(ccm.nbytes)
 
-    ccm=np.vstack((ccm, np.zeros(shape=[num, size])))
-    ccm=np.hstack((ccm, np.zeros(shape=[size+num, num])))
-
-    print('Success')
-
-    new_ccm = np.identity(size + num)
-    new_ccm[:size, :size] = np.copy(ccm)
-    ccm = new_ccm
+    ccm.resize([math.pow(size+num,2)], refcheck=False) # allocate new memory for CCM
+    for i in reversed(range(size)): # reformat the CCM so new rows and columns of 0's are added
+        ccm[(i*(size+num)):(i*(size+num)+size)] = ccm[(i*size):((i+1)*size)]
+        ccm[(i*(size+num)+size):((i+1)*(size+num))] = 0
+    ccm.resize([size+num, size+num], refcheck=False) # resize the CCM to be an array again
 
     if ad is not None:
-        new_ad = np.zeros([size + num]*2)
-        new_ad[:size, :size] = np.copy(ad)
-        new_ad[(size+num/2):(size+3*num/4),:(size)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
-        new_ad[:(size),(size+3*num/4):(size+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
-        ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
+        ad.resize([math.pow(size+num,2)], refcheck=False)
+        for i in reversed(range(size)):
+            ad[(i*(size+num)):(i*(size+num)+size)] = ad[(i*size):((i+1)*size)]
+            ad[(i*(size+num)+size):((i+1)*(size+num))] = 0
+        ad.resize([size+num, size+num], refcheck=False)
+
+        ad[(size+num/2):(size+3*num/4),:(size)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
+        ad[:(size),(size+3*num/4):(size+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
+                                            # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
     return ccm
@@ -814,17 +817,17 @@ def verify(filename,role,func,*args):
 
 challengeMapping = {     '1A': {'val_funcs':[validate1A],'score_func':calculate1A,'vcf_func':None, 'filter_func':None},
                         '1B': {'val_funcs':[validate1B],'score_func':calculate1B,'vcf_func':None, 'filter_func':None},
-                        '1C': {'val_funcs':[validate1C],'score_func':calculate1C,'vcf_func':parseVCFSimple, 'filter_func':None},
-                        '2A': {'val_funcs':[validate2A],'score_func':calculate2,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
-                        '2B': {'val_funcs':[validate2B],'score_func':calculate2,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
-                        '3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
-                        '3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
+                        '1C': {'val_funcs':[validate1C],'score_func':calculate1C,'vcf_func':parseVCF1C, 'filter_func':None},
+                        '2A': {'val_funcs':[validate2A],'score_func':calculate2,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '2B': {'val_funcs':[validate2B],'score_func':calculate2,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
                     }
 
 def verifyChallenge(challenge,predfiles,vcf):
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
-        nssms = verify(vcf,"input VCF", parseVCFSimple)
+        nssms = verify(vcf,"input VCF", parseVCF1C)
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
@@ -879,7 +882,7 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
-
+'''
 if __name__ == '__main__':
     global err_msgs
     err_msgs = []
@@ -945,3 +948,13 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
+'''
+if __name__ == "__main__":
+    filename = '/home/nwilson/Documents/SMC-Het/Galaxy34-[Co-Cluster_(Sub_Challenge_2B)](1).txt.part'
+    f = open(filename)
+    pred_data = f.read()
+    f.close()
+    #parseVCF2and3(pred_data)
+
+    tst = np.identity(10)
+    add_pseudo_counts(tst)
