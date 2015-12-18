@@ -338,7 +338,7 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
-    size = pred_cp.size[0]
+    size = np.array(pred_cp.shape)[1]
     res = 0 # result to be returned
 
     # do one row at a time to reduce memory usage
