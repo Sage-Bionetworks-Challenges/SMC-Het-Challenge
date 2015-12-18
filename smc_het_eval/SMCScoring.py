@@ -880,7 +880,6 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
-'''
 if __name__ == '__main__':
     global err_msgs
     err_msgs = []
@@ -956,3 +955,4 @@ if __name__ == "__main__":
 
     tst = np.identity(10)
     add_pseudo_counts(tst)
+'''
