@@ -206,11 +206,10 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
     larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+    nssms = np.array(pred.shape)[1]
 
     pc_pred = add_pseudo_counts(pred, num=pseudo_counts) # add pseudo counts to the matrices
     pc_truth = add_pseudo_counts(truth, num=pseudo_counts) # use np.copy so that original values are not altered
-    ncluster = add_pseudo_counts(mb.get_ccm('NCluster', truth), num=pseudo_counts) # predicted CCM when every mutations is in its own cluster
-    onecluster = add_pseudo_counts(mb.get_ccm('OneCluster', truth), num=pseudo_counts) # predicted CCM when all mutations are in the same cluster
 
     func_dict = {"orig" : calculate2_orig,
             "sqrt" : calculate2_sqrt,
@@ -230,28 +229,24 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
             score = func_dict[m](pc_pred, pc_truth, full_matrix=full_matrix)
 
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
-            ncluster_score = func_dict[m](ncluster, pc_truth, full_matrix=full_matrix)
-            onecluster_score = func_dict[m](onecluster, pc_truth, full_matrix=full_matrix)
-            if method in larger_is_worse_methods: # normalize scores where a larger score is worse
+            if m in larger_is_worse_methods: # normalize scores where a larger score is worse
                 # normalize the scores to be between 0 and 1 where 1 is the true matrix
                 # and zero is the worse score of the NCluster matrix and the OneCluster matrix
-                worst_score = max(ncluster_score, onecluster_score)
+                worst_score = get_worst_score(nssms, truth, func_dict[m], larger_is_worse=True)
                 score = 1 - (score / worst_score)
             else: # normalize scores where a smaller score is worse
-                worst_score = min(ncluster_score, onecluster_score)
+                worst_score = get_worst_score(nssms, truth, func_dict[m], larger_is_worse=False)
                 score = (score - worst_score) / (1 - worst_score)
             scores.append(score)
 
         return np.mean(scores)
     else:
         score = func(pc_pred, pc_truth, full_matrix=full_matrix)
-        ncluster_score = func(ncluster, pc_truth, full_matrix=full_matrix)
-        onecluster_score = func(onecluster, pc_truth, full_matrix=full_matrix)
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
-            worst_score = max(ncluster_score, onecluster_score) # and zero is the worse score of the NCluster matrix
+            worst_score = get_worst_score(nssms, truth, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
             score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
         else:
-            worst_score = min(ncluster_score, onecluster_score)
+            worst_score = get_worst_score(nssms, truth, func, larger_is_worse=False)
             score = (score - worst_score) / (1 - worst_score)
         return score
 
@@ -780,14 +775,16 @@ def add_pseudo_counts(ccm,ad=None,num=None):
     size = np.array(ccm.shape)[1]
 
     if num is None:
-        num = np.sqrt(size)
+        num = math.floor(np.sqrt(size))
     elif num == 0:
         return ccm, ad
 
     ccm.resize([math.pow(size+num,2)], refcheck=False) # allocate new memory for CCM
     for i in reversed(range(size)): # reformat the CCM so new rows and columns of 0's are added
         ccm[(i*(size+num)):(i*(size+num)+size)] = ccm[(i*size):((i+1)*size)]
-        ccm[(i*(size+num)+size):((i+1)*(size+num))] = 0
+        ccm[(i*(size+num) + size):(i*(size+num) + size + math.floor(num/4))] = 1
+        ccm[(i*(size+num)+size + math.floor(num/4)):((i+1)*(size+num))] = 0
+    ccm[(size*(size+num)):((size+math.floor(num/4))*(size+num))] = 1
     ccm.resize([size+num, size+num], refcheck=False) # resize the CCM to be an array again
 
     if ad is not None:
@@ -803,6 +800,71 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         return ccm, ad
 
     return ccm
+
+#
+def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
+    """Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
+
+    :param nssms: number of SSMs in the input
+    :param truth_ccm: true co-clustering matrix
+     :param truth_ad: true ancestor-descendent matrix (optional)
+     :param subchallenge: subchallenge to use in scoring, one of 'SC2' or 'SC3'.
+                If SC3 is selected then truth_ad cannot be None
+    :return: worst score of NCluster and OneCluster for SC2 or SC3 (depending on the input)
+    """
+
+    if subchallenge is 'SC3':
+        if truth_ad is None:
+            raise ValueError('truth_ad must not be None when scoring SC3')
+        else:
+            if larger_is_worse:
+                return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+            else:
+                return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+
+    elif subchallenge is 'SC2':
+        if larger_is_worse:
+            return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+        else:
+            return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+
+    else:
+        raise ValueError('Subchallenge must be one of SC2 or SC3')
+
+
+
+def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster', subchallenge='SC2'):
+    if subchallenge is 'SC2':
+        bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario))
+        return score_fun(bad_ccm, true_ccm)
+    elif subchallenge is 'SC3':
+        bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario))
+        return score_fun(bad_ccm, bad_ad, true_ccm, true_ad)
+    else:
+        raise ValueError('Scenario must be one of SC2 or SC3')
+
+
+
+def get_bad_ccm(nssms, scenario='OneCluster'):
+    if scenario is 'OneCluster':
+        return np.ones([nssms,nssms])
+    elif scenario is 'NCluster':
+        return np.identity(nssms)
+    else:
+        raise ValueError('Scenario must be one of OneCluster or NClsuter')
+
+def get_bad_ad(nssms, scenario='OneCluster'):
+    if scenario is 'OneCluster':
+        return np.zeros([nssms,nssms])
+    elif scenario is 'NCluster':
+        return np.triu(np.ones([nssms, nssms]),k=1)
+    else:
+        raise ValueError('Scenario must be one of OneCluster or NClsuter')
+
 
 def verify(filename,role,func,*args):
     global err_msgs
