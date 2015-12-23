@@ -942,13 +942,19 @@ batch.cv <- function(n.iter=2, n.folds = 5, inc.all=T, inc.stats=T, func.name='o
   return(results)
 }
 
+##### cv.all #######################################################
+# Preforms a batch run for each of the tests with the given number 
+# of iterations and writes the output to a tsv file.
 cv.all <- function(n.iter=200){
-  for(f.name in c('pc')){#names(funcl)){
+  for(f.name in names(funcl)){
     res <- batch.cv(n.iter=n.iter, func.name=f.name, rewrite=T, display=F)
     write.csv(file=paste(tsv.dir, 'sc3_cv_best_scenarios_', f.name, '.csv', sep=''), apply(res, 1, function(x){sum(x) / n.iter}))
   }
 }
 
+##### cv.ranking ##################################################
+# Calculate the ranking for the scoring metrics used in a given test
+# Shows you which metrics performed the best the most number of scenarios
 cv.ranking <- function(f.name = 'weight'){
   res <- sapply(1:200, 
                 function(x){
