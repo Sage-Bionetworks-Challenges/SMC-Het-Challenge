@@ -5,10 +5,12 @@ import json
 import argparse
 import StringIO
 import scipy.stats
+import sys
 import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
-
+import memory_manage as mm
+import gc
 
 class ValidationError(Exception):
     def __init__(self, value):
@@ -192,7 +194,7 @@ def calculate2_quaid(pred,truth):
         except Warning:
             print ones_score, zeros_score
             return 0
-
+#@profile
 def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=None):
     '''Calculate the score for SubChallenge 2
 
@@ -204,11 +206,9 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
     larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
-
-    pc_pred = add_pseudo_counts(pred, num=pseudo_counts) # add pseudo counts to the matrices
-    pc_truth = add_pseudo_counts(truth, num=pseudo_counts) # use np.copy so that original values are not altered
-    ncluster = add_pseudo_counts(mb.get_ccm('NCluster', truth), num=pseudo_counts) # predicted CCM when every mutations is in its own cluster
-    onecluster = add_pseudo_counts(mb.get_ccm('OneCluster', truth), num=pseudo_counts) # predicted CCM when all mutations are in the same cluster
+    y = np.array(pred.shape)[1]
+    nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
+    import gc
 
     func_dict = {"orig" : calculate2_orig,
             "sqrt" : calculate2_sqrt,
@@ -219,37 +219,31 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
             "aupr": calculate2_aupr,
             "mcc": calculate2_mcc
     }
-
     func = func_dict.get(method, None)
     if func is None:
         scores = []
-
+        worst_scores = []
         for m in ['pseudoV', 'pearson', 'mcc']:
-            score = func_dict[m](pc_pred, pc_truth, full_matrix=full_matrix)
-
-            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
-            ncluster_score = func_dict[m](ncluster, pc_truth, full_matrix=full_matrix)
-            onecluster_score = func_dict[m](onecluster, pc_truth, full_matrix=full_matrix)
-            if method in larger_is_worse_methods: # normalize scores where a larger score is worse
-                # normalize the scores to be between 0 and 1 where 1 is the true matrix
-                # and zero is the worse score of the NCluster matrix and the OneCluster matrix
-                worst_score = max(ncluster_score, onecluster_score)
-                score = 1 - (score / worst_score)
-            else: # normalize scores where a smaller score is worse
-                worst_score = min(ncluster_score, onecluster_score)
-                score = (score - worst_score) / (1 - worst_score)
-            scores.append(score)
-
+            gc.collect()
+            scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
+            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
+        for m in ['pseudoV', 'pearson', 'mcc']:
+            gc.collect()
+            worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse= (m in larger_is_worse_methods)))
+        for i,m in enumerate(['pseudoV', 'pearson', 'mcc']):
+            if m in larger_is_worse_methods:
+                scores[i] = 1 - (scores[i]/worst_scores[i])
+            else:
+                scores[i] = (scores[i] -worst_scores[i]) / (1-worst_scores[i])
         return np.mean(scores)
+
     else:
         score = func(pc_pred, pc_truth, full_matrix=full_matrix)
-        ncluster_score = func(ncluster, pc_truth, full_matrix=full_matrix)
-        onecluster_score = func(onecluster, pc_truth, full_matrix=full_matrix)
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
-            worst_score = max(ncluster_score, onecluster_score) # and zero is the worse score of the NCluster matrix
+            worst_score = get_worst_score(nssms, truth, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
             score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
         else:
-            worst_score = min(ncluster_score, onecluster_score)
+            worst_score = get_worst_score(nssms, truth, func, larger_is_worse=False)
             score = (score - worst_score) / (1 - worst_score)
         return score
 
@@ -324,11 +318,11 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
     pv_val = calculate2_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-
+@profile
 def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
-        pred_cp = np.copy(pred)
-        truth_cp = np.copy(truth)
+        pred_cp = pred
+        truth_cp = truth
     else: # make matrix upper triangular
         pred_cp = np.triu(pred)
         truth_cp = np.triu(truth)
@@ -336,17 +330,23 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     # Avoid dividing by zero by rounding everything less than rnd up to rnd
     # Note: it is ok to do this after making the matrix upper triangular
     # since the bottom triangle of the matrix will not affect the score
-    pred_cp = (1 - rnd) * pred_cp + rnd
-    truth_cp = (1 - rnd) * truth_cp + rnd
 
-    # normalize data
-    pred_cp = pred_cp / np.sum(pred_cp,axis=1)[:,np.newaxis]
-    truth_cp = truth_cp / np.sum(truth_cp,axis=1)[:,np.newaxis]
+    size = np.array(pred_cp.shape)[1]
+    res = 0 # result to be returned
 
-    if sym:
-        return np.sum(truth_cp * np.log(truth_cp/pred_cp)) + np.sum(pred_cp * np.log(pred_cp/truth_cp))
-    else:
-        return np.sum(truth_cp * np.log(truth_cp/pred_cp))
+    # do one row at a time to reduce memory usage
+    for x in xrange(size):
+        pred_row = (1 - rnd) * pred_cp[x,:] + rnd
+        truth_row = (1 - rnd) * truth_cp[x,:] + rnd
+
+
+        pred_row = pred_row / np.sum(pred_row)
+        truth_row = truth_row / np.sum(truth_row)
+        if sym:
+            res += np.sum(truth_row * np.log(truth_row/pred_row)) + np.sum(pred_row * np.log(pred_row/truth_row))
+        else:
+            res += np.sum(truth_row * np.log(truth_row/pred_row))
+    return res
 
 def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
@@ -390,17 +390,58 @@ def calculate2_spearman(pred, truth, full_matrix=True):
 
     return row
 
-
+@profile
 def calculate2_pearson(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
-        pred_cp = pred.flatten()
-        truth_cp = truth.flatten()
+        pass
     else:
         inds = np.triu_indices(n,k=1)
-        pred_cp = pred[inds]
-        truth_cp = truth[inds]
-    return scipy.stats.pearsonr(pred_cp,truth_cp)[0]
+        pred = pred[inds]
+        truth = truth[inds]
+
+    return call_pearson(pred,truth)
+
+def call_pearson(p,t):
+    pbar=0
+    tbar = 0
+    N = p.shape[0]
+    pbar,tbar = mymean(p,t)
+
+    sp,st = mystd(p,t,pbar,tbar)
+
+    res = myscale(p,t,pbar,tbar,sp,st)
+    return res/(N**2-1.0)
+
+def mymean(vec1,vec2):
+    m1 = 0
+    m2 = 0
+    N = vec1.shape[0]
+    M = float(N**2)
+    for i in xrange(N):
+        for j in xrange(N):
+            m1 += vec1[i,j]/ M
+            m2 += vec2[i,j]/ M
+    return m1,m2
+
+def myscale(vec1,vec2, m1, m2, s1, s2):
+    N = vec1.shape[0]
+    out = 0
+    for i in xrange(N):
+        for j in xrange(N):
+            out += ((vec1[i,j] - m1)/s1) * ((vec2[i,j] - m2)/s2)
+    return out
+
+def mystd(vec1,vec2,m1,m2):
+    s1 = 0 
+    s2 = 0
+    N = vec1.shape[0]
+    M = float(N**2)
+    for i in xrange(N):
+        for j in xrange(N):
+            s1 += (vec1[i,j] - m1)**2/(M-1)
+            s2 += (vec2[i,j] - m2)**2/(M-1)
+    return np.sqrt(s1),np.sqrt(s2)
 
 def calculate2_aupr(pred,truth, full_matrix=True):
     n = truth.shape[0]
@@ -417,6 +458,7 @@ def calculate2_aupr(pred,truth, full_matrix=True):
 
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
+@profile
 def calculate2_mcc(pred,truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
@@ -426,14 +468,30 @@ def calculate2_mcc(pred,truth, full_matrix=True):
         inds = np.triu_indices(n,k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
+    tp = 0
+    tn = 0
+    fp = 0
+    fn = 0
+    np.savetxt("test_pred_cp.txt",pred_cp)
+    for i in xrange(pred_cp.shape[0]):
+        for j in xrange(pred_cp.shape[1]):
+            if truth_cp[i,j] and pred_cp[i,j] >= 0.5:
+                tp = tp +1.0
+            elif truth_cp[i,j] and pred_cp[i,j] < 0.5:
+                fn = fn + 1.0
+            if (not truth_cp[i,j]) and pred_cp[i,j] >= 0.5:
+                fp = fp +1.0
+            elif (not truth_cp[i,j]) and pred_cp[i,j] < 0.5:
+                tn = tn + 1.0
 
-    tp = float(sum(pred_cp[truth_cp==1] >= 0.5)) # Use 0.5 as the threshold for turning a probabalistic matrix into a binary matrix
-    tn = float(sum(pred_cp[truth_cp==0] < 0.5))
-    fp = float(sum(pred_cp[truth_cp==0] >= 0.5))
-    fn = float(sum(pred_cp[truth_cp==1] < 0.5))
+    #tp = float(np.sum(pred_cp[truth_cp==1] >= 0.5)) # Use 0.5 as the threshold for turning a probabalistic matrix into a binary matrix
+    #tn = float(np.sum(pred_cp[truth_cp==0] < 0.5))
+    #fp = float(np.sum(pred_cp[truth_cp==0] >= 0.5))
+    #fn = float(np.sum(pred_cp[truth_cp==1] < 0.5))
 
     # To avoid divide-by-zero cases
     denom_terms = [(tp+fp),(tp+fn),(tn+fp),(tn+fn)]
+
     for index, term in enumerate(denom_terms):
         if term == 0:
             denom_terms[index] = 1
@@ -448,6 +506,7 @@ def calculate2_mcc(pred,truth, full_matrix=True):
 
     return num / float(denom)
 
+@profile
 def validate2B(filename,nssms):
     try:
         if filename.endswith('.gz'):
@@ -527,15 +586,17 @@ def validate3A(data, cas, nssms):
                 ad[i,j] = 1
     return ad
 
-def validate3B(data, ccm, nssms):
-    data = StringIO.StringIO(data)
+def validate3B(filename, ccm, nssms):
     k = ccm.shape[0]
     try:
-        ad = np.loadtxt(data,ndmin=2)
+        if filename[-1] == "z":
+            ad = np.loadtxt(str(filename),ndmin=2)
+        else:
+            ad = filename
     except ValueError:
         raise ValidationError("Entry in AD matrix could not be cast as a float")
 
-    if ad.shape != (nssms,nssms):
+    if ad.shape != ccm.shape:
         raise ValidationError("Shape of AD matrix %s is wrong.  Should be %s" % (str(ad.shape), str(ccm.shape)))
     if not np.allclose(ad.diagonal(),np.zeros(ad.shape[0])):
         raise ValidationError("Diagonal entries of AD matrix not 0")
@@ -553,10 +614,65 @@ def validate3B(data, ccm, nssms):
 
     return ad
 
-def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
-    return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,np.dot(truth_ca,truth_ca.T),truth_ad)
+#def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
+#    pred_ccm = np.dot(pred_ca,pred_ca.T)
+#    truth_ccm = np.dot(np.dot(truth_ca,truth_ca.T))
+#    return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,,truth_ad)
 
-def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", weights=None, verbose=False, pseudo_counts=True, full_matrix=True, in_mat=2):
+@profile
+def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
+    f = calculate2_sym_pseudoV
+    scores = []
+    scores.append( f(pred_ad,truth_ad))
+    pred_adt = pred_ad.T
+    truth_adt = truth_ad.T
+    scores.append(f(pred_adt,truth_adt))
+    del pred_adt, truth_adt
+    gc.collect()
+    truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
+    pred_c = 1 - pred_ccm - pred_ad - pred_ad.T
+    scores.append(f(pred_c,truth_c))
+    del pred_c, truth_c
+    gc.collect()
+
+    one_scores = []
+    one_ad = mb.get_ad('OneCluster', nssms=truth_ad.shape[0])
+    one_scores.append( f(one_ad,truth_ad))
+    one_adt = one_ad.T
+    truth_adt = truth_ad.T
+    one_scores.append(f(one_adt,truth_adt))
+    del one_adt, truth_adt
+    gc.collect()
+    truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
+    one_ccm = mb.get_ccm('OneCluster',nssms=truth_ccm.shape[0])
+    one_c = 1 - one_ccm - one_ad - one_ad.T
+    one_scores.append(f(one_c,truth_c))
+    del one_c, truth_c
+    gc.collect()
+
+    n_scores = []
+    n_ad = mb.get_ad('NClusterOneLineage', nssms=truth_ad.shape[0])
+    n_scores.append( f(n_ad,truth_ad))
+    n_adt = n_ad.T
+    truth_adt = truth_ad.T
+    n_scores.append(f(n_adt,truth_adt))
+    del n_adt, truth_adt
+    gc.collect()
+    truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
+    n_ccm = mb.get_ccm('NClusterOneLineage',nssms=truth_ccm.shape[0])
+    n_c = 1 - n_ccm - n_ad - n_ad.T
+    n_scores.append(f(n_c,truth_c))
+    del n_c, truth_c
+    gc.collect()
+
+    score = sum(scores)/3.0
+    one_score = sum(one_scores)/3.0
+    n_score = sum(n_scores)/3.0
+
+    return 1 - (score / max(one_score,n_score))
+
+
+def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV", weights=None, verbose=False, pseudo_counts=True, full_matrix=True, in_mat=2):
     """Calculate the score for subchallenge 3 using the given metric or a weighted average of the
     given metrics, if more than one are specified.
 
@@ -580,21 +696,10 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
     """
     larger_is_worse_methods = ['sym_pseudoV_nc', 'sym_pseudoV', 'pseudoV_nc', 'pseudoV', "simpleKL_nc", 'simpleKL'] # methods where a larger score is worse
 
-    if pseudo_counts:
-        if isinstance(pseudo_counts, int):
-            pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad), num=pseudo_counts) # add pseudo counts to the matrices
-            pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad), num=pseudo_counts) # use np.copy so that original values are not altered
-            ncluster_ccm, ncluster_ad = add_pseudo_counts(mb.get_ccm('NClusterOneLineage', truth_ccm), mb.get_ad('NClusterOneLineage', truth_ad), num=pseudo_counts) # predicted matrices for each mutation being in their own cluster
-            onecluster_ccm, onecluster_ad = add_pseudo_counts(mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad), num=pseudo_counts) # predicted matrices for all mutations being in the same cluster
-        else:
-            pc_pred_ccm, pc_pred_ad = add_pseudo_counts(np.copy(pred_ccm), np.copy(pred_ad))
-            pc_truth_ccm, pc_truth_ad = add_pseudo_counts(np.copy(truth_ccm), np.copy(truth_ad))
-            ncluster_ccm, ncluster_ad = add_pseudo_counts(mb.get_ccm('NClusterOneLineage', truth_ccm), mb.get_ad('NClusterOneLineage', truth_ad))
-            onecluster_ccm, onecluster_ad = add_pseudo_counts(mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad))
-    else:
-        pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad = pred_ccm, pred_ad, truth_ccm, truth_ad
-        ncluster_ccm, ncluster_ad = mb.get_ccm('NClusterOneLineage', truth_ccm), mb.get_ad('NClusterOneLineage', truth_ad)
-        onecluster_ccm, onecluster_ad = mb.get_ccm('OneCluster', truth_ccm), mb.get_ad('OneCluster', truth_ad)
+    
+    pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad = pred_ccm, pred_ad, truth_ccm, truth_ad
+    y = np.array(pc_pred_ad.shape)[1]
+    nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
 
     if isinstance(method, list):
         res = [calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad,
@@ -623,14 +728,23 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV_nc", 
         weights = np.array(weights) / float(sum(weights)) # normalize the weights
         score = sum(np.multiply(res, weights))
     else:
+        
         score =  calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad,
                                       method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
-
+        del pc_pred_ccm
+        del pc_pred_ad
         # normalize the score to be between (worst of NCluster score and OneCluster score) and (Truth score) - similar to above
+        ncluster_ccm, ncluster_ad = add_pseudo_counts(mb.get_ccm('NClusterOneLineage', nssms=nssms), mb.get_ad('NClusterOneLineage', nssms=nssms))
         ncluster_score = calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad,
                                               method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
+        del ncluster_ccm,ncluster_ad
+        onecluster_ccm, onecluster_ad = add_pseudo_counts(mb.get_ccm('OneCluster', nssms=nssms), mb.get_ad('OneCluster', nssms=nssms))
+        
         onecluster_score = calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad,
                                                 method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
+        del onecluster_ccm,onecluster_ad
+
+        print score, ncluster_score, onecluster_score
         if method in larger_is_worse_methods:
             worst_score = max(ncluster_score, onecluster_score)
             score = 1 - (score / worst_score)
@@ -728,7 +842,7 @@ def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, metho
               (method, str(ccm_res), str(ad_res),str(ad_res_t),str(cous_res), str(res)))
     return res
 
-def parseVCFSimple(data):
+def parseVCF1C(data):
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
@@ -736,7 +850,7 @@ def parseVCFSimple(data):
         raise ValidationError("Input VCF contains no SSMs")
     return [[len(data)],[len(data)]]
 
-def parseVCFScoring(data):
+def parseVCF2and3(data):
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
@@ -753,7 +867,7 @@ def filterFPs(matrix, mask):
         return matrix[np.ix_(mask, mask)]
     else:
         return matrix[mask,:]
-
+@profile
 def add_pseudo_counts(ccm,ad=None,num=None):
     """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
     subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
@@ -786,6 +900,71 @@ def add_pseudo_counts(ccm,ad=None,num=None):
 
     return ccm
 
+#
+def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
+    """Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
+
+    :param nssms: number of SSMs in the input
+    :param truth_ccm: true co-clustering matrix
+     :param truth_ad: true ancestor-descendent matrix (optional)
+     :param subchallenge: subchallenge to use in scoring, one of 'SC2' or 'SC3'.
+                If SC3 is selected then truth_ad cannot be None
+    :return: worst score of NCluster and OneCluster for SC2 or SC3 (depending on the input)
+    """
+
+    if subchallenge is 'SC3':
+        if truth_ad is None:
+            raise ValueError('truth_ad must not be None when scoring SC3')
+        else:
+            if larger_is_worse:
+                return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+            else:
+                return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+
+    elif subchallenge is 'SC2':
+        if larger_is_worse:
+            return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+        else:
+            return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+
+    else:
+        raise ValueError('Subchallenge must be one of SC2 or SC3')
+
+
+
+def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster', subchallenge='SC2',pseudo_counts=None):
+    if subchallenge is 'SC2':
+        bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario),num=pseudo_counts)
+        return score_fun(bad_ccm, true_ccm)
+    elif subchallenge is 'SC3':
+        bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario),num=pseudo_counts)
+        return score_fun(bad_ccm, bad_ad, true_ccm, true_ad)
+    else:
+        raise ValueError('Scenario must be one of SC2 or SC3')
+
+
+
+def get_bad_ccm(nssms, scenario='OneCluster'):
+    if scenario is 'OneCluster':
+        return np.ones([nssms,nssms])
+    elif scenario is 'NCluster':
+        return np.identity(nssms)
+    else:
+        raise ValueError('Scenario must be one of OneCluster or NClsuter')
+
+def get_bad_ad(nssms, scenario='OneCluster'):
+    if scenario is 'OneCluster':
+        return np.zeros([nssms,nssms])
+    elif scenario is 'NCluster':
+        return np.triu(np.ones([nssms, nssms]),k=1)
+    else:
+        raise ValueError('Scenario must be one of OneCluster or NClsuter')
+
+
 def verify(filename,role,func,*args):
     global err_msgs
     try:
@@ -807,17 +986,17 @@ def verify(filename,role,func,*args):
 
 challengeMapping = {     '1A': {'val_funcs':[validate1A],'score_func':calculate1A,'vcf_func':None, 'filter_func':None},
                         '1B': {'val_funcs':[validate1B],'score_func':calculate1B,'vcf_func':None, 'filter_func':None},
-                        '1C': {'val_funcs':[validate1C],'score_func':calculate1C,'vcf_func':parseVCFSimple, 'filter_func':None},
-                        '2A': {'val_funcs':[validate2A],'score_func':calculate2,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
-                        '2B': {'val_funcs':[validate2B],'score_func':calculate2,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
-                        '3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3A,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
-                        '3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3,'vcf_func':parseVCFScoring, 'filter_func':filterFPs},
+                        '1C': {'val_funcs':[validate1C],'score_func':calculate1C,'vcf_func':parseVCF1C, 'filter_func':None},
+                        '2A': {'val_funcs':[validate2A],'score_func':calculate2,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '2B': {'val_funcs':[validate2B],'score_func':calculate2,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
                     }
 
 def verifyChallenge(challenge,predfiles,vcf):
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
-        nssms = verify(vcf,"input VCF", parseVCFSimple)
+        nssms = verify(vcf,"input VCF", parseVCF1C)
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
@@ -836,7 +1015,7 @@ def verifyChallenge(challenge,predfiles,vcf):
             return "Invalid"
     return "Valid"
 
-
+@profile
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
@@ -858,7 +1037,12 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
         targs = tout + nssms[1]
-        tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
+        if challenge in ['2B','2A']:
+            vout = verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs)
+            vout2 = add_pseudo_counts(vout)
+            tout.append(vout2)
+        else:
+            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -869,9 +1053,16 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
             return "NA"
     if challengeMapping[challenge]['filter_func']:
         print('Filtering Challenge %s' % challenge)
+        #validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
+        #np.savetxt("test.3B.gz", pout[1])
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
+        if challenge in ['2B','2A']:
+            pout = [add_pseudo_counts(*pout)]
+        if challenge in ['3A']:
+            tout[0] = np.dot(tout[0],tout[0].T)
+            pout[0] = np.dot(pout[0],pout[0].T)
+            
     return challengeMapping[challenge]['score_func'](*(pout + tout))
-
 
 if __name__ == '__main__':
     global err_msgs
@@ -938,3 +1129,14 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
+'''
+if __name__ == "__main__":
+    filename = '/home/nwilson/Documents/SMC-Het/Galaxy34-[Co-Cluster_(Sub_Challenge_2B)](1).txt.part'
+    f = open(filename)
+    pred_data = f.read()
+    f.close()
+    #parseVCF2and3(pred_data)
+
+    tst = np.identity(10)
+    add_pseudo_counts(tst)
+'''
