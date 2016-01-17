@@ -176,7 +176,7 @@ def scoring1C_behavior(method='abs'):
     f.write('\n'.join(res))
     f.close()        
 
-def scoring2A_behavior(tst_reg_mat=True, tst_big_mat=True, tst_rand_reassign=True, tst_closest_reassign=True, method='default', verbose=False):
+def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_reassign=True, method='default', verbose=False):
     '''Test the scoring behaviour of different metrics for evaluating Sub-Challenge 2, under various conditions.
 
     :param tst_big_mat: boolean for whether to test all the mistake scenarios with a larger number of clusters
@@ -185,35 +185,32 @@ def scoring2A_behavior(tst_reg_mat=True, tst_big_mat=True, tst_rand_reassign=Tru
     :param method: scoring metric to use
     :param verbose: boolean for whether to print output on the status of the function
     '''
+
+    # Test the scoring behavior when the predicted CCM comes from one of the presepeficied 'mistake scenarios'
+    # i.e. mistakes in the co-clustering assignment that we expect people to make
+    if verbose:
+        print('Testing scoring for SC2 using the ' + method + ' scoring metric:')
+        print('Scoring behavior for mistake scenarios with 3 clusters...')
     size_clusters = 200 # true size of each cluster
     n_clusters = 3 # true number of clusters
     big_extra_num = 33 # number of mutations to add in the BigExtra case
+    # True CCM:
+    t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
     scenarios = ["SplitClusterBot", "MergeClusterBot", "OneCluster", "NCluster", "SmallExtra", "BigExtra"] # mistake scenarios to be tested
 
-    if verbose:
-        print('Testing scoring for SC2 using the ' + method + ' scoring metric:')
+    # Cases:
+    res = []
+    for sc in scenarios:
+        # calculate the CCM
+        ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
+        # calculate the score for the given scenario
+        res.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
-    if tst_reg_mat:
-        # Test the scoring behavior when the predicted CCM comes from one of the presepeficied 'mistake scenarios'
-        # i.e. mistakes in the co-clustering assignment that we expect people to make
-        if verbose:
-            print('Scoring behavior for mistake scenarios with 3 clusters...')
-        # True CCM:
-        t_ccm, t_clusters = get_ccm('Truth',size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-
-        # Cases:
-        res = []
-        for sc in scenarios:
-            # calculate the CCM
-            ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
-            # calculate the score for the given scenario
-            res.append([sc ,calculate2(ccm, t_ccm, method=method)])
-
-        res = [map(str,x) for x in res]
-        res = ['\t'.join(x) for x in res]
-        f = open(tsv_dir + 'scoring2A_cases_' + method + '.tsv', 'w')
-        f.write('\n'.join(res))
-        f.close()
+    res = [map(str,x) for x in res]
+    res = ['\t'.join(x) for x in res]
+    f = open(tsv_dir + 'scoring2A_cases_' + method + '.tsv', 'w')
+    f.write('\n'.join(res))
+    f.close()
 
     if tst_big_mat:
         # Same thing but with more groups (all of the same size)
@@ -254,9 +251,8 @@ def scoring2A_behavior(tst_reg_mat=True, tst_big_mat=True, tst_rand_reassign=Tru
             res['closest'] = []
 
         # Testing parameters
-        p_errors = range(1, 50)
-        p_errors = np.divide(p_errors, 100.0) #[0.01, 0.03,0.05,.1,.15,.25,.5] # probability that a mutation is reassigned
-        n_iter = 30 # number of iterations to perform for each p_err value
+        p_errors = [0.01,0.03,0.05,.1,.15,.25,.5] # probability that a mutation is reassigned
+        n_iter = 5 # number of iterations to perform for each p_err value
         size_clusters = 200 # true size of each cluster
         n_clusters = 5 # true number of clusters
 
@@ -444,7 +440,7 @@ def scoring2B_behavior(tst_betas=True, tst_prob_mod=True, tst_prob_mod_err=True,
 
 
 def scoring3A_behavior(method="orig", verbose=False, weights=None, save=True, pc_amount='more', full_matrix=True, in_mat=2):
-    '''Scoring behaviour of subchallenge 3 metrics for different mistake scenarios
+    '''Scoring behaviour of subchallenge 3 metrics
 
     Attributes:
     :param method: method or list of methods to use when evaluating each subchallenge scenario
@@ -544,7 +540,7 @@ def scoring3A_weight_behavior(methods=["pseudoV", "pearson", "sym_pseudoV"], ver
     '''
     # True values for each attribute
     if res is None:
-        res = np.transpose(np.asarray([[row[1] for row in scoring3A_behavior(method, verbose=verbose, in_mat=in_mat)] for method in methods]))
+        res = np.transpose(np.asarray([[row[1] for row in scoring3A_behavior(method, verbose=verbose)] for method in methods]))
     print res
 
     wght_res = {'Case':scenarios}
@@ -688,7 +684,7 @@ def rank(scores):
     rank = order.argsort()
     return rank + 1
 
-def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters=6, big_extra_num=15):
+def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters=6, big_extra_num=15, nssms=None):
     '''Find the co-clustering matrix for the given scenario
 
     Attributes:
@@ -703,7 +699,7 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters
         t_clusters = np.zeros((n_clusters*size_clusters,n_clusters))
         for i in range(n_clusters):
             t_clusters[i*size_clusters:(i+1)*size_clusters,i] = 1 #assign each cluster
-    if t_ccm is None:
+    if t_ccm is None and nssms is None:
         t_ccm = np.dot(t_clusters,t_clusters.T)
 
     if scenario in "Truth":
@@ -711,9 +707,9 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters
     elif "ParentIs" in scenario:
         return t_ccm
     elif scenario is "OneCluster":
-        return np.ones(t_ccm.shape)
+        return np.ones((nssms,nssms))
     elif "NCluster" in scenario:
-        return np.identity(t_ccm.shape[0])
+        return np.identity(nssms)
     elif "SplitCluster" in scenario:
         clusters = np.zeros((n_clusters*size_clusters,n_clusters+1))
         clusters[:,:-1] = np.copy(t_clusters)
@@ -770,14 +766,14 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters
     else:
         raise LookupError("Invalid scenario")
 
-def get_ad(scenario, t_ad=None, size_clusters=100):
+def get_ad(scenario, t_ad=None, size_clusters=100, nssms=None):
     '''Find the ancestry-descendant matrix for the given scenario
 
     Attributes:
     :param scenario: string representing the clustering scenario being evaluated
     :param t_ad: optional value for the true AD matrix, to avoid comupting it multiple times
     '''
-    if t_ad is None:
+    if t_ad is None and nssms is None:
         t_ad = np.zeros((6*size_clusters,6*size_clusters))
         t_ad[0:size_clusters, size_clusters:] = 1
         t_ad[size_clusters:2*size_clusters, 3*size_clusters:5*size_clusters] = 1
@@ -840,9 +836,9 @@ def get_ad(scenario, t_ad=None, size_clusters=100):
         ad[5*size_clusters:6*size_clusters, range(size_clusters,2*size_clusters)+range(3*size_clusters,5*size_clusters)] = 1 #adjust cluster 6's ancestry
         return ad
     elif scenario is "OneCluster":
-        return np.zeros(t_ad.shape)
+        return np.zeros((nssms,nssms))
     elif scenario is "NClusterOneLineage":
-        return np.triu(np.ones(t_ad.shape), k=1)
+        return np.triu(np.ones((nssms,nssms)), k=1)
     elif scenario is "NClusterTwoLineages":
         ad = np.triu(np.ones(t_ad.shape), k=1)
         ad[2:3*size_clusters+2,3*size_clusters+2:] = 0
@@ -1060,12 +1056,11 @@ if __name__ == '__main__':
     for m in methods['1C']:
         print 'Scoring 1C Behavior with method ' + m + '...'
         scoring1C_behavior(m)
-
     for m in methods['2']:
-        print 'Scoring 2A Behavior with method ' + m + '...'
-        scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=True,tst_rand_reassign=False, tst_reg_mat=False)
         print 'Scoring 2B Behavior with method ' + m + '...'
         scoring2B_behavior(method=m, verbose=True, tst_betas=True, tst_prob_mod_err=False, tst_prob_mod=False)
+        scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=False)
+
 
     print 'Scoring 3A Behavior...'
     scoring3A_behavior_all(verbose=True)

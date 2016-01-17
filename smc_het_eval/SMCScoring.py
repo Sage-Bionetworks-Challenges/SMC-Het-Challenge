@@ -9,7 +9,6 @@ import sys
 import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
-import memory_manage as mm
 import gc
 
 class ValidationError(Exception):
@@ -318,7 +317,6 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
     pv_val = calculate2_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-@profile
 def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
@@ -390,7 +388,6 @@ def calculate2_spearman(pred, truth, full_matrix=True):
 
     return row
 
-@profile
 def calculate2_pearson(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
@@ -458,7 +455,7 @@ def calculate2_aupr(pred,truth, full_matrix=True):
 
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
-@profile
+
 def calculate2_mcc(pred,truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
@@ -506,7 +503,6 @@ def calculate2_mcc(pred,truth, full_matrix=True):
 
     return num / float(denom)
 
-@profile
 def validate2B(filename,nssms):
     try:
         if filename.endswith('.gz'):
@@ -619,7 +615,6 @@ def validate3B(filename, ccm, nssms):
 #    truth_ccm = np.dot(np.dot(truth_ca,truth_ca.T))
 #    return calculate3(np.dot(pred_ca,pred_ca.T),pred_ad,,truth_ad)
 
-@profile
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     f = calculate2_sym_pseudoV
     scores = []
@@ -867,7 +862,7 @@ def filterFPs(matrix, mask):
         return matrix[np.ix_(mask, mask)]
     else:
         return matrix[mask,:]
-@profile
+
 def add_pseudo_counts(ccm,ad=None,num=None):
     """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
     subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
@@ -1015,7 +1010,7 @@ def verifyChallenge(challenge,predfiles,vcf):
             return "Invalid"
     return "Valid"
 
-@profile
+
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
