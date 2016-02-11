@@ -846,15 +846,28 @@ def parseVCF1C(data):
     return [[len(data)],[len(data)]]
 
 def parseVCF2and3(data):
+    # array of lines
     data = data.split('\n')
+    # array of non-blank lines
     data = [x for x in data if x != '']
+    # array of non-comment lines
     data = [x for x in data if x[0] != '#']
     if len(data) == 0:
         raise ValidationError("Input VCF contains no SSMs")
     total_ssms = len(data)
+    # check if line is true or false, array of 0/1's
     mask = [x[-4:] == "True" for x in data]
+    # enumerate returns tuple of (index, object)
+    # get array of indices that are true in mask
     mask = [i for i,x in enumerate(mask) if x]
     tp_ssms = len(mask)
+
+    # return
+    # [
+    #     [ total real lines in vcf ],
+    #     [ total true lines in vcf (mask) ],
+    #     [ array of indices of objects in mask that are true ]
+    # ]
     return [[total_ssms],[tp_ssms],mask]
 
 def filterFPs(matrix, mask):
@@ -988,10 +1001,10 @@ challengeMapping = {     '1A': {'val_funcs':[validate1A],'score_func':calculate1
                         '3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
                     }
 
-def verifyChallenge(challenge,predfiles,vcf):
+def verifyChallenge(challenge, predfiles, vcf):
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
-        nssms = verify(vcf,"input VCF", parseVCF1C)
+        nssms = verify(vcf, "input VCF", parseVCF1C)
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
@@ -1003,61 +1016,72 @@ def verifyChallenge(challenge,predfiles,vcf):
         return "Invalid"
 
     out = []
-    for (predfile,valfunc) in zip(predfiles,challengeMapping[challenge]['val_funcs']):
+    for (predfile, valfunc) in zip(predfiles, challengeMapping[challenge]['val_funcs']):
         args = out + nssms[0]
-        out.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*args))
+        out.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *args))
         if out[-1] == None:
             return "Invalid"
     return "Valid"
 
 
-def scoreChallenge(challenge,predfiles,truthfiles,vcf):
+def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     global err_msgs
+
     if challengeMapping[challenge]['vcf_func']:
-        nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
+        nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'])
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
-
     else:
         nssms = [[],[]]
+
+    print('total vcf lines -> ' + str(nssms[0]))
+    print('total mask lines -> ' + str(nssms[1]))
+
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
         return "NA"
 
     tout = []
     pout = []
-    for predfile,truthfile,valfunc in zip(predfiles,truthfiles,challengeMapping[challenge]['val_funcs']):
+
+    for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
         if truthfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
+
         targs = tout + nssms[1]
+        print(targs)
+
         if challenge in ['2B','2A']:
-            vout = verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs)
+            vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             vout2 = add_pseudo_counts(vout)
             tout.append(vout2)
         else:
-            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
+            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
+
         pargs = pout + nssms[0]
-        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
+        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
+
         if tout[-1] == None or pout[-1] == None:
             return "NA"
-    if challengeMapping[challenge]['filter_func']:
-        print('Filtering Challenge %s' % challenge)
-        #validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
-        #np.savetxt("test.3B.gz", pout[1])
-        pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
-        if challenge in ['2B','2A']:
-            pout = [add_pseudo_counts(*pout)]
-        if challenge in ['3A']:
-            tout[0] = np.dot(tout[0],tout[0].T)
-            pout[0] = np.dot(pout[0],pout[0].T)
+    # if challengeMapping[challenge]['filter_func']:
+    #     print('Filtering Challenge %s' % challenge)
+    #     #validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
+    #     #np.savetxt("test.3B.gz", pout[1])
+    #     pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
+    #     if challenge in ['2B','2A']:
+    #         pout = [add_pseudo_counts(*pout)]
+    #     if challenge in ['3A']:
+    #         tout[0] = np.dot(tout[0],tout[0].T)
+    #         pout[0] = np.dot(pout[0],pout[0].T)
             
-    return challengeMapping[challenge]['score_func'](*(pout + tout))
+    # return challengeMapping[challenge]['score_func'](*(pout + tout))
+    return "success"
 
 if __name__ == '__main__':
     global err_msgs
