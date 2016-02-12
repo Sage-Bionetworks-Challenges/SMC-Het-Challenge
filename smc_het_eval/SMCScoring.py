@@ -216,8 +216,13 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     :param pseudo_counts: logical for how many psuedo counts to add to the matrices
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
+
     larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+    # y = pred.n
     y = np.array(pred.shape)[1]
+    # nssms
+    # recall when we did m = n + sqrt(n)
+    # nssms = n, given m, using quadratic
     nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
     import gc
 
@@ -236,16 +241,22 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
         worst_scores = []
         for m in ['pseudoV', 'pearson', 'mcc']:
             gc.collect()
+            timmie = time.time()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
+            timmie2 = time.time() - timmie
+            print("method %s took %s seconds" % (m, round(timmie2, 2)))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
         for m in ['pseudoV', 'pearson', 'mcc']:
             gc.collect()
+            timmie = time.time()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse= (m in larger_is_worse_methods)))
+            timmie2 = time.time() - timmie
+            print("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
         for i,m in enumerate(['pseudoV', 'pearson', 'mcc']):
             if m in larger_is_worse_methods:
-                scores[i] = 1 - (scores[i]/worst_scores[i])
+                scores[i] = 1 - (scores[i] / worst_scores[i])
             else:
-                scores[i] = (scores[i] -worst_scores[i]) / (1-worst_scores[i])
+                scores[i] = (scores[i] - worst_scores[i]) / (1 - worst_scores[i])
         return np.mean(scores)
 
     else:
@@ -1074,8 +1085,10 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         if challenge in ['2B','2A']:
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
+            print('truth ccm nxn -> ', vout.shape)
 # 3
             vout2 = add_pseudo_counts(vout)
+            print('pseudod truth ccm nxn -> ', vout2.shape)
             tout.append(vout2)
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
@@ -1092,6 +1105,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         timmie = time.time()
 # 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
+        print('pred ccm nxn -> ', pout[0].shape)
 
         timmie2 = time.time() - timmie
         print("verify(pred) took %s seconds" % round(timmie2, 2))
@@ -1105,18 +1119,18 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         # np.savetxt("test.3B.gz", pout[1])
 # 5
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
-
-        print(pout)
-        print(pout[0].shape)
+        print('filtered pred ccm nxn -> ', pout[0].shape)
 
         if challenge in ['2B','2A']:
 # 6
             pout = [ add_pseudo_counts(*pout) ]
+            print('pseudod filtered pred ccm nxn -> ', pout[0].shape)
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0],tout[0].T)
             pout[0] = np.dot(pout[0],pout[0].T)
             
     return challengeMapping[challenge]['score_func'](*(pout + tout))
+    # return 'success'
 
 if __name__ == '__main__':
     global err_msgs
@@ -1126,8 +1140,8 @@ if __name__ == '__main__':
     parser.add_argument("--pred-config", default=None)
     parser.add_argument("--truth-config", default=None)
     parser.add_argument("-c", "--challenge", default=None)
-    parser.add_argument("--predfiles",nargs="+")
-    parser.add_argument("--truthfiles",nargs="*")
+    parser.add_argument("--predfiles", nargs="+")
+    parser.add_argument("--truthfiles", nargs="*")
     parser.add_argument("--vcf")
     parser.add_argument("-o", "--outputfile")
     parser.add_argument('-v', action='store_true', default=False)
@@ -1140,7 +1154,7 @@ if __name__ == '__main__':
             for line in handle:
                 try:
                     v = json.loads(line)
-                    if isinstance(v,dict):
+                    if isinstance(v, dict):
                         pred_config = dict(pred_config, **v)
                 except ValueError as e:
                     pass
@@ -1149,7 +1163,7 @@ if __name__ == '__main__':
             for line in handle:
                 try:
                     v = json.loads(line)
-                    if isinstance(v,dict):
+                    if isinstance(v, dict):
                         truth_config = dict(truth_config, **v)
                 except ValueError as e:
                     pass
@@ -1162,18 +1176,18 @@ if __name__ == '__main__':
                 vcf = truth_config[challenge]['vcf']
                 truthfiles = truth_config[challenge]['truth']
                 if args.v:
-                    res = verifyChallenge(challenge,predfile,vcf)
+                    res = verifyChallenge(challenge, predfile, vcf)
                 else:
-                    res = scoreChallenge(challenge,predfile,truthfiles,vcf)
+                    res = scoreChallenge(challenge, predfile, truthfiles, vcf)
                 out[challenge] = res
         with open(args.outputfile, "w") as handle:
-            jtxt = json.dumps( out )
+            jtxt = json.dumps(out)
             handle.write(jtxt)
     else:
         if args.v:
-            res = verifyChallenge(args.challenge,args.predfiles,args.vcf)
+            res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
         else:
-            res = scoreChallenge(args.challenge,args.predfiles,args.truthfiles,args.vcf)
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
 
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )

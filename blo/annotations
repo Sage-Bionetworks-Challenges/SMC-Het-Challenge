@@ -42,4 +42,16 @@ scoreChallenge
 		- the extension portion is from an m x m identity matrix
 		- return - extended prediction ccm
 	7 - score function
-		- 
+		- calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None)
+		- input - prediction ccm (pccm), truth ccm (tccm)
+		- using pccm.n, calculate #true
+		- method param provided into function call was empty so defaults to 'default'
+		- func is None
+		- for m in ['pseudoV', 'pearson', 'mcc']
+			- garbage collect
+			- m(pred, truth, full_matrix=True)
+			########## tiny runtimes ##########
+				- pseudoV	0.35		0.76
+				- pearson	13.14		26.15
+				- mcc		7.45		14.42
+			###################################
