@@ -137,6 +137,10 @@ def calculate1C(pred, truth, err='abs'):
     return sum(1-se)/float(len(truthvs))
 
 def validate2A(data, nssms, return_ccm=True):
+    # validate2A only fails input if..
+    #   - length(truthfile) != length(mask)
+    #   - if an entry in truthfile can't be cast to int
+    #   - if set(truthfile) != seq(1, len(set(truthfile)), 1)
     data = data.split('\n')
     data = filter(None, data)
     if len(data) != nssms:
@@ -148,7 +152,7 @@ def validate2A(data, nssms, return_ccm=True):
             data[i] = int(data[i])
             cluster_entries.add(data[i])
         except ValueError:
-            raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i+1,data[i][0]))
+            raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i + 1, data[i][0]))
     used_clusters = sorted(list(cluster_entries))
     # expect the set to be equal to seq(1, len(set), 1)
     expected_clusters = range(1, len(cluster_entries) + 1)
@@ -157,24 +161,26 @@ def validate2A(data, nssms, return_ccm=True):
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
     # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
-    c_m = np.zeros((len(data),len(cluster_entries)))
+    c_m = np.zeros((len(data), len(cluster_entries)))
 
     # for each value in truthfile, put a 1 in the m index of the n row
     for i in xrange(len(data)):
-        c_m[i,data[i]-1] = 1
+        c_m[i, data[i] - 1] = 1
 
     if not return_ccm:
         return c_m
     else:
-        ccm = np.dot(c_m,c_m.T)
+        # return the dot product of c_m * t(c_m)
+        # this always gives a symmetric matrix
+        ccm = np.dot(c_m, c_m.T)
         return ccm
 
-def validate2Afor3A(data,nssms):
-    return validate2A(data,nssms,False)
+def validate2Afor3A(data, nssms):
+    return validate2A(data, nssms, False)
 
-def calculate2_quaid(pred,truth):
+def calculate2_quaid(pred, truth):
     n = truth.shape[0]
-    indices = np.triu_indices(n,k=1)
+    indices = np.triu_indices(n, k=1)
     ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices])
     ones_count = np.count_nonzero(truth[indices])
     if ones_count > 0:
@@ -882,17 +888,20 @@ def filterFPs(matrix, mask):
     else:
         return matrix[mask,:]
 
-def add_pseudo_counts(ccm,ad=None,num=None):
+def add_pseudo_counts(ccm, ad=None, num=None):
     """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
     subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
     either of these matrices has a variance of zero. These fake mutations must be added to both the predicted
-    and ruth matrices.
+    and truth matrices.
 
     :param ccm: co-clustering matrix
     :param ad: ancestor-descendant matrix (optional, to be compatible with subchallenge 2)
     :param num: number of pseudo counts to add
     :return: modified ccm and ad matrices
     """
+    # create an m x m identity matrix where m = (ccm.n + sqrt(ccm.n))
+    # copy ccm into the identity matrix
+    # basically we're extending ccm with identity values
     size = np.array(ccm.shape)[1]
 
     if num is None:
@@ -912,6 +921,7 @@ def add_pseudo_counts(ccm,ad=None,num=None):
         ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
+    # return the identity-extended ccm
     return ccm
 
 #
@@ -1033,18 +1043,14 @@ def verifyChallenge(challenge, predfiles, vcf):
 def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     global err_msgs
 
-    timmie = time.time()
-
     if challengeMapping[challenge]['vcf_func']:
+# 1
         nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'])
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
     else:
         nssms = [[],[]]
-
-    timmie2 = time.time() - timmie
-    print("verify(vcf) took %s seconds" % round(timmie2, 2))
 
     print('total vcf lines -> ' + str(nssms[0]))
     print('total mask lines -> ' + str(nssms[1]))
@@ -1062,50 +1068,55 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             return "NA"
 
         targs = tout + nssms[1]
-        print(targs)
-
-        ## B L O ##
 
         timmie = time.time()
 
         if challenge in ['2B','2A']:
+# 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
-        #     vout2 = add_pseudo_counts(vout)
-        #     tout.append(vout2)
-        # else:
-        #     tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
+# 3
+            vout2 = add_pseudo_counts(vout)
+            tout.append(vout2)
+        else:
+            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
 
         timmie2 = time.time() - timmie
-        print("verify(truth) took %s seconds" % round(timmie2, 2))
+        print("add_pseudo_counts(verify(truth)) took %s seconds" % round(timmie2, 2))
 
-    #     if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
-    #         err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
-    #         return "NA"
+        if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
+            err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
+            return "NA"
 
-    #     pargs = pout + nssms[0]
+        pargs = pout + nssms[0]
 
-    #     timmie = time.time()
+        timmie = time.time()
+# 4
+        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
 
-    #     pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
+        timmie2 = time.time() - timmie
+        print("verify(pred) took %s seconds" % round(timmie2, 2))
 
-    #     timmie2 = time.time() - timmie
-    #     print("verify(pred) took %s seconds" % round(timmie2, 2))
+        if tout[-1] == None or pout[-1] == None:
+            return "NA"
 
-    #     if tout[-1] == None or pout[-1] == None:
-    #         return "NA"
-    # if challengeMapping[challenge]['filter_func']:
-    #     print('Filtering Challenge %s' % challenge)
-    #     #validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
-    #     #np.savetxt("test.3B.gz", pout[1])
-    #     pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
-    #     if challenge in ['2B','2A']:
-    #         pout = [add_pseudo_counts(*pout)]
-    #     if challenge in ['3A']:
-    #         tout[0] = np.dot(tout[0],tout[0].T)
-    #         pout[0] = np.dot(pout[0],pout[0].T)
+    if challengeMapping[challenge]['filter_func']:
+        print('Filtering Challenge %s' % challenge)
+        # validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
+        # np.savetxt("test.3B.gz", pout[1])
+# 5
+        pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
+
+        print(pout)
+        print(pout[0].shape)
+
+        if challenge in ['2B','2A']:
+# 6
+            pout = [ add_pseudo_counts(*pout) ]
+        if challenge in ['3A']:
+            tout[0] = np.dot(tout[0],tout[0].T)
+            pout[0] = np.dot(pout[0],pout[0].T)
             
-    # return challengeMapping[challenge]['score_func'](*(pout + tout))
-    return "success"
+    return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 if __name__ == '__main__':
     global err_msgs
