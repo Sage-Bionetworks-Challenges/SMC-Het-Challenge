@@ -10,7 +10,11 @@ import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
 import gc
+
+# blo
 import time
+import resource
+import os
 
 class ValidationError(Exception):
     def __init__(self, value):
@@ -206,9 +210,9 @@ def calculate2_quaid(pred, truth):
             print ones_score, zeros_score
             return 0
 #@profile
-def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=None):
-    '''Calculate the score for SubChallenge 2
-
+def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None):
+    '''
+    Calculate the score for SubChallenge 2
     :param pred: predicted co-clustering matrix
     :param truth: true co-clustering matrix
     :param full_matrix: logical for whether to use the full matrix or just the upper triangular matrices when calculating the score
@@ -239,20 +243,29 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     if func is None:
         scores = []
         worst_scores = []
-        for m in ['pseudoV', 'pearson', 'mcc']:
+
+        # functions = ['pseudoV', 'pearson', 'mcc']
+        functions = ['pseudoV']
+        # functions = ['pearson']
+        # functions = ['mcc']
+
+        # for m in ['pseudoV', 'pearson', 'mcc']:
+        for m in functions:
             gc.collect()
             timmie = time.time()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
             timmie2 = time.time() - timmie
             print("method %s took %s seconds" % (m, round(timmie2, 2)))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
-        for m in ['pseudoV', 'pearson', 'mcc']:
+        # for m in ['pseudoV', 'pearson', 'mcc']:
+        for m in functions:
             gc.collect()
             timmie = time.time()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse= (m in larger_is_worse_methods)))
             timmie2 = time.time() - timmie
             print("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
-        for i,m in enumerate(['pseudoV', 'pearson', 'mcc']):
+        # for i,m in enumerate(['pseudoV', 'pearson', 'mcc']):
+        for i,m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = 1 - (scores[i] / worst_scores[i])
             else:
@@ -269,7 +282,7 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
             score = (score - worst_score) / (1 - worst_score)
         return score
 
-def calculate2_orig(pred,truth, full_matrix=True):
+def calculate2_orig(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
         pred_cp = np.copy(pred)
@@ -340,7 +353,7 @@ def calculate2_pseudoV_norm(pred,truth,rnd=0.01, max_val=4000, full_matrix=True)
     pv_val = calculate2_pseudoV(pred,truth,rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
+def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -369,7 +382,7 @@ def calculate2_pseudoV(pred,truth,rnd=0.01, full_matrix=True, sym=False):
             res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
-def calculate2_sym_pseudoV_norm(pred,truth,rnd=0.01, max_val=8000, full_matrix=True):
+def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -891,7 +904,7 @@ def parseVCF2and3(data):
     #     [ total true lines in vcf (mask) ],
     #     [ array of indices of objects in mask that are true ]
     # ]
-    return [[total_ssms],[tp_ssms],mask]
+    return [[total_ssms], [tp_ssms], mask]
 
 def filterFPs(matrix, mask):
     if matrix.shape[0] == matrix.shape[1]:
@@ -900,7 +913,8 @@ def filterFPs(matrix, mask):
         return matrix[mask,:]
 
 def add_pseudo_counts(ccm, ad=None, num=None):
-    """Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
+    """
+    Add a small number of fake mutations or 'pseudo counts' to the co-clustering and ancestor-descendant matrices for
     subchallenges 2 and 3, each in their own, new cluster. This ensures that there are not cases where
     either of these matrices has a variance of zero. These fake mutations must be added to both the predicted
     and truth matrices.
@@ -919,7 +933,7 @@ def add_pseudo_counts(ccm, ad=None, num=None):
         num = np.sqrt(size)
     elif num == 0:
         return ccm, ad
-    
+
     new_ccm = np.identity(size + num)
     new_ccm[:size, :size] = np.copy(ccm)
     ccm = new_ccm
@@ -937,12 +951,13 @@ def add_pseudo_counts(ccm, ad=None, num=None):
 
 #
 def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
-    """Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
+    """
+    Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
 
     :param nssms: number of SSMs in the input
     :param truth_ccm: true co-clustering matrix
-     :param truth_ad: true ancestor-descendent matrix (optional)
-     :param subchallenge: subchallenge to use in scoring, one of 'SC2' or 'SC3'.
+    :param truth_ad: true ancestor-descendent matrix (optional)
+    :param subchallenge: subchallenge to use in scoring, one of 'SC2' or 'SC3'.
                 If SC3 is selected then truth_ad cannot be None
     :return: worst score of NCluster and OneCluster for SC2 or SC3 (depending on the input)
     """
@@ -971,9 +986,9 @@ def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge=
 
 
 
-def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster', subchallenge='SC2',pseudo_counts=None):
+def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None):
     if subchallenge is 'SC2':
-        bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario),num=pseudo_counts)
+        bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario), num=pseudo_counts)
         return score_fun(bad_ccm, true_ccm)
     elif subchallenge is 'SC3':
         bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario),num=pseudo_counts)
@@ -981,11 +996,9 @@ def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster
     else:
         raise ValueError('Scenario must be one of SC2 or SC3')
 
-
-
 def get_bad_ccm(nssms, scenario='OneCluster'):
     if scenario is 'OneCluster':
-        return np.ones([nssms,nssms])
+        return np.ones([nssms, nssms])
     elif scenario is 'NCluster':
         return np.identity(nssms)
     else:
@@ -1052,6 +1065,7 @@ def verifyChallenge(challenge, predfiles, vcf):
 
 
 def scoreChallenge(challenge, predfiles, truthfiles, vcf):
+    mem('start')
     global err_msgs
 
     if challengeMapping[challenge]['vcf_func']:
@@ -1062,6 +1076,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             return "NA"
     else:
         nssms = [[],[]]
+
+    mem('1 - verify vcf')
 
     print('total vcf lines -> ' + str(nssms[0]))
     print('total mask lines -> ' + str(nssms[1]))
@@ -1086,10 +1102,14 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             print('truth ccm nxn -> ', vout.shape)
+
+            mem('2 - verify truth')
 # 3
             vout2 = add_pseudo_counts(vout)
             print('pseudod truth ccm nxn -> ', vout2.shape)
             tout.append(vout2)
+
+            mem('3 - truth pseudo counts')
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
 
@@ -1107,6 +1127,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
         print('pred ccm nxn -> ', pout[0].shape)
 
+        mem('4 - verify pred')
+
         timmie2 = time.time() - timmie
         print("verify(pred) took %s seconds" % round(timmie2, 2))
 
@@ -1121,16 +1143,54 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         print('filtered pred ccm nxn -> ', pout[0].shape)
 
+        mem('5 - filter pred')
+
         if challenge in ['2B','2A']:
 # 6
             pout = [ add_pseudo_counts(*pout) ]
             print('pseudod filtered pred ccm nxn -> ', pout[0].shape)
+
+            mem('6 - filtered pred pseudo counts')
+
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0],tout[0].T)
             pout[0] = np.dot(pout[0],pout[0].T)
-            
-    return challengeMapping[challenge]['score_func'](*(pout + tout))
-    # return 'success'
+
+    mem('okok')
+    # pouty = np.ones([1938, 1938])
+    pouty = np.ones([12000, 12000])
+    mem('okok2')
+
+    # return challengeMapping[challenge]['score_func'](*(pout + tout))
+    return 'success'
+
+def mem(note):
+    pid = os.getpid()
+    with open(os.path.join('/proc', str(pid), 'status')) as f:
+        lines = f.readlines()
+    _vt = [l for l in lines if l.startswith("VmSize")][0]
+    vt = mem_pretty(int(_vt.split()[1]))
+    _vmax = [l for l in lines if l.startswith("VmPeak")][0]
+    vmax = mem_pretty(int(_vmax.split()[1]))
+    _vram = [l for l in lines if l.startswith("VmRSS")][0]
+    vram = mem_pretty(int(_vram.split()[1]))
+    _vswap = [l for l in lines if l.startswith("VmSwap")][0]
+    vswap = mem_pretty(int(_vswap.split()[1]))
+
+    vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+    print('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+
+def mem_pretty(mem):
+    denom = 1
+    unit = 'kb'
+    if (mem > 999999):
+        denom = 1000000.0
+        unit ='gb'
+    elif (mem > 999):
+        denom = 1000.0
+        unit ='mb'
+    return str(mem / denom) + unit
 
 if __name__ == '__main__':
     global err_msgs
@@ -1192,6 +1252,8 @@ if __name__ == '__main__':
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
             handle.write(jtxt)
+
+    mem('7 - score')
 
     if len(err_msgs) > 0:
         for msg in err_msgs:
