@@ -455,6 +455,7 @@ def mymean(vec1, vec2):
     M = float(N**2)
     for i in xrange(N):
         for j in xrange(N):
+            # cast point if using int8 matrices
             m1 += vec1[i, j]/ M
             m2 += vec2[i, j]/ M
     return m1, m2
@@ -493,6 +494,7 @@ def calculate2_aupr(pred, truth, full_matrix=True):
 
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
+# note about casting: should be int/float friendly for pred/truth matrices
 
 def calculate2_mcc(pred, truth, full_matrix=True):
     n = truth.shape[0]
@@ -503,6 +505,7 @@ def calculate2_mcc(pred, truth, full_matrix=True):
         inds = np.triu_indices(n, k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
+    # TruePositive, TrueNegative, FalsePositive, FalseNegative
     tp = 0
     tn = 0
     fp = 0
@@ -510,12 +513,13 @@ def calculate2_mcc(pred, truth, full_matrix=True):
     # np.savetxt("test_pred_cp.txt", pred_cp)
     for i in xrange(pred_cp.shape[0]):
         for j in xrange(pred_cp.shape[1]):
+            # correct because truth_cp values should be boolean casted ints?
             if truth_cp[i, j] and pred_cp[i, j] >= 0.5:
-                tp = tp +1.0
+                tp = tp + 1.0
             elif truth_cp[i, j] and pred_cp[i, j] < 0.5:
                 fn = fn + 1.0
             if (not truth_cp[i, j]) and pred_cp[i, j] >= 0.5:
-                fp = fp +1.0
+                fp = fp + 1.0
             elif (not truth_cp[i, j]) and pred_cp[i, j] < 0.5:
                 tn = tn + 1.0
 
@@ -1011,7 +1015,7 @@ def get_bad_ccm(nssms, scenario='OneCluster'):
     elif scenario is 'NCluster':
         return np.identity(nssms, dtype=np.int8)
     else:
-        raise ValueError('Scenario must be one of OneCluster or NClsuter')
+        raise ValueError('Scenario must be one of OneCluster or NCluster')
 
 def get_bad_ad(nssms, scenario='OneCluster'):
     if scenario is 'OneCluster':
@@ -1019,7 +1023,7 @@ def get_bad_ad(nssms, scenario='OneCluster'):
     elif scenario is 'NCluster':
         return np.triu(np.ones([nssms, nssms]), k=1)
     else:
-        raise ValueError('Scenario must be one of OneCluster or NClsuter')
+        raise ValueError('Scenario must be one of OneCluster or NCluster')
 
 
 def verify(filename, role, func, *args):
