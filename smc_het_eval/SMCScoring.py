@@ -165,7 +165,7 @@ def validate2A(data, nssms, return_ccm=True):
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
     # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
-    # c_m = np.zeros((len(data), len(cluster_entries)))
+    # use dtype=np.int8 for c_m/ccm because we just need 0 and 1 integer values
     c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
 
     # for each value in truthfile, put a 1 in the m index of the n row
@@ -706,7 +706,8 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
 
 
 def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV", weights=None, verbose=False, pseudo_counts=True, full_matrix=True, in_mat=2):
-    """Calculate the score for subchallenge 3 using the given metric or a weighted average of the
+    """
+    Calculate the score for subchallenge 3 using the given metric or a weighted average of the
     given metrics, if more than one are specified.
 
     :param pred_ccm: predicted co-clustering matrix
@@ -940,7 +941,6 @@ def add_pseudo_counts(ccm, ad=None, num=None):
         return ccm, ad
 
     # added dtype=ccm.dtype because some matrices (that only have integer values of 0 and 1) can use int8 instead of the default float64
-    # int8 will theoretically use 8x less memory that float64
     # this shoudn't cause issues downstream in calculations because there is (from what I can tell) always a float value to cast the expression to float
     new_ccm = np.identity(size + num, dtype=ccm.dtype)
     new_ccm[:size, :size] = np.copy(ccm)
