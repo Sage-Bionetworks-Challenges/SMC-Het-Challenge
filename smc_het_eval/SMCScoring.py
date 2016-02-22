@@ -24,7 +24,7 @@ class ValidationError(Exception):
 
 def validate1A(data):
     data = data.split('\n')
-    data = filter(None,data)
+    data = filter(None, data)
     if len(data) < 1:
         raise ValidationError("Input file contains zero lines")
     if len(data) > 1:
@@ -45,7 +45,7 @@ def validate1A(data):
 
     return numeric
 
-def calculate1A(pred,truth, err='abs'):
+def calculate1A(pred, truth, err='abs'):
     if err is 'abs':
         return 1 - abs(truth - pred)
     elif err is 'sqr':
@@ -55,7 +55,7 @@ def calculate1A(pred,truth, err='abs'):
 
 def validate1B(data):
     data = data.split('\n')
-    data = filter(None,data)
+    data = filter(None, data)
     if len(data) != 1:
         if len(data) == 0:
             raise ValidationError("Input file contains zero lines")
@@ -165,8 +165,8 @@ def validate2A(data, nssms, return_ccm=True):
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
     # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
-    c_m = np.zeros((len(data), len(cluster_entries)))
-    # c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
+    # c_m = np.zeros((len(data), len(cluster_entries)))
+    c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
 
     # for each value in truthfile, put a 1 in the m index of the n row
     for i in xrange(len(data)):
@@ -245,8 +245,8 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        functions = ['pseudoV', 'pearson', 'mcc']
-        # functions = ['pseudoV']
+        # functions = ['pseudoV', 'pearson', 'mcc']
+        functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
 
@@ -371,6 +371,7 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
 
     # do one row at a time to reduce memory usage
     for x in xrange(size):
+        # (1 - rnd) will cast the pred_cp/truth_cp matrices automatically if they are int8
         pred_row = (1 - rnd) * pred_cp[x,] + rnd
         truth_row = (1 - rnd) * truth_cp[x,] + rnd
 
@@ -430,13 +431,13 @@ def calculate2_pearson(pred, truth, full_matrix=True):
     if full_matrix:
         pass
     else:
-        inds = np.triu_indices(n,k=1)
+        inds = np.triu_indices(n, k=1)
         pred = pred[inds]
         truth = truth[inds]
 
-    return call_pearson(pred,truth)
+    return call_pearson(pred, truth)
 
-def call_pearson(p,t):
+def call_pearson(p, t):
     pbar=0
     tbar = 0
     N = p.shape[0]
@@ -929,6 +930,8 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     # copy ccm into the identity matrix
     # basically we're extending ccm with identity values
 
+    print('!!! apc getting a %s matrix' % ccm.dtype)
+
     size = np.array(ccm.shape)[1]
 
     if num is None:
@@ -936,8 +939,10 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     elif num == 0:
         return ccm, ad
 
-    new_ccm = np.identity(size + num)
-    # new_ccm = np.identity(size + num, dtype=np.int8)
+    # added dtype=ccm.dtype because some matrices (that only have integer values of 0 and 1) can use int8 instead of the default float64
+    # int8 will theoretically use 8x less memory that float64
+    # this shoudn't cause issues downstream in calculations because there is (from what I can tell) always a float value to cast the expression to float
+    new_ccm = np.identity(size + num, dtype=ccm.dtype)
     new_ccm[:size, :size] = np.copy(ccm)
     ccm = new_ccm
 
@@ -994,18 +999,17 @@ def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster
         bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario), num=pseudo_counts)
         return score_fun(bad_ccm, true_ccm)
     elif subchallenge is 'SC3':
-        bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario),num=pseudo_counts)
+        bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario), num=pseudo_counts)
         return score_fun(bad_ccm, bad_ad, true_ccm, true_ad)
     else:
         raise ValueError('Scenario must be one of SC2 or SC3')
 
 def get_bad_ccm(nssms, scenario='OneCluster'):
+    # no need to use default float64 matrices, we're just making ones and identity matrices
     if scenario is 'OneCluster':
-        # return np.ones([nssms, nssms], dtype=np.int8)
-        return np.ones([nssms, nssms])
+        return np.ones([nssms, nssms], dtype=np.int8)
     elif scenario is 'NCluster':
-        # return np.identity(nssms, dtype=np.int8)
-        return np.identity(nssms)
+        return np.identity(nssms, dtype=np.int8)
     else:
         raise ValueError('Scenario must be one of OneCluster or NClsuter')
 
@@ -1018,7 +1022,7 @@ def get_bad_ad(nssms, scenario='OneCluster'):
         raise ValueError('Scenario must be one of OneCluster or NClsuter')
 
 
-def verify(filename,role,func,*args):
+def verify(filename, role, func, *args):
     global err_msgs
     try:
         if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
