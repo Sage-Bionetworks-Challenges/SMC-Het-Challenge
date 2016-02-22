@@ -33,14 +33,22 @@ def mem_pretty(mem):
 print(os.getpid())
 mem('1')
 
+# if we can use int8 matrices instead of float64s, we SHOULD shrink memory 8x
+
 # x = np.arange(225000000, dtype=np.float64).reshape(15000, 15000)
 x = np.arange(225000000, dtype=np.int8).reshape(15000, 15000)
 
 mem('2')
 
-x = x.tolist()
+y = np.arange(25, dtype=np.int8).reshape(5,5)
 
-mem('4')
+print(y[1,])
+print(y[1,])
+
+# x.toList makes a HUGE fricken object. don't do this
+# x = x.tolist()
+
+# mem('4')
 # y = np.zeros((15000, 15000))
 # mem('4')
 
@@ -52,4 +60,4 @@ mem('4')
 
 # mem('done')
 
-raw_input("Press the <ENTER> key to continue...")
+# raw_input("Press the <ENTER> key to continue...")
