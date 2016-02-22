@@ -1,0 +1,21 @@
+## MEM -> total: 284.9mb (max: 284.9mb) | ram: 34.4mb (max: 34.54mb) | swap: 0kb @ start
+## MEM -> total: 286.848mb (max: 287.58mb) | ram: 35.848mb (max: 36.332mb) | swap: 0kb @ 1 - verify vcf
+total vcf lines -> [6984]
+total mask lines -> [6750]
+('truth ccm nxn -> ', (6750, 6750))
+## MEM -> total: 642.808mb (max: 1.1671gb) | ram: 391.98mb (max: 391.988mb) | swap: 0kb @ 2 - verify truth
+('pseudod truth ccm nxn -> ', (6832, 6832))
+## MEM -> total: 1.007468gb (max: 1.363424gb) | ram: 752.604mb (max: 1.108476gb) | swap: 0kb @ 3 - truth pseudo counts
+add_pseudo_counts(verify(truth)) took 1.1 seconds
+('pred ccm nxn -> ', (6984, 6984))
+## MEM -> total: 1.388536gb (max: 1.912828gb) | ram: 1.133676gb (max: 1.133684gb) | swap: 0kb @ 4 - verify pred
+verify(pred) took 0.75 seconds
+Filtering Challenge 2A
+('filtered pred ccm nxn -> ', (6750, 6750))
+## MEM -> total: 1.744496gb (max: 1.912828gb) | ram: 1.489544gb (max: 1.489636gb) | swap: 0kb @ 5 - filter pred
+('pseudod filtered pred ccm nxn -> ', (6832, 6832))
+## MEM -> total: 1.753196gb (max: 2.465112gb) | ram: 1.494288gb (max: 2.206128gb) | swap: 0kb @ 6 - filtered pred pseudo counts
+## MEM -> total: 1.753196gb (max: 2.465112gb) | ram: 1.494288gb (max: 2.206128gb) | swap: 0kb @ okok
+method pseudoV took 3.66 seconds
+worst scores method pseudoV took 8.14 seconds
+## MEM -> total: 286.848mb (max: 2.829772gb) | ram: 36.084mb (max: 2.56674gb) | swap: 0kb @ 7 - score
