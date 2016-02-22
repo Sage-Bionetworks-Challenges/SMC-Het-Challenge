@@ -166,6 +166,7 @@ def validate2A(data, nssms, return_ccm=True):
 
     # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
     c_m = np.zeros((len(data), len(cluster_entries)))
+    # c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
 
     # for each value in truthfile, put a 1 in the m index of the n row
     for i in xrange(len(data)):
@@ -244,8 +245,8 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        # functions = ['pseudoV', 'pearson', 'mcc']
-        functions = ['pseudoV']
+        functions = ['pseudoV', 'pearson', 'mcc']
+        # functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
 
@@ -261,7 +262,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         for m in functions:
             gc.collect()
             timmie = time.time()
-            worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse= (m in larger_is_worse_methods)))
+            worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
             timmie2 = time.time() - timmie
             print("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
         # for i,m in enumerate(['pseudoV', 'pearson', 'mcc']):
@@ -370,8 +371,8 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
 
     # do one row at a time to reduce memory usage
     for x in xrange(size):
-        pred_row = (1 - rnd) * pred_cp[x,:] + rnd
-        truth_row = (1 - rnd) * truth_cp[x,:] + rnd
+        pred_row = (1 - rnd) * pred_cp[x,] + rnd
+        truth_row = (1 - rnd) * truth_cp[x,] + rnd
 
 
         pred_row = pred_row / np.sum(pred_row)
@@ -492,7 +493,7 @@ def calculate2_aupr(pred,truth, full_matrix=True):
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
 
-def calculate2_mcc(pred,truth, full_matrix=True):
+def calculate2_mcc(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
         pred_cp = pred
@@ -505,7 +506,7 @@ def calculate2_mcc(pred,truth, full_matrix=True):
     tn = 0
     fp = 0
     fn = 0
-    np.savetxt("test_pred_cp.txt",pred_cp)
+    # np.savetxt("test_pred_cp.txt", pred_cp)
     for i in xrange(pred_cp.shape[0]):
         for j in xrange(pred_cp.shape[1]):
             if truth_cp[i,j] and pred_cp[i,j] >= 0.5:
@@ -539,10 +540,10 @@ def calculate2_mcc(pred,truth, full_matrix=True):
 
     return num / float(denom)
 
-def validate2B(filename,nssms):
+def validate2B(filename, nssms):
     try:
         if filename.endswith('.gz'):
-            ccm = np.loadtxt(str(filename),ndmin=2)
+            ccm = np.loadtxt(str(filename), ndmin=2)
         else:
             data = StringIO.StringIO(filename)
             ccm = np.loadtxt(data, ndmin=2)
@@ -551,7 +552,7 @@ def validate2B(filename,nssms):
 
     if ccm.shape != (nssms,nssms):
         raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms,nssms))))
-    if not np.allclose(ccm.diagonal(),np.ones((nssms))):
+    if not np.allclose(ccm.diagonal(), np.ones((nssms))):
         raise ValidationError("Diagonal entries of co-clustering matrix not 1")
     if np.any(np.isnan(ccm)):
         raise ValidationError("Co-clustering matrix contains NaNs")
@@ -569,10 +570,10 @@ def validate2B(filename,nssms):
 
 def validate3A(data, cas, nssms):
     predK = cas.shape[1]
-    cluster_assignments = np.argmax(cas,1) + 1
+    cluster_assignments = np.argmax(cas, 1) + 1
 
     data = data.split('\n')
-    data = filter(None,data)
+    data = filter(None, data)
     if len(data) != predK:
         raise ValidationError("Input file contains a different number of lines (%d) than expected (%d)")
     data = [x.split('\t') for x in data]
@@ -585,7 +586,7 @@ def validate3A(data, cas, nssms):
         except ValueError:
             raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
 
-    if [x[0] for x in data] != range(1,predK+1):
+    if [x[0] for x in data] != range(1, predK+1):
         raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
 
     for i in range(len(data)):
@@ -604,18 +605,18 @@ def validate3A(data, cas, nssms):
             descendant_of[gp] += [child] + descendant_of[child]
 
     # Check that root has all nodes as decendants (equivalent to checking if the tree is connected)
-    if set(descendant_of[0]) != set(range(1,predK+1)):
+    if set(descendant_of[0]) != set(range(1, predK+1)):
         raise ValidationError("Root of phylogeny not ancestor of all clusters / Tree is not connected. " +
                               "Phelogeny matrix: %s, Descendant_of Dictionary %s" %
                               (data, descendant_of))
 
     # Form AD matrix
     n = len(cluster_assignments)
-    ad = np.zeros((n,n))
+    ad = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
             if cluster_assignments[j] in descendant_of[cluster_assignments[i]]:
-                ad[i,j] = 1
+                ad[i, j] = 1
     return ad
 
 def validate3B(filename, ccm, nssms):
@@ -927,6 +928,7 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     # create an m x m identity matrix where m = (ccm.n + sqrt(ccm.n))
     # copy ccm into the identity matrix
     # basically we're extending ccm with identity values
+
     size = np.array(ccm.shape)[1]
 
     if num is None:
@@ -935,6 +937,7 @@ def add_pseudo_counts(ccm, ad=None, num=None):
         return ccm, ad
 
     new_ccm = np.identity(size + num)
+    # new_ccm = np.identity(size + num, dtype=np.int8)
     new_ccm[:size, :size] = np.copy(ccm)
     ccm = new_ccm
 
@@ -998,8 +1001,10 @@ def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster
 
 def get_bad_ccm(nssms, scenario='OneCluster'):
     if scenario is 'OneCluster':
+        # return np.ones([nssms, nssms], dtype=np.int8)
         return np.ones([nssms, nssms])
     elif scenario is 'NCluster':
+        # return np.identity(nssms, dtype=np.int8)
         return np.identity(nssms)
     else:
         raise ValueError('Scenario must be one of OneCluster or NClsuter')
@@ -1017,12 +1022,12 @@ def verify(filename,role,func,*args):
     global err_msgs
     try:
         if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
-            pred = func(filename,*args)
+            pred = func(filename, *args)
         else:
             f = open(filename)
             pred_data = f.read()
             f.close()
-            pred = func(pred_data,*args)
+            pred = func(pred_data, *args)
     except (IOError,TypeError) as e:
         err_msgs.append("Error opening %s, from function %s using file %s in : %s" %  (role, func, filename, e.strerror))
         return None
@@ -1037,8 +1042,8 @@ challengeMapping = {     '1A': {'val_funcs':[validate1A],'score_func':calculate1
                         '1C': {'val_funcs':[validate1C],'score_func':calculate1C,'vcf_func':parseVCF1C, 'filter_func':None},
                         '2A': {'val_funcs':[validate2A],'score_func':calculate2,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
                         '2B': {'val_funcs':[validate2B],'score_func':calculate2,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
-                        '3A': {'val_funcs':[validate2Afor3A,validate3A],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
-                        '3B': {'val_funcs':[validate2B,validate3B],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '3A': {'val_funcs':[validate2Afor3A, validate3A],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
+                        '3B': {'val_funcs':[validate2B, validate3B],'score_func':calculate3Final,'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
                     }
 
 def verifyChallenge(challenge, predfiles, vcf):
@@ -1096,8 +1101,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         targs = tout + nssms[1]
 
-        timmie = time.time()
-
         if challenge in ['2B','2A']:
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
@@ -1113,24 +1116,16 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
 
-        timmie2 = time.time() - timmie
-        print("add_pseudo_counts(verify(truth)) took %s seconds" % round(timmie2, 2))
-
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
 
         pargs = pout + nssms[0]
-
-        timmie = time.time()
 # 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
         print('pred ccm nxn -> ', pout[0].shape)
 
         mem('4 - verify pred')
-
-        timmie2 = time.time() - timmie
-        print("verify(pred) took %s seconds" % round(timmie2, 2))
 
         if tout[-1] == None or pout[-1] == None:
             return "NA"
@@ -1153,16 +1148,15 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             mem('6 - filtered pred pseudo counts')
 
         if challenge in ['3A']:
-            tout[0] = np.dot(tout[0],tout[0].T)
-            pout[0] = np.dot(pout[0],pout[0].T)
+            tout[0] = np.dot(tout[0], tout[0].T)
+            pout[0] = np.dot(pout[0], pout[0].T)
 
-    mem('okok')
-    # pouty = np.ones([1938, 1938])
-    pouty = np.ones([12000, 12000])
-    mem('okok2')
+    answer = challengeMapping[challenge]['score_func'](*(pout + tout))
+    print('%.16f' % answer)
 
+    return answer
     # return challengeMapping[challenge]['score_func'](*(pout + tout))
-    return 'success'
+    # return 'success'
 
 def mem(note):
     pid = os.getpid()
