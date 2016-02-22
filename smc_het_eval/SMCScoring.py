@@ -1041,14 +1041,50 @@ def verify(filename, role, func, *args):
     return pred
 
 
-challengeMapping = {     '1A': {'val_funcs':[validate1A], 'score_func':calculate1A, 'vcf_func':None, 'filter_func':None},
-                        '1B': {'val_funcs':[validate1B], 'score_func':calculate1B, 'vcf_func':None, 'filter_func':None},
-                        '1C': {'val_funcs':[validate1C], 'score_func':calculate1C, 'vcf_func':parseVCF1C, 'filter_func':None},
-                        '2A': {'val_funcs':[validate2A], 'score_func':calculate2, 'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
-                        '2B': {'val_funcs':[validate2B], 'score_func':calculate2, 'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
-                        '3A': {'val_funcs':[validate2Afor3A, validate3A], 'score_func':calculate3Final, 'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
-                        '3B': {'val_funcs':[validate2B, validate3B], 'score_func':calculate3Final, 'vcf_func':parseVCF2and3, 'filter_func':filterFPs},
-                    }
+challengeMapping = {
+    '1A' : {
+        'val_funcs' : [validate1A],
+        'score_func' : calculate1A,
+        'vcf_func' : None,
+        'filter_func' : None
+    },
+    '1B' : {
+        'val_funcs' : [validate1B],
+        'score_func' : calculate1B,
+        'vcf_func' : None,
+        'filter_func' : None
+    },
+    '1C' : {
+        'val_funcs' : [validate1C],
+        'score_func' : calculate1C,
+        'vcf_func' : parseVCF1C,
+        'filter_func' : None
+    },
+    '2A' : {
+        'val_funcs' : [validate2A],
+        'score_func' : calculate2,
+        'vcf_func' : parseVCF2and3,
+        'filter_func' : filterFPs
+    },
+    '2B' : {
+        'val_funcs' : [validate2B],
+        'score_func' : calculate2,
+        'vcf_func' : parseVCF2and3,
+        'filter_func' : filterFPs
+    },
+    '3A' : {
+        'val_funcs' : [validate2Afor3A, validate3A],
+        'score_func' : calculate3Final,
+        'vcf_func' : parseVCF2and3,
+        'filter_func' : filterFPs
+    },
+    '3B' : {
+        'val_funcs' : [validate2B, validate3B],
+        'score_func' : calculate3Final,
+        'vcf_func' : parseVCF2and3,
+        'filter_func' : filterFPs
+    },
+}
 
 def verifyChallenge(challenge, predfiles, vcf):
     global err_msgs
