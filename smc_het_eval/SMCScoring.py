@@ -231,14 +231,15 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
     nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
     import gc
 
-    func_dict = {"orig" : calculate2_orig,
-            "sqrt" : calculate2_sqrt,
-            "pseudoV": calculate2_pseudoV,
-            "sym_pseudoV": calculate2_sym_pseudoV,
-            "spearman": calculate2_spearman,
-            "pearson": calculate2_pearson,
-            "aupr": calculate2_aupr,
-            "mcc": calculate2_mcc
+    func_dict = {
+        "orig"           : calculate2_orig,
+        "sqrt"           : calculate2_sqrt,
+        "pseudoV"        : calculate2_pseudoV,
+        "sym_pseudoV"    : calculate2_sym_pseudoV,
+        "spearman"       : calculate2_spearman,
+        "pearson"        : calculate2_pearson,
+        "aupr"           : calculate2_aupr,
+        "mcc"            : calculate2_mcc
     }
     func = func_dict.get(method, None)
     if func is None:
@@ -250,7 +251,6 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         # functions = ['pearson']
         # functions = ['mcc']
 
-        # for m in ['pseudoV', 'pearson', 'mcc']:
         for m in functions:
             gc.collect()
             timmie = time.time()
@@ -258,14 +258,12 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
             timmie2 = time.time() - timmie
             print("method %s took %s seconds" % (m, round(timmie2, 2)))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
-        # for m in ['pseudoV', 'pearson', 'mcc']:
         for m in functions:
             gc.collect()
             timmie = time.time()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
             timmie2 = time.time() - timmie
             print("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
-        # for i, m in enumerate(['pseudoV', 'pearson', 'mcc']):
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = 1 - (scores[i] / worst_scores[i])
@@ -555,6 +553,7 @@ def validate2B(filename, nssms):
     except ValueError as e:
         raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
 
+
     if ccm.shape != (nssms, nssms):
         raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms, nssms))))
     if not np.allclose(ccm.diagonal(), np.ones((nssms))):
@@ -567,9 +566,28 @@ def validate2B(filename, nssms):
         raise ValidationError("Co-clustering matrix contains entries greater than 1")
     if np.any(ccm < 0):
         raise ValidationError("Co-clustering matrix contains entries less than 0")
-    if not np.allclose(ccm.T, ccm):
+    if not isSymmetric(ccm):
         raise ValidationError("Co-clustering matrix is not symmetric")
     return ccm
+
+
+def isSymmetric(x):
+    '''
+    Checks if a matrix is symmetric.
+    Better than doing np.allclose(x.T, x) because..
+        - it does it in memory without making a new x.T matrix
+        - fails fast if not symmetric
+    '''
+    symmetricity = False
+    if (x.shape[0] == x.shape[1]):
+        symmetricity = True
+        for i in xrange(x.shape[0]):
+            symmetricity = symmetricity and np.allclose(x[i, :], x[:, i])
+            if (not symmetricity):
+                break
+    return symmetricity
+
+
 
 #### SUBCHALLENGE 3 #########################################################################################
 
@@ -958,7 +976,6 @@ def add_pseudo_counts(ccm, ad=None, num=None):
         ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
-    # return the identity-extended ccm
     return ccm
 
 #
@@ -1149,6 +1166,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             print('truth ccm nxn -> ', vout.shape)
+            # np.savetxt("truth2B.txt", vout)
 
             mem('2 - verify truth')
 # 3
@@ -1167,6 +1185,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         pargs = pout + nssms[0]
 # 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
+        # np.savetxt("pred2B.txt", pout[0])
         print('pred ccm nxn -> ', pout[0].shape)
 
         mem('4 - verify pred')
