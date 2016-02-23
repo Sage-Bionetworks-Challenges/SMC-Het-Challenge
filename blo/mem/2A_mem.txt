@@ -1,0 +1,2 @@
+-0.5496299947144522
+## MEM -> total: 287.568mb (max: 1.374304gb) | ram: 37.288mb (max: 1.121044gb) | swap: 0kb @ 7 - score
