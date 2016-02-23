@@ -36,14 +36,11 @@ mem('1')
 # if we can use int8 matrices instead of float64s, we SHOULD shrink memory 8x
 
 # x = np.arange(225000000, dtype=np.float64).reshape(15000, 15000)
-x = np.arange(225000000, dtype=np.int8).reshape(15000, 15000)
+# x = np.arange(225000000, dtype=np.int8).reshape(15000, 15000)
 
-mem('2')
+# mem('2')
 
-y = np.arange(25, dtype=np.int8).reshape(5,5)
-
-print(y[1,])
-print(y[1,])
+# y = np.arange(25, dtype=np.int8).reshape(5,5)
 
 # x.toList makes a HUGE fricken object. don't do this
 # x = x.tolist()
@@ -61,3 +58,25 @@ print(y[1,])
 # mem('done')
 
 # raw_input("Press the <ENTER> key to continue...")
+mem('start')
+# x = np.arange(4000000).reshape(2000, 2000)
+x = np.identity(20000)
+x[43,15] = 23
+# x = np.identity(5, dtype=np.int8)
+mem('make')
+
+allequals = True
+
+for i in xrange(x.shape[0]):
+    allequals = allequals and np.allclose(x[i, :], x[:, i])
+    if (not allequals):
+        break
+
+
+print(allequals)
+mem('mine')
+
+print(np.allclose(x, x.T))
+
+# print(np.allclose(x[0,:], x[:,0]))
+mem('check')
