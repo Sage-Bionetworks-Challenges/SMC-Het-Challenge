@@ -58,25 +58,32 @@ mem('1')
 # mem('done')
 
 # raw_input("Press the <ENTER> key to continue...")
-mem('start')
-# x = np.arange(4000000).reshape(2000, 2000)
-x = np.identity(20000)
-x[43,15] = 23
+# mem('start')
+x = np.arange(225000000).reshape(15000, 15000)
+mem('made first')
+y = x.view()
+print(x[24,44])
+print(y[24,44])
+y[24,44] = 75
+print(x[24,44])
+print(y[24,44])
+# x = np.identity(20000)
+# x[43,15] = 23
 # x = np.identity(5, dtype=np.int8)
-mem('make')
+mem('made view')
 
-allequals = True
+# allequals = True
 
-for i in xrange(x.shape[0]):
-    allequals = allequals and np.allclose(x[i, :], x[:, i])
-    if (not allequals):
-        break
+# for i in xrange(x.shape[0]):
+#     allequals = allequals and np.allclose(x[i, :], x[:, i])
+#     if (not allequals):
+#         break
 
 
-print(allequals)
-mem('mine')
+# print(allequals)
+# mem('mine')
 
-print(np.allclose(x, x.T))
+# print(np.allclose(x, x.T))
 
 # print(np.allclose(x[0,:], x[:,0]))
-mem('check')
+# mem('check')
