@@ -302,8 +302,8 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        # functions = ['pseudoV', 'pearson', 'mcc']
-        functions = ['pseudoV']
+        functions = ['pseudoV', 'pearson', 'mcc']
+        # functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
 
