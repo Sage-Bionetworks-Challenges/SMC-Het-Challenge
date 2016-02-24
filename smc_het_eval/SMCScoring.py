@@ -15,6 +15,7 @@ import gc
 import time
 import resource
 import os
+import gzip
 
 class ValidationError(Exception):
     def __init__(self, value):
@@ -182,6 +183,61 @@ def validate2A(data, nssms, return_ccm=True):
 
 def validate2Afor3A(data, nssms):
     return validate2A(data, nssms, False)
+
+def validate2B(filename, nssms, with_pseudo_counts=False):
+    # if pseudo_counts are requested, create the matrix with the extended size
+    ccm_size = nssms + np.sqrt(nssms) if with_pseudo_counts else nssms
+    # we only really need the identity matrix for 2B truth matrices but we will be overwriting them anyway downstream
+    ccm = np.identity(ccm_size)
+    try:
+        if filename.endswith('.gz'):
+            gzipfile = gzip.open(str(filename), 'r')
+            line_num = 0
+            for line in gzipfile:
+                ccm[line_num, :nssms] = np.fromstring(line, sep='\t')
+                line_num += 1
+            gzipfile.close()
+        else:
+            # TODO - optimize with line by line
+            data = StringIO.StringIO(filename)
+            truth_ccm = np.loadtxt(data, ndmin=2)
+            ccm[:nssms, :nssms] = truth_ccm
+    except ValueError as e:
+        raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
+
+    actual_ccm = ccm[:nssms, :nssms]
+
+    if actual_ccm.shape != (nssms, nssms):
+        raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
+    if not np.allclose(actual_ccm.diagonal(), np.ones((nssms))):
+        raise ValidationError("Diagonal entries of co-clustering matrix not 1")
+    if np.any(np.isnan(actual_ccm)):
+        raise ValidationError("Co-clustering matrix contains NaNs")
+    if np.any(np.isinf(actual_ccm)):
+        raise ValidationError("Co-clustering matrix contains non-finite entries")
+    if np.any(actual_ccm > 1):
+        raise ValidationError("Co-clustering matrix contains entries greater than 1")
+    if np.any(actual_ccm < 0):
+        raise ValidationError("Co-clustering matrix contains entries less than 0")
+    if not isSymmetric(actual_ccm):
+        raise ValidationError("Co-clustering matrix is not symmetric")
+    return ccm
+
+def isSymmetric(x):
+    '''
+    Checks if a matrix is symmetric.
+    Better than doing np.allclose(x.T, x) because..
+        - it does it in memory without making a new x.T matrix
+        - fails fast if not symmetric
+    '''
+    symmetricity = False
+    if (x.shape[0] == x.shape[1]):
+        symmetricity = True
+        for i in xrange(x.shape[0]):
+            symmetricity = symmetricity and np.allclose(x[i, :], x[:, i])
+            if (not symmetricity):
+                break
+    return symmetricity
 
 def calculate2_quaid(pred, truth):
     n = truth.shape[0]
@@ -543,51 +599,6 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 
     return num / float(denom)
 
-def validate2B(filename, nssms):
-    try:
-        if filename.endswith('.gz'):
-            ccm = np.loadtxt(str(filename), ndmin=2)
-        else:
-            data = StringIO.StringIO(filename)
-            ccm = np.loadtxt(data, ndmin=2)
-    except ValueError as e:
-        raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
-
-
-    if ccm.shape != (nssms, nssms):
-        raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms, nssms))))
-    if not np.allclose(ccm.diagonal(), np.ones((nssms))):
-        raise ValidationError("Diagonal entries of co-clustering matrix not 1")
-    if np.any(np.isnan(ccm)):
-        raise ValidationError("Co-clustering matrix contains NaNs")
-    if np.any(np.isinf(ccm)):
-        raise ValidationError("Co-clustering matrix contains non-finite entries")
-    if np.any(ccm > 1):
-        raise ValidationError("Co-clustering matrix contains entries greater than 1")
-    if np.any(ccm < 0):
-        raise ValidationError("Co-clustering matrix contains entries less than 0")
-    if not isSymmetric(ccm):
-        raise ValidationError("Co-clustering matrix is not symmetric")
-    return ccm
-
-
-def isSymmetric(x):
-    '''
-    Checks if a matrix is symmetric.
-    Better than doing np.allclose(x.T, x) because..
-        - it does it in memory without making a new x.T matrix
-        - fails fast if not symmetric
-    '''
-    symmetricity = False
-    if (x.shape[0] == x.shape[1]):
-        symmetricity = True
-        for i in xrange(x.shape[0]):
-            symmetricity = symmetricity and np.allclose(x[i, :], x[:, i])
-            if (not symmetricity):
-                break
-    return symmetricity
-
-
 
 #### SUBCHALLENGE 3 #########################################################################################
 
@@ -931,11 +942,25 @@ def parseVCF2and3(data):
     # ]
     return [[total_ssms], [tp_ssms], mask]
 
-def filterFPs(matrix, mask):
-    if matrix.shape[0] == matrix.shape[1]:
-        return matrix[np.ix_(mask, mask)]
+def filterFPs(x, mask):
+    # filters in memory, and returns a view
+    # matrix[np.ix_(mask, mask)] is considered advanced indexing and creates a copy, allocating new memory
+    if x.shape[0] == x.shape[1]:
+        for i, m1 in enumerate(mask):
+            for j, m2 in enumerate(mask):
+                x[i, j] = x[m1, m2]
+        # zero out "top right quadrant" of matrix after masking
+        for i in xrange(len(mask)):
+            for j in xrange(len(mask), x.shape[0]):
+                x[i, j] = 0
+        # zero out "bottom quadrants" of matrix after masking
+        for i in xrange(len(mask), x.shape[0]):
+            for j in xrange(x.shape[0]):
+                x[i, j] = 0
+        # return a view, does not allocate new memory
+        return x[:len(mask), :len(mask)]
     else:
-        return matrix[mask, :]
+        return x[mask, :]
 
 def add_pseudo_counts(ccm, ad=None, num=None):
     """
@@ -977,6 +1002,21 @@ def add_pseudo_counts(ccm, ad=None, num=None):
         return ccm, ad
 
     return ccm
+
+def add_pseudo_counts_in_place(ccm, nssms):
+    # adds pseudo counts in memory and returns a view
+
+    final_size = nssms + np.sqrt(nssms)
+    final_size = int(final_size)
+
+    # identity-fy the portion ccm[nssms:final_size, nssms:final_size]
+    for i in xrange(nssms, final_size):
+        for j in xrange(nssms, final_size):
+            if (i == j):
+                ccm[i, j] = 1
+
+    # return :final_size bounded ccm just in case the ccm reference holds a larger view of the matrix
+    return ccm[:final_size, :final_size]
 
 #
 def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
@@ -1049,6 +1089,7 @@ def verify(filename, role, func, *args):
         if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
             pred = func(filename, *args)
         else:
+            # really shouldn't do read() here, stores the whole thing in memory when we could read it in chunks/lines
             f = open(filename)
             pred_data = f.read()
             f.close()
@@ -1162,7 +1203,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         targs = tout + nssms[1]
 
-        if challenge in ['2B', '2A']:
+        if challenge in ['2A']:
+            # we can afford to perform the copy in add_pseudo_counts because we're just using int8 matrices
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             print('truth ccm nxn -> ', vout.shape)
@@ -1171,12 +1213,21 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             mem('2 - verify truth')
 # 3
             vout2 = add_pseudo_counts(vout)
-            print('pseudod truth ccm nxn -> ', vout2.shape)
+
             tout.append(vout2)
 
             mem('3 - truth pseudo counts')
+        elif challenge in ['2B']:
+            # adds pseudo counts during creation to save memory by avoiding copy-required add_pseudo_counts call
+            # append True to request pseudo counts in validate2B call
+            targs.append(True)
+            vout_with_pseudo_counts = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
+            tout.append(vout_with_pseudo_counts)
+            mem('2-3 - 2B verify')
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
+
+        print('pseudod truth ccm nxn -> ', tout[-1].shape)
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -1198,17 +1249,23 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         # validate3B(pout[1], np.dot(pout[0], pout[0].T), nssms[0])
         # np.savetxt("test.3B.gz", pout[1])
 # 5
+        if challenge in ['2B']:
+            # save a ref of a view of the pred matrix to do pseudo counts
+            predsave = pout[0]
+
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         print('filtered pred ccm nxn -> ', pout[0].shape)
 
         mem('5 - filter pred')
 
-        if challenge in ['2B', '2A']:
-# 6
+        if challenge in ['2A']:
             pout = [ add_pseudo_counts(*pout) ]
-            print('pseudod filtered pred ccm nxn -> ', pout[0].shape)
-
             mem('6 - filtered pred pseudo counts')
+        elif challenge in ['2B']:
+            pout = [ add_pseudo_counts_in_place(predsave, *nssms[1]) ]
+            mem('6 - filtered pred pseudo counts')
+
+        print('pseudod filtered pred ccm nxn -> ', pout[0].shape)
 
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0], tout[0].T)
@@ -1216,9 +1273,10 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
     answer = challengeMapping[challenge]['score_func'](*(pout + tout))
     print('%.16f' % answer)
-
     return answer
+
     # return challengeMapping[challenge]['score_func'](*(pout + tout))
+
     # return 'success'
 
 def mem(note):
