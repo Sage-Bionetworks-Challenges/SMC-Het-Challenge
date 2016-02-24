@@ -1184,7 +1184,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     else:
         nssms = [[], []]
 
-    mem('1 - verify vcf')
+    mem('1 - vcf')
 
     print('total vcf lines -> ' + str(nssms[0]))
     print('total mask lines -> ' + str(nssms[1]))
@@ -1215,8 +1215,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             vout2 = add_pseudo_counts(vout)
 
             tout.append(vout2)
-
-            mem('3 - truth pseudo counts')
+            mem('3 - apc truth')
         elif challenge in ['2B']:
             # adds pseudo counts during creation to save memory by avoiding copy-required add_pseudo_counts call
             # append True to request pseudo counts in validate2B call
@@ -1260,10 +1259,10 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         if challenge in ['2A']:
             pout = [ add_pseudo_counts(*pout) ]
-            mem('6 - filtered pred pseudo counts')
+            mem('6 - filtered pred apc')
         elif challenge in ['2B']:
             pout = [ add_pseudo_counts_in_place(predsave, *nssms[1]) ]
-            mem('6 - filtered pred pseudo counts')
+            mem('6 - filtered pred apc')
 
         print('pseudod filtered pred ccm nxn -> ', pout[0].shape)
 

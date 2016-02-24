@@ -11,6 +11,39 @@ import metric_behavior as mb
 from functools import reduce
 import gc
 
+# blo
+import time
+import resource
+import os
+
+def mem(note):
+    pid = os.getpid()
+    with open(os.path.join('/proc', str(pid), 'status')) as f:
+        lines = f.readlines()
+    _vt = [l for l in lines if l.startswith("VmSize")][0]
+    vt = mem_pretty(int(_vt.split()[1]))
+    _vmax = [l for l in lines if l.startswith("VmPeak")][0]
+    vmax = mem_pretty(int(_vmax.split()[1]))
+    _vram = [l for l in lines if l.startswith("VmRSS")][0]
+    vram = mem_pretty(int(_vram.split()[1]))
+    _vswap = [l for l in lines if l.startswith("VmSwap")][0]
+    vswap = mem_pretty(int(_vswap.split()[1]))
+
+    vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+    print('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+
+def mem_pretty(mem):
+    denom = 1
+    unit = 'kb'
+    if (mem > 999999):
+        denom = 1000000.0
+        unit ='gb'
+    elif (mem > 999):
+        denom = 1000.0
+        unit ='mb'
+    return str(mem / denom) + unit
+
 class ValidationError(Exception):
     def __init__(self, value):
         self.value = value
@@ -222,14 +255,18 @@ def calculate2(pred,truth, full_matrix=True, method='default', pseudo_counts=Non
     if func is None:
         scores = []
         worst_scores = []
-        for m in ['pseudoV', 'pearson', 'mcc']:
+        # functions = ['pseudoV', 'pearson', 'mcc']
+        functions = ['pseudoV']
+        # functions = ['pearson']
+        # functions = ['mcc']
+        for m in functions:
             gc.collect()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
-        for m in ['pseudoV', 'pearson', 'mcc']:
+        for m in functions:
             gc.collect()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse= (m in larger_is_worse_methods)))
-        for i,m in enumerate(['pseudoV', 'pearson', 'mcc']):
+        for i,m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = 1 - (scores[i]/worst_scores[i])
             else:
@@ -1012,6 +1049,7 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
+    mem('start')
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
@@ -1021,6 +1059,9 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
 
     else:
         nssms = [[],[]]
+
+    mem('1 - vcf')
+
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
         return "NA"
@@ -1034,7 +1075,9 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         targs = tout + nssms[1]
         if challenge in ['2B','2A']:
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs)
+            mem('2 - verify truth')
             vout2 = add_pseudo_counts(vout)
+            mem('3 - apc truth')
             tout.append(vout2)
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
@@ -1044,6 +1087,7 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
             return "NA"
         pargs = pout + nssms[0]
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
+        mem('4 - verify pred')
         if tout[-1] == None or pout[-1] == None:
             return "NA"
     if challengeMapping[challenge]['filter_func']:
@@ -1051,13 +1095,17 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         #validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
         #np.savetxt("test.3B.gz", pout[1])
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
+        mem('5 - filter pred')
         if challenge in ['2B','2A']:
             pout = [add_pseudo_counts(*pout)]
+            mem('6 - filtered pred apc')
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0],tout[0].T)
             pout[0] = np.dot(pout[0],pout[0].T)
             
-    return challengeMapping[challenge]['score_func'](*(pout + tout))
+    answer = challengeMapping[challenge]['score_func'](*(pout + tout))
+    print('%.16f' % answer)
+    return answer
 
 if __name__ == '__main__':
     global err_msgs
@@ -1119,6 +1167,8 @@ if __name__ == '__main__':
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
             handle.write(jtxt)
+
+    mem('7 - score')
 
     if len(err_msgs) > 0:
         for msg in err_msgs:
