@@ -1307,6 +1307,7 @@ def mem_pretty(mem):
     return str(mem / denom) + unit
 
 if __name__ == '__main__':
+    start_time = time.time()
     global err_msgs
     err_msgs = []
 
@@ -1368,6 +1369,9 @@ if __name__ == '__main__':
             handle.write(jtxt)
 
     mem('7 - score')
+
+    end_time = time.time() - start_time
+    print("run took %s seconds!" % round(end_time, 2))
 
     if len(err_msgs) > 0:
         for msg in err_msgs:

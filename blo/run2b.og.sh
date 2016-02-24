@@ -9,7 +9,7 @@ if [[ -z "$1" || "$1" -ne "half" || "$1" -ne "full" || "$1" -ne "tiny" ]]; then
 fi
 
 DATA="$1"
-DIRECTORY="./run-2B";
+DIRECTORY="./run-2B-og";
 
 if [ ! -z "$2" ]; then
 	NAME="$2"

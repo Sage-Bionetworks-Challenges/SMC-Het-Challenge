@@ -506,7 +506,7 @@ def calculate2_mcc(pred,truth, full_matrix=True):
     tn = 0
     fp = 0
     fn = 0
-    np.savetxt("test_pred_cp.txt",pred_cp)
+    # np.savetxt("test_pred_cp.txt",pred_cp)
     for i in xrange(pred_cp.shape[0]):
         for j in xrange(pred_cp.shape[1]):
             if truth_cp[i,j] and pred_cp[i,j] >= 0.5:
@@ -1108,6 +1108,7 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     return answer
 
 if __name__ == '__main__':
+    start_time = time.time()
     global err_msgs
     err_msgs = []
 
@@ -1169,6 +1170,9 @@ if __name__ == '__main__':
             handle.write(jtxt)
 
     mem('7 - score')
+
+    end_time = time.time() - start_time
+    print("run took %s seconds!" % round(end_time, 2))
 
     if len(err_msgs) > 0:
         for msg in err_msgs:
