@@ -646,7 +646,8 @@ def validate3A(data, cas, nssms):
 
     # Form AD matrix
     n = len(cluster_assignments)
-    ad = np.zeros((n, n))
+    # can use int8 because only 0 and 1 integers
+    ad = np.zeros((n, n), dtype=np.int8)
     for i in range(n):
         for j in range(n):
             if cluster_assignments[j] in descendant_of[cluster_assignments[i]]:
@@ -688,13 +689,10 @@ def validate3B(filename, ccm, nssms):
 
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     f = calculate2_sym_pseudoV
+
     scores = []
-    scores.append( f(pred_ad, truth_ad))
-    pred_adt = pred_ad.T
-    truth_adt = truth_ad.T
-    scores.append(f(pred_adt, truth_adt))
-    del pred_adt, truth_adt
-    gc.collect()
+    scores.append(f(pred_ad, truth_ad))
+    scores.append(f(pred_ad.T, truth_ad.T))
     truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
     pred_c = 1 - pred_ccm - pred_ad - pred_ad.T
     scores.append(f(pred_c, truth_c))
@@ -703,37 +701,29 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
 
     one_scores = []
     one_ad = mb.get_ad('OneCluster', nssms=truth_ad.shape[0])
-    one_scores.append( f(one_ad, truth_ad))
-    one_adt = one_ad.T
-    truth_adt = truth_ad.T
-    one_scores.append(f(one_adt, truth_adt))
-    del one_adt, truth_adt
-    gc.collect()
+    one_scores.append(f(one_ad, truth_ad))
+    one_scores.append(f(one_ad.T, truth_ad.T))
     truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
     one_ccm = mb.get_ccm('OneCluster', nssms=truth_ccm.shape[0])
     one_c = 1 - one_ccm - one_ad - one_ad.T
     one_scores.append(f(one_c, truth_c))
-    del one_c, truth_c
+    del one_c, truth_c, one_ad, one_ccm
     gc.collect()
 
     n_scores = []
     n_ad = mb.get_ad('NClusterOneLineage', nssms=truth_ad.shape[0])
-    n_scores.append( f(n_ad, truth_ad))
-    n_adt = n_ad.T
-    truth_adt = truth_ad.T
-    n_scores.append(f(n_adt, truth_adt))
-    del n_adt, truth_adt
-    gc.collect()
+    n_scores.append(f(n_ad, truth_ad))
+    n_scores.append(f(n_ad.T, truth_ad.T))
     truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
     n_ccm = mb.get_ccm('NClusterOneLineage', nssms=truth_ccm.shape[0])
     n_c = 1 - n_ccm - n_ad - n_ad.T
     n_scores.append(f(n_c, truth_c))
-    del n_c, truth_c
+    del n_c, truth_c, n_ad, n_ccm
     gc.collect()
 
-    score = sum(scores)/3.0
-    one_score = sum(one_scores)/3.0
-    n_score = sum(n_scores)/3.0
+    score = sum(scores) / 3.0
+    one_score = sum(one_scores) / 3.0
+    n_score = sum(n_scores) / 3.0
 
     return 1 - (score / max(one_score, n_score))
 
@@ -1235,9 +1225,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 # 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
         # np.savetxt("pred2B.txt", pout[0])
-        print('PRED DIMENSIONS -> ', pout[-1].shape)
 
         mem('VERIFY PRED %s' % predfile)
+        print('PRED DIMENSIONS -> ', pout[-1].shape)
 
         if tout[-1] == None or pout[-1] == None:
             return "NA"
