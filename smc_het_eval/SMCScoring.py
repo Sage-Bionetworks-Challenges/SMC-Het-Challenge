@@ -302,8 +302,8 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        functions = ['pseudoV', 'pearson', 'mcc']
-        # functions = ['pseudoV']
+        # functions = ['pseudoV', 'pearson', 'mcc']
+        functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
 
@@ -1172,7 +1172,7 @@ def verifyChallenge(challenge, predfiles, vcf):
 
 
 def scoreChallenge(challenge, predfiles, truthfiles, vcf):
-    mem('start')
+    mem('START %s' % challenge)
     global err_msgs
 
     if challengeMapping[challenge]['vcf_func']:
@@ -1184,7 +1184,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     else:
         nssms = [[], []]
 
-    mem('1 - vcf')
+    mem('VERIFY VCF %s' % vcf)
 
     print('total vcf lines -> ' + str(nssms[0]))
     print('total mask lines -> ' + str(nssms[1]))
@@ -1207,26 +1207,27 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             # we can afford to perform the copy in add_pseudo_counts because we're just using int8 matrices
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
-            print('truth ccm nxn -> ', vout.shape)
+            print('TRUTH DIMENSIONS -> ', vout.shape)
             # np.savetxt("truth2B.txt", vout)
 
-            mem('2 - verify truth')
+            mem('VERIFY TRUTH %s' % truthfile)
 # 3
             vout2 = add_pseudo_counts(vout)
 
             tout.append(vout2)
-            mem('3 - apc truth')
+            mem('APC TRUTH %s' % truthfile)
         elif challenge in ['2B']:
             # adds pseudo counts during creation to save memory by avoiding copy-required add_pseudo_counts call
             # append True to request pseudo counts in validate2B call
             targs.append(True)
             vout_with_pseudo_counts = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             tout.append(vout_with_pseudo_counts)
-            mem('2-3 - 2B verify')
+            mem('VERIFY/APC TRUTH %s' % truthfile)
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
+            mem('VERIFY TRUTH %s' % truthfile)
 
-        print('pseudod truth ccm nxn -> ', tout[-1].shape)
+        print('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -1236,9 +1237,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 # 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
         # np.savetxt("pred2B.txt", pout[0])
-        print('pred ccm nxn -> ', pout[0].shape)
+        print('PRED DIMENSIONS -> ', pout[-1].shape)
 
-        mem('4 - verify pred')
+        mem('VERIFY PRED %s' % predfile)
 
         if tout[-1] == None or pout[-1] == None:
             return "NA"
@@ -1253,18 +1254,18 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             predsave = pout[0]
 
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
-        print('filtered pred ccm nxn -> ', pout[0].shape)
+        print('PRED DIMENSION(S) -> ', [p.shape for p in pout])
 
-        mem('5 - filter pred')
+        mem('FILTER PRED(S)')
 
         if challenge in ['2A']:
             pout = [ add_pseudo_counts(*pout) ]
-            mem('6 - filtered pred apc')
+            mem('APC PRED')
+            print('FINAL PRED DIMENSION -> ', pout[-1].shape)
         elif challenge in ['2B']:
             pout = [ add_pseudo_counts_in_place(predsave, *nssms[1]) ]
-            mem('6 - filtered pred apc')
-
-        print('pseudod filtered pred ccm nxn -> ', pout[0].shape)
+            mem('APC PRED')
+            print('FINAL PRED DIMENSION -> ', pout[-1].shape)
 
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0], tout[0].T)
