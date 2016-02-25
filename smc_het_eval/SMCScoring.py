@@ -1004,6 +1004,8 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     return ccm
 
 def add_pseudo_counts_in_place(ccm, nssms):
+    # REQUIRES ccm to be at (nssms + sqrt(nssms)) size
+    # aka, requires ccm to be large enough to fit the counts
     # adds pseudo counts in memory and returns a view
 
     final_size = nssms + np.sqrt(nssms)
@@ -1011,9 +1013,7 @@ def add_pseudo_counts_in_place(ccm, nssms):
 
     # identity-fy the portion ccm[nssms:final_size, nssms:final_size]
     for i in xrange(nssms, final_size):
-        for j in xrange(nssms, final_size):
-            if (i == j):
-                ccm[i, j] = 1
+        ccm[i, i] = 1
 
     # return :final_size bounded ccm just in case the ccm reference holds a larger view of the matrix
     return ccm[:final_size, :final_size]
