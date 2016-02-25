@@ -1049,7 +1049,7 @@ def verifyChallenge(challenge,predfiles,vcf):
 
 
 def scoreChallenge(challenge,predfiles,truthfiles,vcf):
-    mem('start')
+    mem('START %s' % challenge)
     global err_msgs
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf,"input VCF", challengeMapping[challenge]['vcf_func'])
@@ -1060,7 +1060,7 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
     else:
         nssms = [[],[]]
 
-    mem('1 - vcf')
+    mem('VERIFY VCF %s' % vcf)
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
@@ -1075,19 +1075,20 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         targs = tout + nssms[1]
         if challenge in ['2B','2A']:
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs)
-            mem('2 - verify truth')
+            mem('VERIFY TRUTH %s' % truthfile)
             vout2 = add_pseudo_counts(vout)
-            mem('3 - apc truth')
+            mem('APC TRUTH %s' % truthfile)
             tout.append(vout2)
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge),valfunc,*targs))
+            mem('VERIFY TRUTH %s' % truthfile)
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
         pargs = pout + nssms[0]
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge),valfunc,*pargs))
-        mem('4 - verify pred')
+        mem('VERIFY PRED %s' % predfile)
         if tout[-1] == None or pout[-1] == None:
             return "NA"
     if challengeMapping[challenge]['filter_func']:
@@ -1095,13 +1096,14 @@ def scoreChallenge(challenge,predfiles,truthfiles,vcf):
         #validate3B(pout[1],np.dot(pout[0],pout[0].T),nssms[0])
         #np.savetxt("test.3B.gz", pout[1])
         pout = [challengeMapping[challenge]['filter_func'](x,nssms[2]) for x in pout]
-        mem('5 - filter pred')
+        mem('FILTER PRED(S)')
         if challenge in ['2B','2A']:
             pout = [add_pseudo_counts(*pout)]
-            mem('6 - filtered pred apc')
+            mem('APC PRED')
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0],tout[0].T)
             pout[0] = np.dot(pout[0],pout[0].T)
+            mem('3A DOT')
             
     answer = challengeMapping[challenge]['score_func'](*(pout + tout))
     print('%.16f' % answer)
@@ -1169,7 +1171,7 @@ if __name__ == '__main__':
             jtxt = json.dumps( { args.challenge : res } )
             handle.write(jtxt)
 
-    mem('7 - score')
+    mem('DONE')
 
     end_time = time.time() - start_time
     print("run took %s seconds!" % round(end_time, 2))

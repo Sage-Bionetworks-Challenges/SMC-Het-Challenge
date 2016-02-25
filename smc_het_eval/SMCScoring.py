@@ -978,8 +978,6 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     # copy ccm into the identity matrix
     # basically we're extending ccm with identity values
 
-    print('!!! apc getting a %s matrix' % ccm.dtype)
-
     size = np.array(ccm.shape)[1]
 
     if num is None:
@@ -1270,6 +1268,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0], tout[0].T)
             pout[0] = np.dot(pout[0], pout[0].T)
+            mem('3A DOT')
 
     answer = challengeMapping[challenge]['score_func'](*(pout + tout))
     print('%.16f' % answer)
@@ -1369,7 +1368,7 @@ if __name__ == '__main__':
             jtxt = json.dumps( { args.challenge : res } )
             handle.write(jtxt)
 
-    mem('7 - score')
+    mem('DONE')
 
     end_time = time.time() - start_time
     print("run took %s seconds!" % round(end_time, 2))
