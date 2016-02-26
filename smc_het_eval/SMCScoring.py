@@ -17,6 +17,8 @@ import resource
 import os
 import gzip
 
+INFO = False
+
 class ValidationError(Exception):
     def __init__(self, value):
         self.value = value
@@ -302,8 +304,8 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        # functions = ['pseudoV', 'pearson', 'mcc']
-        functions = ['pseudoV']
+        functions = ['pseudoV', 'pearson', 'mcc']
+        # functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
 
@@ -312,14 +314,14 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
             timmie = time.time()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
             timmie2 = time.time() - timmie
-            print("method %s took %s seconds" % (m, round(timmie2, 2)))
+            printInfo("method %s took %s seconds" % (m, round(timmie2, 2)))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
         for m in functions:
             gc.collect()
             timmie = time.time()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
             timmie2 = time.time() - timmie
-            print("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
+            printInfo("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = 1 - (scores[i] / worst_scores[i])
@@ -1216,8 +1218,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
     mem('VERIFY VCF %s' % vcf)
 
-    print('total vcf lines -> ' + str(nssms[0]))
-    print('total mask lines -> ' + str(nssms[1]))
+    printInfo('total vcf lines -> ' + str(nssms[0]))
+    printInfo('total mask lines -> ' + str(nssms[1]))
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
@@ -1237,7 +1239,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             # we can afford to perform the copy in add_pseudo_counts because we're just using int8 matrices
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
-            print('TRUTH DIMENSIONS -> ', vout.shape)
+            printInfo('TRUTH DIMENSIONS -> ', vout.shape)
 
             mem('VERIFY TRUTH %s' % truthfile)
 # 3
@@ -1256,7 +1258,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
             mem('VERIFY TRUTH %s' % truthfile)
 
-        print('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+        printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -1267,7 +1269,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
 
         mem('VERIFY PRED %s' % predfile)
-        print('PRED DIMENSIONS -> ', pout[-1].shape)
+        printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
 
         if tout[-1] == None or pout[-1] == None:
             return "NA"
@@ -1281,18 +1283,18 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             predsave = pout[0]
 
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
-        print('PRED DIMENSION(S) -> ', [p.shape for p in pout])
+        printInfo('PRED DIMENSION(S) -> ', [p.shape for p in pout])
 
         mem('FILTER PRED(S)')
 
         if challenge in ['2A']:
             pout = [ add_pseudo_counts(*pout) ]
             mem('APC PRED')
-            print('FINAL PRED DIMENSION -> ', pout[-1].shape)
+            printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
         elif challenge in ['2B']:
             pout = [ add_pseudo_counts_in_place(predsave, *nssms[1]) ]
             mem('APC PRED')
-            print('FINAL PRED DIMENSION -> ', pout[-1].shape)
+            printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
 
         if challenge in ['3A']:
             tout[0] = np.dot(tout[0], tout[0].T)
@@ -1300,12 +1302,16 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             mem('3A DOT')
 
     answer = challengeMapping[challenge]['score_func'](*(pout + tout))
-    print('%.16f' % answer)
+    printInfo('%.16f' % answer)
     return answer
 
     # return challengeMapping[challenge]['score_func'](*(pout + tout))
 
     # return 'success'
+
+def printInfo(*string):
+    if (INFO):
+        print([string])
 
 def mem(note):
     pid = os.getpid()
@@ -1322,7 +1328,7 @@ def mem(note):
 
     vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-    print('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+    printInfo('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
 
 def mem_pretty(mem):
     denom = 1
@@ -1400,7 +1406,7 @@ if __name__ == '__main__':
     mem('DONE')
 
     end_time = time.time() - start_time
-    print("run took %s seconds!" % round(end_time, 2))
+    printInfo("run took %s seconds!" % round(end_time, 2))
 
     if len(err_msgs) > 0:
         for msg in err_msgs:
