@@ -17,7 +17,7 @@ import resource
 import os
 import gzip
 
-INFO = False
+INFO = True
 
 class ValidationError(Exception):
     def __init__(self, value):
