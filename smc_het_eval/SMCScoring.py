@@ -655,10 +655,16 @@ def validate3A(data, cas, nssms):
     return ad
 
 def validate3B(filename, ccm, nssms):
-    k = ccm.shape[0]
+    size = ccm.shape[0]
     try:
-        if filename[-1] == "z":
-            ad = np.loadtxt(str(filename), ndmin=2)
+        if filename.endswith('.gz'):
+            ad = np.zeros((size, size))
+            gzipfile = gzip.open(str(filename), 'r')
+            line_num = 0
+            for line in gzipfile:
+                ad[line_num, :size] = np.fromstring(line, sep='\t')
+                line_num += 1
+            gzipfile.close()
         else:
             ad = filename
     except ValueError:
@@ -676,11 +682,31 @@ def validate3B(filename, ccm, nssms):
         raise ValidationError("AD matrix contains entries greater than 1")
     if np.any(ad < 0):
         raise ValidationError("AD matrix contains entries less than 0")
-    indices = np.triu_indices(k, 1)
-    if np.any(ad[indices] + ad.T[indices] + ccm[indices] > 1):
+    if checkForBadTriuIndices(ad, ad.T, ccm):
         raise ValidationError("For some i, j the sum of AD(i, j) + AD(j, i) + CCM(i, j) > 1.")
 
     return ad
+
+def checkForBadTriuIndices(*matrices):
+    offset = 1
+    # perform np.any(ad[indices] + ad.T[indices] + ccm[indices] > 1) in memory, otherwise you're loading all the objects into memory
+    # plus, doing matrix[np.triu_indices()] creates a copy which is doubly bad
+    shape = matrices[0].shape
+    equalShapes = True
+    fail = True
+    for x in matrices:
+        equalShapes &= shape == x.shape
+        if (not equalShapes):
+            break
+    if (equalShapes):
+        for i in xrange(shape[0]):
+            for j in xrange(i + offset, shape[0]):
+                fail &= reduce(lambda x, y: x + y, [z[i, j] for z in matrices]) <= 1
+                if (not fail):
+                    break
+    else:
+        raise ValidationError('Unequal shapes passed to checkForBadTriuIndices')
+    return not fail
 
 #def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
 #    pred_ccm = np.dot(pred_ca, pred_ca.T)
@@ -693,8 +719,8 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     scores = []
     scores.append(f(pred_ad, truth_ad))
     scores.append(f(pred_ad.T, truth_ad.T))
-    truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
-    pred_c = 1 - pred_ccm - pred_ad - pred_ad.T
+    truth_c = makeCMatrix(truth_ccm, truth_ad, truth_ad.T)
+    pred_c = makeCMatrix(pred_ccm, pred_ad, pred_ad.T)
     scores.append(f(pred_c, truth_c))
     del pred_c, truth_c
     gc.collect()
@@ -703,9 +729,9 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     one_ad = mb.get_ad('OneCluster', nssms=truth_ad.shape[0])
     one_scores.append(f(one_ad, truth_ad))
     one_scores.append(f(one_ad.T, truth_ad.T))
-    truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
+    truth_c = makeCMatrix(truth_ccm, truth_ad, truth_ad.T)
     one_ccm = mb.get_ccm('OneCluster', nssms=truth_ccm.shape[0])
-    one_c = 1 - one_ccm - one_ad - one_ad.T
+    one_c = makeCMatrix(one_ccm, one_ad, one_ad.T)
     one_scores.append(f(one_c, truth_c))
     del one_c, truth_c, one_ad, one_ccm
     gc.collect()
@@ -714,9 +740,9 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     n_ad = mb.get_ad('NClusterOneLineage', nssms=truth_ad.shape[0])
     n_scores.append(f(n_ad, truth_ad))
     n_scores.append(f(n_ad.T, truth_ad.T))
-    truth_c = 1 - truth_ccm - truth_ad - truth_ad.T
+    truth_c = makeCMatrix(truth_ccm, truth_ad, truth_ad.T)
     n_ccm = mb.get_ccm('NClusterOneLineage', nssms=truth_ccm.shape[0])
-    n_c = 1 - n_ccm - n_ad - n_ad.T
+    n_c = makeCMatrix(n_ccm, n_ad, n_ad.T)
     n_scores.append(f(n_c, truth_c))
     del n_c, truth_c, n_ad, n_ccm
     gc.collect()
@@ -726,6 +752,22 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     n_score = sum(n_scores) / 3.0
 
     return 1 - (score / max(one_score, n_score))
+
+def makeCMatrix(*matrices):
+    # perform (1 - *matrices) without loading all the matrices into memory
+    shape = matrices[0].shape
+    equalShapes = True
+    for x in matrices:
+        equalShapes &= shape == x.shape
+        if (not equalShapes):
+            break
+    if (equalShapes):
+        output = np.ones([shape[0], shape[0]])
+        for i in xrange(shape[0]):
+            output[i, ] -= reduce(lambda x, y: x + y, [z[i, ] for z in matrices])
+    else:
+        raise ValidationError('Unequal shapes passed to makeCMatrix')
+    return output
 
 
 def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV", weights=None, verbose=False, pseudo_counts=True, full_matrix=True, in_mat=2):
@@ -1196,7 +1238,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             print('TRUTH DIMENSIONS -> ', vout.shape)
-            # np.savetxt("truth2B.txt", vout)
 
             mem('VERIFY TRUTH %s' % truthfile)
 # 3
@@ -1224,7 +1265,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
         pargs = pout + nssms[0]
 # 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
-        # np.savetxt("pred2B.txt", pout[0])
 
         mem('VERIFY PRED %s' % predfile)
         print('PRED DIMENSIONS -> ', pout[-1].shape)
@@ -1235,7 +1275,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     if challengeMapping[challenge]['filter_func']:
         print('Filtering Challenge %s' % challenge)
         # validate3B(pout[1], np.dot(pout[0], pout[0].T), nssms[0])
-        # np.savetxt("test.3B.gz", pout[1])
 # 5
         if challenge in ['2B']:
             # save a ref of a view of the pred matrix to do pseudo counts
