@@ -167,19 +167,15 @@ def validate2A(data, nssms, return_ccm=True):
     if used_clusters != expected_clusters:
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
-    # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
     # use dtype=np.int8 for c_m/ccm because we just need 0 and 1 integer values
     c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
 
-    # for each value in truthfile, put a 1 in the m index of the n row
     for i in xrange(len(data)):
         c_m[i, data[i] - 1] = 1
 
     if not return_ccm:
         return c_m
     else:
-        # return the dot product of c_m * t(c_m)
-        # this always gives a symmetric matrix
         ccm = np.dot(c_m, c_m.T)
         return ccm
 
@@ -281,11 +277,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
     '''
 
     larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
-    # y = pred.n
     y = np.array(pred.shape)[1]
-    # nssms
-    # recall when we did m = n + sqrt(n)
-    # nssms = n, given m, using quadratic
     nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
     import gc
 
@@ -952,19 +944,13 @@ def parseVCF1C(data):
     return [[len(data)], [len(data)]]
 
 def parseVCF2and3(data):
-    # array of lines
     data = data.split('\n')
-    # array of non-blank lines
     data = [x for x in data if x != '']
-    # array of non-comment lines
     data = [x for x in data if x[0] != '#']
     if len(data) == 0:
         raise ValidationError("Input VCF contains no SSMs")
     total_ssms = len(data)
-    # check if line is true or false, array of 0/1's
     mask = [x[-4:] == "True" for x in data]
-    # enumerate returns tuple of (index, object)
-    # get array of indices that are true in mask
     mask = [i for i, x in enumerate(mask) if x]
     tp_ssms = len(mask)
 
@@ -1008,10 +994,6 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     :param num: number of pseudo counts to add
     :return: modified ccm and ad matrices
     """
-    # create an m x m identity matrix where m = (ccm.n + sqrt(ccm.n))
-    # copy ccm into the identity matrix
-    # basically we're extending ccm with identity values
-
     size = np.array(ccm.shape)[1]
 
     if num is None:
@@ -1208,7 +1190,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     global err_msgs
 
     if challengeMapping[challenge]['vcf_func']:
-# 1
         nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'])
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
@@ -1237,14 +1218,10 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         if challenge in ['2A']:
             # we can afford to perform the copy in add_pseudo_counts because we're just using int8 matrices
-# 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             printInfo('TRUTH DIMENSIONS -> ', vout.shape)
-
             mem('VERIFY TRUTH %s' % truthfile)
-# 3
             vout2 = add_pseudo_counts(vout)
-
             tout.append(vout2)
             mem('APC TRUTH %s' % truthfile)
         elif challenge in ['2B']:
@@ -1265,7 +1242,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             return "NA"
 
         pargs = pout + nssms[0]
-# 4
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
 
         mem('VERIFY PRED %s' % predfile)
@@ -1277,7 +1253,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     if challengeMapping[challenge]['filter_func']:
         print('Filtering Challenge %s' % challenge)
         # validate3B(pout[1], np.dot(pout[0], pout[0].T), nssms[0])
-# 5
         if challenge in ['2B']:
             # save a ref of a view of the pred matrix to do pseudo counts
             predsave = pout[0]
@@ -1305,9 +1280,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     printInfo('%.16f' % answer)
     return answer
 
-    # return challengeMapping[challenge]['score_func'](*(pout + tout))
-
-    # return 'success'
 
 def printInfo(*string):
     if (INFO):
