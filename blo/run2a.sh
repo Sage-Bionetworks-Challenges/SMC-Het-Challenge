@@ -3,8 +3,8 @@
 DATA=""
 NAME=""
 
-if [[ -z "$1" || "$1" -ne "half" || "$1" -ne "full" || "$1" -ne "tiny" ]]; then
-	echo "ERROR: at least specify (tiny | half | full) dude.."
+if [[ -z "$1" ]]; then
+	echo "ERROR: specify dataset"
 	exit 1
 fi
 
