@@ -151,6 +151,7 @@ def validate2A(data, nssms, return_ccm=True):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) != nssms:
+        printInfo("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
         raise ValidationError("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
     cluster_entries = set()
     # make a set of all entries in truth file
@@ -159,12 +160,14 @@ def validate2A(data, nssms, return_ccm=True):
             data[i] = int(data[i])
             cluster_entries.add(data[i])
         except ValueError:
+            printInfo("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i + 1, data[i][0]))
             raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i + 1, data[i][0]))
     used_clusters = sorted(list(cluster_entries))
     # expect the set to be equal to seq(1, len(set), 1)
     expected_clusters = range(1, len(cluster_entries) + 1)
 
     if used_clusters != expected_clusters:
+        printInfo("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
     # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
@@ -205,23 +208,31 @@ def validate2B(filename, nssms, with_pseudo_counts=False):
             truth_ccm = np.loadtxt(data, ndmin=2)
             ccm[:nssms, :nssms] = truth_ccm
     except ValueError as e:
+        printInfo("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
         raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
 
     actual_ccm = ccm[:nssms, :nssms]
 
     if actual_ccm.shape != (nssms, nssms):
+        printInfo("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
         raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
     if not np.allclose(actual_ccm.diagonal(), np.ones((nssms))):
+        printInfo("Diagonal entries of co-clustering matrix not 1")
         raise ValidationError("Diagonal entries of co-clustering matrix not 1")
     if np.any(np.isnan(actual_ccm)):
+        printInfo("Co-clustering matrix contains NaNs")
         raise ValidationError("Co-clustering matrix contains NaNs")
     if np.any(np.isinf(actual_ccm)):
+        printInfo("Co-clustering matrix contains non-finite entries")
         raise ValidationError("Co-clustering matrix contains non-finite entries")
     if np.any(actual_ccm > 1):
         raise ValidationError("Co-clustering matrix contains entries greater than 1")
+        printInfo("Co-clustering matrix contains entries greater than 1")
     if np.any(actual_ccm < 0):
         raise ValidationError("Co-clustering matrix contains entries less than 0")
+        printInfo("Co-clustering matrix contains entries less than 0")
     if not isSymmetric(actual_ccm):
+        printInfo("Co-clustering matrix is not symmetric")
         raise ValidationError("Co-clustering matrix is not symmetric")
     return ccm
 
@@ -611,22 +622,27 @@ def validate3A(data, cas, nssms):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) != predK:
+        printInfo("Input file contains a different number of lines (%d) than expected (%d)")
         raise ValidationError("Input file contains a different number of lines (%d) than expected (%d)")
     data = [x.split('\t') for x in data]
     for i in range(len(data)):
         if len(data[i]) != 2:
+            printInfo("Number of tab separated columns in line %d is not 2" % (i+1))
             raise ValidationError("Number of tab separated columns in line %d is not 2" % (i+1))
         try:
             data[i][0] = int(data[i][0])
             data[i][1] = int(data[i][1])
         except ValueError:
+            printInfo("Entry in line %d could not be cast as integer" % (i+1))
             raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
 
     if [x[0] for x in data] != range(1, predK+1):
+        printInfo("First column must have %d entries in acending order starting with 1" % predK)
         raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
 
     for i in range(len(data)):
         if data[i][1] not in set(range(predK+1)):
+            printInfo("Parent node label in line %d is not valid." % (i+1))
             raise ValidationError("Parent node label in line %d is not valid." % (i+1))
 
     # Form descendant of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
@@ -670,21 +686,29 @@ def validate3B(filename, ccm, nssms):
         else:
             ad = filename
     except ValueError:
+        printInfo("Entry in AD matrix could not be cast as a float")
         raise ValidationError("Entry in AD matrix could not be cast as a float")
 
     if ad.shape != ccm.shape:
+        printInfo("Shape of AD matrix %s is wrong.  Should be %s" % (str(ad.shape), str(ccm.shape)))
         raise ValidationError("Shape of AD matrix %s is wrong.  Should be %s" % (str(ad.shape), str(ccm.shape)))
     if not np.allclose(ad.diagonal(), np.zeros(ad.shape[0])):
+        printInfo("Diagonal entries of AD matrix not 0")
         raise ValidationError("Diagonal entries of AD matrix not 0")
     if np.any(np.isnan(ad)):
+        printInfo("AD matrix contains NaNs")
         raise ValidationError("AD matrix contains NaNs")
     if np.any(np.isinf(ad)):
+        printInfo("AD matrix contains non-finite entries")
         raise ValidationError("AD matrix contains non-finite entries")
     if np.any(ad > 1):
+        printInfo("AD matrix contains entries greater than 1")
         raise ValidationError("AD matrix contains entries greater than 1")
     if np.any(ad < 0):
+        printInfo("AD matrix contains entries less than 0")
         raise ValidationError("AD matrix contains entries less than 0")
     if checkForBadTriuIndices(ad, ad.T, ccm):
+        printInfo("For some i, j the sum of AD(i, j) + AD(j, i) + CCM(i, j) > 1.")
         raise ValidationError("For some i, j the sum of AD(i, j) + AD(j, i) + CCM(i, j) > 1.")
 
     return ad
