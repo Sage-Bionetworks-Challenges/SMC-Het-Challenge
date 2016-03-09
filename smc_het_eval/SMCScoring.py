@@ -18,6 +18,7 @@ import os
 import gzip
 
 INFO = True
+WRITE_2B_FILES = False
 
 class ValidationError(Exception):
     def __init__(self, value):
@@ -1265,6 +1266,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             printInfo('TRUTH DIMENSIONS -> ', vout.shape)
 
+            if WRITE_2B_FILES:
+                np.savetxt('truth2B.txt.gz', vout)
+
             mem('VERIFY TRUTH %s' % truthfile)
 # 3
             vout2 = add_pseudo_counts(vout)
@@ -1294,6 +1298,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         mem('VERIFY PRED %s' % predfile)
         printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+
+        if challenge in ['2A'] and WRITE_2B_FILES:
+            np.savetxt('pred2B.txt.gz', pout[-1])
 
         if tout[-1] == None or pout[-1] == None:
             return "NA"
