@@ -280,6 +280,7 @@ def calculate2_quaid(pred, truth):
         except Warning:
             print ones_score, zeros_score
             return 0
+
 #@profile
 def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None):
     '''
@@ -506,7 +507,7 @@ def calculate2_pearson(pred, truth, full_matrix=True):
     return call_pearson(pred, truth)
 
 def call_pearson(p, t):
-    pbar=0
+    pbar = 0
     tbar = 0
     N = p.shape[0]
     pbar, tbar = mymean(p, t)
@@ -517,15 +518,9 @@ def call_pearson(p, t):
     return res/(N**2-1.0)
 
 def mymean(vec1, vec2):
-    m1 = 0
-    m2 = 0
-    N = vec1.shape[0]
-    M = float(N**2)
-    for i in xrange(N):
-        for j in xrange(N):
-            # cast point if using int8 matrices
-            m1 += vec1[i, j]/ M
-            m2 += vec2[i, j]/ M
+    # np.ndarray.mean() actually costs nothing
+    m1 = np.ndarray.mean(vec1)
+    m2 = np.ndarray.mean(vec2)
     return m1, m2
 
 def myscale(vec1, vec2, m1, m2, s1, s2):
@@ -537,15 +532,19 @@ def myscale(vec1, vec2, m1, m2, s1, s2):
     return out
 
 def mystd(vec1, vec2, m1, m2):
-    s1 = 0 
+    s1 = 0
     s2 = 0
     N = vec1.shape[0]
     M = float(N**2)
+
     for i in xrange(N):
         for j in xrange(N):
-            s1 += (vec1[i, j] - m1)**2/(M-1)
-            s2 += (vec2[i, j] - m2)**2/(M-1)
-    return np.sqrt(s1), np.sqrt(s2)
+            s1 += ((vec1[i, j] - m1)**2) / (M - 1)
+            s2 += ((vec2[i, j] - m2)**2) / (M - 1)
+    s1 = np.sqrt(s1)
+    s2 = np.sqrt(s2)
+
+    return s1, s2
 
 def calculate2_aupr(pred, truth, full_matrix=True):
     n = truth.shape[0]
