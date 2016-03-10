@@ -3,7 +3,7 @@
 DATA=""
 NAME=""
 
-if [[ -z "$1" || "$1" -ne "half" || "$1" -ne "full" || "$1" -ne "tiny" ]]; then
+if [[ -z "$1" ]]; then
 	echo "ERROR: at least specify (tiny | half | full) dude.."
 	exit 1
 fi
