@@ -19,7 +19,7 @@ import gzip
 
 INFO = True
 WRITE_2B_FILES = False
-WRITE_3B_FILES = True
+WRITE_3B_FILES = False
 
 class ValidationError(Exception):
     def __init__(self, value):
