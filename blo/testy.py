@@ -2,6 +2,9 @@ import numpy as np
 import os
 import resource
 
+# bench!!!!
+# for x in 1k 5k 10k 20k 50k 100k; do bash run2a.sh ${x} >> 2a.log; done
+
 def mem(note):
     pid = os.getpid()
     with open(os.path.join('/proc', str(pid), 'status')) as f:
