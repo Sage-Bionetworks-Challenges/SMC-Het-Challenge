@@ -19,6 +19,7 @@ import gzip
 
 INFO = True
 WRITE_2B_FILES = False
+WRITE_3B_FILES = True
 
 class ValidationError(Exception):
     def __init__(self, value):
@@ -670,6 +671,7 @@ def validate3A(data, cas, nssms):
         for j in range(n):
             if cluster_assignments[j] in descendant_of[cluster_assignments[i]]:
                 ad[i, j] = 1
+
     return ad
 
 def validate3B(filename, ccm, nssms):
@@ -1303,6 +1305,10 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         if tout[-1] == None or pout[-1] == None:
             return "NA"
+
+    if challenge in ['3A'] and WRITE_3B_FILES:
+        np.savetxt('pred3B.txt.gz', pout[-1])
+        np.savetxt('truth3B.txt.gz', tout[-1])
 
     if challengeMapping[challenge]['filter_func']:
         print('Filtering Challenge %s' % challenge)
