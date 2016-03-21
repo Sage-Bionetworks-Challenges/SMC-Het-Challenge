@@ -511,12 +511,12 @@ def call_pearson(p, t):
     pbar = 0
     tbar = 0
     N = p.shape[0]
+
     pbar, tbar = mymean(p, t)
-
     sp, st = mystd(p, t, pbar, tbar)
-
     res = myscale(p, t, pbar, tbar, sp, st)
-    return res/(N**2-1.0)
+
+    return res/(N**2 - 1.0)
 
 def mymean(vec1, vec2):
     # np.ndarray.mean() actually costs nothing
@@ -527,9 +527,16 @@ def mymean(vec1, vec2):
 def myscale(vec1, vec2, m1, m2, s1, s2):
     N = vec1.shape[0]
     out = 0
+
+    # original
+    # for i in xrange(N):
+    #     for j in xrange(N):
+    #         out += ((vec1[i, j] - m1)/s1) * ((vec2[i, j] - m2)/s2)
+
+    # optimized - row operations
     for i in xrange(N):
-        for j in xrange(N):
-            out += ((vec1[i, j] - m1)/s1) * ((vec2[i, j] - m2)/s2)
+        out += np.dot(((vec1[i, ] - m1)/s1), ((vec2[i, ] - m2)/s2))
+
     return out
 
 def mystd(vec1, vec2, m1, m2):
@@ -538,10 +545,20 @@ def mystd(vec1, vec2, m1, m2):
     N = vec1.shape[0]
     M = float(N**2)
 
+    # original
+    # for i in xrange(N):
+    #     for j in xrange(N):
+    #         s1 += ((vec1[i, j] - m1)**2) / (M - 1)
+    #         s2 += ((vec2[i, j] - m2)**2) / (M - 1)
+    # s1 = np.sqrt(s1)
+    # s2 = np.sqrt(s2)
+
+    # optimized - row operations
     for i in xrange(N):
-        for j in xrange(N):
-            s1 += ((vec1[i, j] - m1)**2) / (M - 1)
-            s2 += ((vec2[i, j] - m2)**2) / (M - 1)
+        s1 += np.ndarray.sum((vec1[i, ] - m1)**2)
+        s2 += np.ndarray.sum((vec2[i, ] - m2)**2)
+    s1 /= (M - 1)
+    s2 /= (M - 1)
     s1 = np.sqrt(s1)
     s2 = np.sqrt(s2)
 
@@ -566,6 +583,8 @@ def calculate2_aupr(pred, truth, full_matrix=True):
 
 def calculate2_mcc(pred, truth, full_matrix=True):
     n = truth.shape[0]
+    ptype = str(pred.dtype)
+    ttype = str(truth.dtype)
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -573,28 +592,39 @@ def calculate2_mcc(pred, truth, full_matrix=True):
         inds = np.triu_indices(n, k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
-    # TruePositive, TrueNegative, FalsePositive, FalseNegative
-    tp = 0
-    tn = 0
-    fp = 0
-    fn = 0
-    # np.savetxt("test_pred_cp.txt", pred_cp)
-    for i in xrange(pred_cp.shape[0]):
-        for j in xrange(pred_cp.shape[1]):
-            # correct because truth_cp values should be boolean casted ints?
-            if truth_cp[i, j] and pred_cp[i, j] >= 0.5:
-                tp = tp + 1.0
-            elif truth_cp[i, j] and pred_cp[i, j] < 0.5:
-                fn = fn + 1.0
-            if (not truth_cp[i, j]) and pred_cp[i, j] >= 0.5:
-                fp = fp + 1.0
-            elif (not truth_cp[i, j]) and pred_cp[i, j] < 0.5:
-                tn = tn + 1.0
 
-    #tp = float(np.sum(pred_cp[truth_cp==1] >= 0.5)) # Use 0.5 as the threshold for turning a probabalistic matrix into a binary matrix
-    #tn = float(np.sum(pred_cp[truth_cp==0] < 0.5))
-    #fp = float(np.sum(pred_cp[truth_cp==0] >= 0.5))
-    #fn = float(np.sum(pred_cp[truth_cp==1] < 0.5))
+    tp = 0.0
+    tn = 0.0
+    fp = 0.0
+    fn = 0.0
+
+    # original
+    # for i in xrange(pred_cp.shape[0]):
+    #     for j in xrange(pred_cp.shape[1]):
+    #         if truth_cp[i,j] and pred_cp[i,j] >= 0.5:
+    #             tp = tp +1.0
+    #         elif truth_cp[i,j] and pred_cp[i,j] < 0.5:
+    #             fn = fn + 1.0
+    #         if (not truth_cp[i,j]) and pred_cp[i,j] >= 0.5:
+    #             fp = fp +1.0
+    #         elif (not truth_cp[i,j]) and pred_cp[i,j] < 0.5:
+    #             tn = tn + 1.0
+
+    # optimized with fancy boolean magic algorithm to calculate MCC
+    for i in xrange(pred_cp.shape[0]):
+        # only round if the matrices are floats
+        pred_line = np.round(pred_cp[i, ] + 10.0**(-10)) if 'float' in ptype else pred_cp[i, ]
+        truth_line = np.round(truth_cp[i, ] + 10.0**(-10)) if 'float' in ttype else truth_cp[i, ]
+
+        ors = np.logical_or(truth_line, pred_line)
+        ands = np.logical_and(truth_line, pred_line)
+        evalthis = truth_line.astype(np.int8) + ors + ands
+
+        counts = np.bincount(evalthis)
+        tn += counts[0]
+        fp += counts[1]
+        fn += counts[2]
+        tp += counts[3]
 
     # To avoid divide-by-zero cases
     denom_terms = [(tp+fp), (tp+fn), (tn+fp), (tn+fn)]
@@ -1229,7 +1259,7 @@ def verifyChallenge(challenge, predfiles, vcf):
     return "Valid"
 
 
-def scoreChallenge(challenge, predfiles, truthfiles, vcf):
+def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
     mem('START %s' % challenge)
     global err_msgs
 
@@ -1348,6 +1378,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 def printInfo(*string):
     if (INFO):
         print([string])
+        sys.stdout.flush()
 
 def mem(note):
     pid = os.getpid()
@@ -1391,6 +1422,7 @@ if __name__ == '__main__':
     parser.add_argument("--vcf")
     parser.add_argument("-o", "--outputfile")
     parser.add_argument('-v', action='store_true', default=False)
+    parser.add_argument('--approx', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -1433,7 +1465,7 @@ if __name__ == '__main__':
         if args.v:
             res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
         else:
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, args.approx)
 
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
@@ -1448,14 +1480,3 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
-'''
-if __name__ == "__main__":
-    filename = '/home/nwilson/Documents/SMC-Het/Galaxy34-[Co-Cluster_(Sub_Challenge_2B)](1).txt.part'
-    f = open(filename)
-    pred_data = f.read()
-    f.close()
-    #parseVCF2and3(pred_data)
-
-    tst = np.identity(10)
-    add_pseudo_counts(tst)
-'''
