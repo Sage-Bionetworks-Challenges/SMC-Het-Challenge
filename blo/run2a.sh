@@ -20,7 +20,7 @@ mkdir $DIRECTORY;
 
 python ../smc_het_eval/SMCScoring.py \
 	-c 2A \
-	--predfiles ./data/2A/${DATA}/Tumour1.pred.2A.txt \
-	--truthfiles ./data/2A/${DATA}/Tumour1.truth.2A.txt \
-	--vcf ./data/2A/${DATA}/Tumour1.truth.scoring_vcf.vcf \
+	--predfiles ../../data/kbuckets/2A/${DATA}/Tumour1.pred.2A.txt \
+	--truthfiles ../../data/kbuckets/2A/${DATA}/Tumour1.truth.2A.txt \
+	--vcf ../../data/kbuckets/2A/${DATA}/Tumour1.truth.scoring_vcf.vcf \
 	-o ${DIRECTORY}/2A_${DATA}_output.txt;

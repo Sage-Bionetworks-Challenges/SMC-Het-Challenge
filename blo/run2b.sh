@@ -20,7 +20,7 @@ mkdir $DIRECTORY;
 
 python ../smc_het_eval/SMCScoring.py \
 	-c 2B \
-	--predfiles ./data/2B/${DATA}/pred2B.txt.gz \
-	--truthfiles ./data/2B/${DATA}/truth2B.txt.gz \
-	--vcf ./data/2B/${DATA}/Tumour1.truth.scoring_vcf.vcf \
+	--predfiles ../../data/kbuckets/2B/${DATA}/pred2B.txt.gz \
+	--truthfiles ../../data/kbuckets/2B/${DATA}/truth2B.txt.gz \
+	--vcf ../../data/kbuckets/2B/${DATA}/Tumour1.truth.scoring_vcf.vcf \
 	-o ${DIRECTORY}/2B_${DATA}_output.txt;
