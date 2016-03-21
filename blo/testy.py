@@ -3,7 +3,7 @@ import os
 import resource
 
 # bench!!!!
-# for x in 1k 5k 10k 20k 50k 100k; do bash run2a.sh ${x} >> 2a.log; done
+# for x in 1k 5k 10k 20k 50k 100k; do echo "RUNNING data set .. ${x}" | tee -a 2a.log; bash run2a.sh ${x} | tee -a 2a.log; done
 
 def mem(note):
     pid = os.getpid()
