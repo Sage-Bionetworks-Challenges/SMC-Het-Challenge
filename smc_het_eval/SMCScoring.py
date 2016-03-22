@@ -445,9 +445,8 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
         pred_row = (1 - rnd) * pred_cp[x, ] + rnd
         truth_row = (1 - rnd) * truth_cp[x, ] + rnd
 
-
-        pred_row = pred_row / np.sum(pred_row)
-        truth_row = truth_row / np.sum(truth_row)
+        pred_row /= np.sum(pred_row)
+        truth_row /= np.sum(truth_row)
         if sym:
             res += np.sum(truth_row * np.log(truth_row/pred_row)) + np.sum(pred_row * np.log(pred_row/truth_row))
         else:
@@ -1076,7 +1075,7 @@ def add_pseudo_counts(ccm, ad=None, num=None):
         return ccm, ad
 
     # added dtype=ccm.dtype because some matrices (that only have integer values of 0 and 1) can use int8 instead of the default float64
-    # this shoudn't cause issues downstream in calculations because there is (from what I can tell) always a float value to cast the expression to float
+    # this shoudn't cause issues downstream in calculations because there is (from what I can tell) always a float expression to cast the ints to float
     new_ccm = np.identity(size + num, dtype=ccm.dtype)
     new_ccm[:size, :size] = np.copy(ccm)
     ccm = new_ccm
@@ -1274,8 +1273,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
 
     mem('VERIFY VCF %s' % vcf)
 
-    printInfo('total vcf lines -> ' + str(nssms[0]))
-    printInfo('total mask lines -> ' + str(nssms[1]))
+    printInfo('total lines -> ' + str(nssms[0]))
+    printInfo('total truth lines -> ' + str(nssms[1]))
+    printInfo('head nssms[2] -> ' + str(nssms[2][:20]))
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
