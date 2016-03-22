@@ -190,18 +190,18 @@ mem('enter')
 
 #### row vs element 2
 
-vec1 = np.loadtxt('./vec1.txt.gz', ndmin=2)
-vec2 = np.loadtxt('./vec2.txt.gz', ndmin=2)
+# vec1 = np.loadtxt('./vec1.txt.gz', ndmin=2)
+# vec2 = np.loadtxt('./vec2.txt.gz', ndmin=2)
 
 # np.savetxt('vec1.txt.gz', vec1)
 # np.savetxt('vec2.txt.gz', vec2)
 
-m1 = 0.0
-m2 = 0.0
-N = vec1.shape[0]
-M = float(N**2)
+# m1 = 0.0
+# m2 = 0.0
+# N = vec1.shape[0]
+# M = float(N**2)
 
-print M
+# print M
 
 # for i in xrange(N):
 #     for j in xrange(N):
@@ -213,13 +213,13 @@ print M
 # print m1 * M
 # print m2 * M
 
-for i in xrange(N):
-    m1 += np.add.reduce(vec1[i, :N])
-    m2 += np.add.reduce(vec2[i, :N])
-m1 /= M
-m2 /= M
-print m1
-print m2
+# for i in xrange(N):
+#     m1 += np.add.reduce(vec1[i, :N])
+#     m2 += np.add.reduce(vec2[i, :N])
+# m1 /= M
+# m2 /= M
+# print m1
+# print m2
 
 # for i in xrange(N):
 #     for j in xrange(N):
@@ -235,29 +235,54 @@ print m2
 
 # print(vec1[:10, :10])
 # print((vec1[3, :4] + 2)**2)
-print("OG")
+# print("OG")
 
-s1_1 = 0
-s2_1 = 0
-for i in xrange(N):
-    for j in xrange(N):
-        s1_1 += ((vec1[i, j] - m1)**2) / (M - 1)
-        s2_1 += ((vec2[i, j] - m2)**2) / (M - 1)
-print("s1_1 %.20f | s2_1 %.20f" % (s1_1 * (M - 1), s2_1 * (M - 1)))
-print("s1_1 %.20f | s2_1 %.20f" % (s1_1, s2_1))
+# s1_1 = 0
+# s2_1 = 0
+# for i in xrange(N):
+#     for j in xrange(N):
+#         s1_1 += ((vec1[i, j] - m1)**2) / (M - 1)
+#         s2_1 += ((vec2[i, j] - m2)**2) / (M - 1)
+# print("s1_1 %.20f | s2_1 %.20f" % (s1_1 * (M - 1), s2_1 * (M - 1)))
+# print("s1_1 %.20f | s2_1 %.20f" % (s1_1, s2_1))
 
-print("MINE")
+# print("MINE")
 
-s1_2 = 0
-s2_2 = 0
-for i in xrange(N):
-    s1_2 += np.add.reduce((vec1[i, ] - m1)**2)
-    s2_2 += np.add.reduce((vec2[i, ] - m2)**2)
-print("s1_2 %.20f | s2_2 %.20f" % (s1_2, s2_2))
-s1_2 /= (M - 1)
-s2_2 /= (M - 1)
-print("s1_2 %.20f | s2_2 %.20f" % (s1_2, s2_2))
+# s1_2 = 0
+# s2_2 = 0
+# for i in xrange(N):
+#     s1_2 += np.add.reduce((vec1[i, ] - m1)**2)
+#     s2_2 += np.add.reduce((vec2[i, ] - m2)**2)
+# print("s1_2 %.20f | s2_2 %.20f" % (s1_2, s2_2))
+# s1_2 /= (M - 1)
+# s2_2 /= (M - 1)
+# print("s1_2 %.20f | s2_2 %.20f" % (s1_2, s2_2))
 
+n = 6
+
+x = np.identity(n, dtype=np.float64)
+x[1,4] = 4
+x[2,1] = 4
+x[2,4] = 8
+print x
+mem('make')
+# x = np.ones([10000, 10000], dtype=np.int8)
+
+nn = np.floor(np.sqrt(n))
+print nn
+
+x.resize([(n + nn)**2], refcheck = False)
+
+for i in reversed(range(n)): # reformat the CCM so new rows and columns of 0's are added
+    x[(i*(n+nn)):(i*(n+nn)+n)] = x[(i*n):((i+1)*n)]
+    x[(i*(n+nn) + n):(i*(n+nn) + n + np.floor(nn/4))] = 1
+    x[(i*(n+nn)+n + np.floor(nn/4)):((i+1)*(n+nn))] = 0
+
+x[(n*(n+nn)):((n+np.floor(nn/4))*(n+nn))] = 1
+x.resize([n+nn, n+nn], refcheck=False) # resize the CCM to be an array again
+
+print x.shape
+print x
 
 ####
 mem('end')

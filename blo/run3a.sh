@@ -1,4 +1,4 @@
-../../data/kbuckets/!/bin/bash
+#!/bin/bash
 
 DATA=""
 NAME=""
