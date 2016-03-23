@@ -258,7 +258,9 @@ mem('enter')
 # s2_2 /= (M - 1)
 # print("s1_2 %.20f | s2_2 %.20f" % (s1_2, s2_2))
 
-n = 6
+
+############### expand ndarray
+n = 964
 
 x = np.identity(n, dtype=np.float64)
 x[1,4] = 4
@@ -266,23 +268,87 @@ x[2,1] = 4
 x[2,4] = 8
 print x
 mem('make')
-# x = np.ones([10000, 10000], dtype=np.int8)
 
 nn = np.floor(np.sqrt(n))
-print nn
+# nn = 3
 
-x.resize([(n + nn)**2], refcheck = False)
+# NATHANS ALGO
+x.resize((n + nn)**2, refcheck = False)
 
-for i in reversed(range(n)): # reformat the CCM so new rows and columns of 0's are added
+for i in reversed(xrange(n)):
     x[(i*(n+nn)):(i*(n+nn)+n)] = x[(i*n):((i+1)*n)]
     x[(i*(n+nn) + n):(i*(n+nn) + n + np.floor(nn/4))] = 1
     x[(i*(n+nn)+n + np.floor(nn/4)):((i+1)*(n+nn))] = 0
 
 x[(n*(n+nn)):((n+np.floor(nn/4))*(n+nn))] = 1
-x.resize([n+nn, n+nn], refcheck=False) # resize the CCM to be an array again
+x.resize([n+nn, n+nn], refcheck=False)
 
-print x.shape
+for j in xrange(int(n), int(n+nn)):
+    x[j, j] = 1
+
 print x
+
+print "NATHAN -> ", np.sum(x), ' and size -> ', x.shape
+#/ NATHANS ALGO
+
+# REF ALGO
+x = np.identity(n, dtype=np.float64)
+x[1,4] = 4
+x[2,1] = 4
+x[2,4] = 8
+
+newx = np.identity(n + nn, dtype=np.float64)
+newx[:n, :n] = np.copy(x)
+x = newx
+
+print x
+print "REF -> ", np.sum(x), ' and size -> ', x.shape
+#/ REF ALGO
+
+# MY ALDO
+x = np.identity(n, dtype=np.float64)
+x[1,4] = 4
+x[2,1] = 4
+x[2,4] = 8
+
+nnn = n + nn
+
+x.resize(((nnn)**2))
+
+for i in reversed(xrange(int(nnn))):
+    if i < n:
+        x[(i*nnn):(i*nnn + n)] = x[(i*n):(i*n + n)]
+        x[(i*nnn + n):((i+1)*nnn)] = 0
+    else:
+        x[(i*nnn):((i+1)*nnn)] = 0
+        x[i*(nnn+1)] = 1
+
+x.resize((nnn, nnn))
+print x
+
+print "MINE -> ", np.sum(x), ' and size -> ', x.shape
+#/ MY ALDO
+
+############ shrink ndarray
+# n = 1000
+# nn = 5
+
+# x = np.identity(n, dtype=np.float64)
+# mem('make')
+# x[1, 4] = 4
+# x[2, 1] = 2
+# print x
+
+# x.resize((n**2))
+
+# # basically, array shifting
+# for i in xrange(nn):
+#     x[(i*nn):((i+1)*nn)] = x[(i*n):(i*n+nn)]
+
+# x.resize((nn**2))
+# x.resize((nn, nn))
+
+# print x
 
 ####
 mem('end')
