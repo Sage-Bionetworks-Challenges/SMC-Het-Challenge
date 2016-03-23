@@ -17,9 +17,11 @@ import resource
 import os
 import gzip
 
-INFO = True
-WRITE_2B_FILES = False
-WRITE_3B_FILES = False
+INFO            = True
+MEM             = True
+FINAL_MEM       = True
+WRITE_2B_FILES  = False
+WRITE_3B_FILES  = False
 
 class ValidationError(Exception):
     def __init__(self, value):
@@ -191,9 +193,9 @@ def validate2A(data, nssms, return_ccm=True):
 def validate2Afor3A(data, nssms):
     return validate2A(data, nssms, False)
 
-def validate2B(filename, nssms, with_pseudo_counts=False):
+def validate2B(filename, nssms):
     # if pseudo_counts are requested, create the matrix with the extended size
-    ccm_size = nssms + np.sqrt(nssms) if with_pseudo_counts else nssms
+    ccm_size = nssms
     # we only really need the identity matrix for 2B truth matrices but we will be overwriting them anyway downstream
     ccm = np.identity(ccm_size)
     try:
@@ -325,17 +327,11 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
 
         for m in functions:
             gc.collect()
-            timmie = time.time()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
-            timmie2 = time.time() - timmie
-            printInfo("method %s took %s seconds" % (m, round(timmie2, 2)))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
         for m in functions:
             gc.collect()
-            timmie = time.time()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
-            timmie2 = time.time() - timmie
-            printInfo("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = 1 - (scores[i] / worst_scores[i])
@@ -1032,22 +1028,38 @@ def parseVCF2and3(data):
     return [[total_ssms], [tp_ssms], mask]
 
 def filterFPs(x, mask):
-    # filters in memory, and returns a view
-    # matrix[np.ix_(mask, mask)] is considered advanced indexing and creates a copy, allocating new memory
+    # EVERYTHING is done in memory
+    #   1 - the elements at the indicies specified by mask are "picked" and assembled into a matrix
+    #       that grows out of the upper-left corner of the original matrix (the original matrix will
+    #       always be bigger than the eventual masked matrix)
+    #   2 - the matrix is resized into a 1D array
+    #   3 - the elements of the array are "shifted" so that they satisfy the [i,j] indices for
+    #       a matrix of the new (masked) size
+    #   4 - the array is "shrunk" to discard the difference between the old size and the new size
+    #   5 - the array is resized into an actual nxn matrix
+    # NOTE: matrix[np.ix_(mask, mask)] is considered advanced indexing and creates a copy, allocating new memory
+    #       that's why we don't do it anymore
     if x.shape[0] == x.shape[1]:
+        # 1 assemble masked matrix within the original matrix
         for i, m1 in enumerate(mask):
             for j, m2 in enumerate(mask):
                 x[i, j] = x[m1, m2]
-        # zero out "top right quadrant" of matrix after masking
-        for i in xrange(len(mask)):
-            for j in xrange(len(mask), x.shape[0]):
-                x[i, j] = 0
-        # zero out "bottom quadrants" of matrix after masking
-        for i in xrange(len(mask), x.shape[0]):
-            for j in xrange(x.shape[0]):
-                x[i, j] = 0
-        # return a view, does not allocate new memory
-        return x[:len(mask), :len(mask)]
+
+        old_n = x.shape[0]
+        new_n = len(mask)
+
+        # 2 resize into array
+        x.resize((old_n**2), refcheck=False)
+
+        # 3 shift elements
+        for k in xrange(new_n):
+            x[(k*new_n):((k+1)*new_n)] = x[(k*old_n):(k*old_n+new_n)]
+
+        # 4 shrink array
+        x.resize((new_n**2), refcheck=False)
+        # 5 resize to array
+        x.resize((new_n, new_n), refcheck=False)
+        return x
     else:
         return x[mask, :]
 
@@ -1063,49 +1075,54 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     :param num: number of pseudo counts to add
     :return: modified ccm and ad matrices
     """
-    # create an m x m identity matrix where m = (ccm.n + sqrt(ccm.n))
-    # copy ccm into the identity matrix
-    # basically we're extending ccm with identity values
 
-    size = np.array(ccm.shape)[1]
+    old_n = ccm.shape[0]
 
     if num is None:
-        num = np.sqrt(size)
+        num = np.floor(np.sqrt(old_n))
     elif num == 0:
         return ccm, ad
 
-    # added dtype=ccm.dtype because some matrices (that only have integer values of 0 and 1) can use int8 instead of the default float64
-    # this shoudn't cause issues downstream in calculations because there is (from what I can tell) always a float expression to cast the ints to float
-    new_ccm = np.identity(size + num, dtype=ccm.dtype)
-    new_ccm[:size, :size] = np.copy(ccm)
-    ccm = new_ccm
+    # EVERYTHING is done in memory
+    #   The matrix is extended from nxn to mxm where { m = n + sqrt(n) }
+    #   The "extended" portion of the matrix is basically taken from an identity matrix
+    #   n = original ccm size
+    #   m = n + sqrt(n)
+    #   1 - the ccm is resized from an nxn matrix to an m^2 length array
+    #   2 - the array is modified so that the elements are "shifted" from nxn [i,j] indices
+    #       to mxm [i,j] indices. the "new" elements that exist at ccm[:n, n:m] and ccm[n:m, ]
+    #       are set to 0. the "identity" spots at [ccm[x, x] for x in n:m] are set to 1.
+    #   3 - the array is finally resized into an actual mxm matrix
 
+    new_n = int(old_n + num)
+
+    # 1 resize to array
+    ccm.resize((new_n**2), refcheck=False)
+
+    # 2 shift elements
+    for i in reversed(xrange(new_n)):
+        if i < old_n:
+            ccm[(i*new_n):(i*new_n + old_n)] = ccm[(i*old_n):(i*old_n + old_n)]
+            ccm[(i*new_n + old_n):((i+1)*new_n)] = 0
+        else:
+            ccm[(i*new_n):((i+1)*new_n)] = 0
+            ccm[i*(new_n+1)] = 1
+
+    # 3 resize to matrix again
+    ccm.resize((new_n, new_n), refcheck=False)
+
+    # didn't optimize this. YET
+    # either way, it should be cheap to do, i think all ad's are int8 matrices..
     if ad is not None:
-        new_ad = np.zeros([size + num]*2)
-        new_ad[:size, :size] = np.copy(ad)
-        new_ad[(size+num/2):(size+3*num/4), :(size)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
-        new_ad[:(size), (size+3*num/4):(size+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
+        new_ad = np.zeros([old_n + num] * 2)
+        new_ad[:old_n, :old_n] = np.copy(ad)
+        new_ad[(old_n+num/2):(old_n+3*num/4), :(old_n)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
+        new_ad[:(old_n), (old_n+3*num/4):(old_n+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
         ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
     return ccm
 
-def add_pseudo_counts_in_place(ccm, nssms):
-    # REQUIRES ccm to be at (nssms + sqrt(nssms)) size
-    # aka, requires ccm to be large enough to fit the counts
-    # adds pseudo counts in memory and returns a view
-
-    final_size = nssms + np.sqrt(nssms)
-    final_size = int(final_size)
-
-    # identity-fy the portion ccm[nssms:final_size, nssms:final_size]
-    for i in xrange(nssms, final_size):
-        ccm[i, i] = 1
-
-    # return :final_size bounded ccm just in case the ccm reference holds a larger view of the matrix
-    return ccm[:final_size, :final_size]
-
-#
 def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
     """
     Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
@@ -1259,6 +1276,7 @@ def verifyChallenge(challenge, predfiles, vcf):
 
 
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
+    print('Starting Challenge %s' % challenge)
     mem('START %s' % challenge)
     global err_msgs
 
@@ -1291,8 +1309,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
 
         targs = tout + nssms[1]
 
-        if challenge in ['2A']:
-            # we can afford to perform the copy in add_pseudo_counts because we're just using int8 matrices
+        if challenge in ['2A', '2B']:
 # 2
             vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
             printInfo('TRUTH DIMENSIONS -> ', vout.shape)
@@ -1302,17 +1319,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
 
             mem('VERIFY TRUTH %s' % truthfile)
 # 3
-            vout2 = add_pseudo_counts(vout)
-
-            tout.append(vout2)
-            mem('APC TRUTH %s' % truthfile)
-        elif challenge in ['2B']:
-            # adds pseudo counts during creation to save memory by avoiding copy-required add_pseudo_counts call
-            # append True to request pseudo counts in validate2B call
-            targs.append(True)
-            vout_with_pseudo_counts = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
+            vout_with_pseudo_counts = add_pseudo_counts(vout)
             tout.append(vout_with_pseudo_counts)
-            mem('VERIFY/APC TRUTH %s' % truthfile)
+            mem('APC TRUTH %s' % truthfile)
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
             mem('VERIFY TRUTH %s' % truthfile)
@@ -1340,25 +1349,23 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
         np.savetxt('pred3B.txt.gz', pout[-1])
         np.savetxt('truth3B.txt.gz', tout[-1])
 
+    printInfo('tout sum -> ', np.sum(tout[0]))
+    printInfo('pout sum -> ', np.sum(pout[0]))
+
     if challengeMapping[challenge]['filter_func']:
         print('Filtering Challenge %s' % challenge)
         # validate3B(pout[1], np.dot(pout[0], pout[0].T), nssms[0])
 # 5
-        if challenge in ['2B']:
-            # save a ref of a view of the pred matrix to do pseudo counts
-            predsave = pout[0]
-
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         printInfo('PRED DIMENSION(S) -> ', [p.shape for p in pout])
 
         mem('FILTER PRED(S)')
 
-        if challenge in ['2A']:
+        printInfo('tout sum filtered -> ', np.sum(tout[0]))
+        printInfo('pout sum filtered -> ', np.sum(pout[0]))
+
+        if challenge in ['2A', '2B']:
             pout = [ add_pseudo_counts(*pout) ]
-            mem('APC PRED')
-            printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
-        elif challenge in ['2B']:
-            pout = [ add_pseudo_counts_in_place(predsave, *nssms[1]) ]
             mem('APC PRED')
             printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
 
@@ -1368,7 +1375,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
             mem('3A DOT')
 
     answer = challengeMapping[challenge]['score_func'](*(pout + tout))
-    printInfo('%.16f' % answer)
+    print('SCORE -> %.16f' % answer)
     return answer
 
     # return challengeMapping[challenge]['score_func'](*(pout + tout))
@@ -1395,7 +1402,9 @@ def mem(note):
 
     vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-    printInfo('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+    if (MEM and (FINAL_MEM and note == 'DONE' or not FINAL_MEM)):
+        print('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+        sys.stdout.flush()
 
 def mem_pretty(mem):
     denom = 1
