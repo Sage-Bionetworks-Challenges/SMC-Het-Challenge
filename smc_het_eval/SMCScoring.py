@@ -29,6 +29,12 @@ class ValidationError(Exception):
     def __str__(self):
         return repr(self.value)
 
+class SampleError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
 def validate1A(data):
     data = data.split('\n')
     data = filter(None, data)
@@ -147,13 +153,17 @@ def calculate1C(pred, truth, err='abs'):
 
     return sum(1-se)/float(len(truthvs))
 
-def validate2A(data, nssms, return_ccm=True):
+def validate2A(data, nssms, return_ccm=True, mask=None):
     # validate2A only fails input if..
-    #   - length(truthfile) != length(mask)
-    #   - if an entry in truthfile can't be cast to int
-    #   - if set(truthfile) != seq(1, len(set(truthfile)), 1)
+    #   - length(file) != length(mask)
+    #   - if an entry in file can't be cast to int
+    #   - if set(file) != seq(1, len(set(file)), 1)
     data = data.split('\n')
     data = filter(None, data)
+
+    # apply mask if it exists
+    data = [x for i, x in enumerate(data) if i in mask] if mask else data
+
     if len(data) != nssms:
         printInfo("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
         raise ValidationError("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
@@ -170,15 +180,22 @@ def validate2A(data, nssms, return_ccm=True):
     # expect the set to be equal to seq(1, len(set), 1)
     expected_clusters = range(1, len(cluster_entries) + 1)
 
-    if used_clusters != expected_clusters:
+    # only raise ValidationError if the clusters are not equal AND no mask is used
+    if used_clusters != expected_clusters and not mask:
         printInfo("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
-    # make a matrix of zeros ( n x m ), n = len(truthfile), m = len(set)
+    # raise a SampleError if the clusters are not equal AND a mask is being used
+    # the mask could be selecting rows that don't end up giving the complete cluster
+    # raise the error, and trigger a re-sample
+    if used_clusters != expected_clusters and mask != None:
+        raise SampleError('Sampling gave incomplete clusters: expected (%s) and got (%s)' % (str(expected_clusters), str(used_clusters)))
+
+    # make a matrix of zeros ( n x m ), n = len(file), m = len(set)
     # use dtype=np.int8 for c_m/ccm because we just need 0 and 1 integer values
     c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
 
-    # for each value in truthfile, put a 1 in the m index of the n row
+    # for each value in file, put a 1 in the m index of the n row
     for i in xrange(len(data)):
         c_m[i, data[i] - 1] = 1
 
@@ -190,10 +207,10 @@ def validate2A(data, nssms, return_ccm=True):
         ccm = np.dot(c_m, c_m.T)
         return ccm
 
-def validate2Afor3A(data, nssms):
-    return validate2A(data, nssms, False)
+def validate2Afor3A(data, nssms, mask=None):
+    return validate2A(data, nssms, return_ccm=False, mask=mask)
 
-def validate2B(filename, nssms):
+def validate2B(filename, nssms, mask=None):
     # if pseudo_counts are requested, create the matrix with the extended size
     ccm_size = nssms
     # we only really need the identity matrix for 2B truth matrices but we will be overwriting them anyway downstream
@@ -641,7 +658,7 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 
 #### SUBCHALLENGE 3 #########################################################################################
 
-def validate3A(data, cas, nssms):
+def validate3A(data, cas, nssms, mask=None):
     predK = cas.shape[1]
     cluster_assignments = np.argmax(cas, 1) + 1
 
@@ -699,7 +716,7 @@ def validate3A(data, cas, nssms):
 
     return ad
 
-def validate3B(filename, ccm, nssms):
+def validate3B(filename, ccm, nssms, mask=None):
     size = ccm.shape[0]
     try:
         if filename.endswith('.gz'):
@@ -1002,22 +1019,24 @@ def parseVCF1C(data):
         raise ValidationError("Input VCF contains no SSMs")
     return [[len(data)], [len(data)]]
 
-def parseVCF2and3(data):
-    # array of lines
+def parseVCF2and3(data, sample_mask=None):
+
     data = data.split('\n')
-    # array of non-blank lines
     data = [x for x in data if x != '']
-    # array of non-comment lines
     data = [x for x in data if x[0] != '#']
+
+    # apply sample_mask to data, sample_mask exists
+    data = [x for i, x in enumerate(data) if i in sample_mask] if sample_mask else data
+
     if len(data) == 0:
         raise ValidationError("Input VCF contains no SSMs")
-    total_ssms = len(data)
+    vcf_lines = len(data)
     # check if line is true or false, array of 0/1's
     mask = [x[-4:] == "True" for x in data]
     # enumerate returns tuple of (index, object)
     # get array of indices that are true in mask
     mask = [i for i, x in enumerate(mask) if x]
-    tp_ssms = len(mask)
+    true_lines = len(mask)
 
     # return
     # [
@@ -1025,7 +1044,7 @@ def parseVCF2and3(data):
     #     [ total true lines in vcf (mask) ],
     #     [ array of indices of objects in mask that are true ]
     # ]
-    return [[total_ssms], [tp_ssms], mask]
+    return [[vcf_lines], [true_lines], mask]
 
 def filterFPs(x, mask):
     # EVERYTHING is done in memory
@@ -1187,25 +1206,72 @@ def get_bad_ad(nssms, scenario='OneCluster'):
         raise ValueError('Scenario must be one of OneCluster or NCluster')
 
 
-def verify(filename, role, func, *args):
+def verify(filename, role, func, *args, **kwargs):
+    # printInfo('ARGS -> %s | %s | %s | %s | %s' % (filename, role, func, args, kwargs))
     global err_msgs
     try:
         if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
-            pred = func(filename, *args)
+            verified = func(filename, *args, **kwargs)
         else:
             # really shouldn't do read() here, stores the whole thing in memory when we could read it in chunks/lines
             f = open(filename)
-            pred_data = f.read()
+            data = f.read()
             f.close()
-            pred = func(pred_data, *args)
+            verified = func(data, *args, **kwargs)
     except (IOError, TypeError) as e:
         err_msgs.append("Error opening %s, from function %s using file %s in : %s" %  (role, func, filename, e.strerror))
         return None
     except (ValidationError, ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))
         return None
-    return pred
+    except SampleError as e:
+        raise e
+    return verified
 
+def makeMasks(vcfFile, sample_fraction):
+    # returns mask dictionary { 'all' : sample_mask, 'truth' : truth_mask }
+    #   where sample_mask and truth_mask are both lists of indices
+    # we need the truth_mask because the truth file ONLY contains truth lines,
+    # whereas the vcf, pred files contain truth and false lines. thus, the truth
+    # file line indicies do NOT match up with vcf and pred, so we need to make a
+    # separate mask just for the truth file
+
+    f = open(vcfFile)
+    vcf = f.read()
+    f.close()
+
+    vcf = vcf.split('\n')
+    vcf = [x for x in vcf if x != '' and x[0] != '#']
+    vcf = [x[-4:] == "True" for x in vcf]
+
+    # can use the combinadics method here..
+    vcf_count = len(vcf)
+    sample_size = int(np.floor(vcf_count * sample_fraction))
+    sample_mask = set()
+    for x in np.random.randint(0, vcf_count, sample_size):
+        sample_mask.add(x)
+    # useless counter to see how many "tries" it does to finish the set
+    i = 0
+
+    # finding the remaining random numbers can take a looooooooooooooong time
+    # probably better to implement deterministic combinadics
+    while len(sample_mask) < sample_size:
+        missing = sample_size - len(sample_mask)
+        for x in np.random.randint(0, vcf_count, missing):
+            sample_mask.add(x)
+        i += 1
+
+    truth_mask = []
+    truth_index = 0
+    for i in xrange(len(vcf)):
+        if vcf[i] and i in sample_mask:
+            truth_mask.append(truth_index)
+        if vcf[i]:
+            truth_index += 1
+
+    sample_mask = sorted(sample_mask)
+
+    return { 'samples' : sample_mask, 'truths' : truth_mask }
 
 challengeMapping = {
     '1A' : {
@@ -1275,14 +1341,15 @@ def verifyChallenge(challenge, predfiles, vcf):
     return "Valid"
 
 
-def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
-    print('Starting Challenge %s' % challenge)
-    mem('START %s' % challenge)
+def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     global err_msgs
+    mem('START %s' % challenge)
+
+    masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
 
     if challengeMapping[challenge]['vcf_func']:
 # 1
-        nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'])
+        nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'], sample_mask=masks['samples'])
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
@@ -1311,7 +1378,11 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
 
         if challenge in ['2A', '2B']:
 # 2
-            vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
+            try:
+                vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
+            except SampleError as e:
+                raise e
+
             printInfo('TRUTH DIMENSIONS -> ', vout.shape)
 
             if WRITE_2B_FILES:
@@ -1323,7 +1394,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
             tout.append(vout_with_pseudo_counts)
             mem('APC TRUTH %s' % truthfile)
         else:
-            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
+            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
             mem('VERIFY TRUTH %s' % truthfile)
 
         printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
@@ -1334,7 +1405,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
 
         pargs = pout + nssms[0]
 # 4
-        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
+        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
 
         mem('VERIFY PRED %s' % predfile)
         printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
@@ -1342,7 +1413,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
         if challenge in ['2A'] and WRITE_2B_FILES:
             np.savetxt('pred2B.txt.gz', pout[-1])
 
-        if tout[-1] == None or pout[-1] == None:
+        if tout[-1] is None or pout[-1] is None:
             return "NA"
 
     if challenge in ['3A'] and WRITE_3B_FILES:
@@ -1353,8 +1424,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
     printInfo('pout sum -> ', np.sum(pout[0]))
 
     if challengeMapping[challenge]['filter_func']:
-        print('Filtering Challenge %s' % challenge)
-        # validate3B(pout[1], np.dot(pout[0], pout[0].T), nssms[0])
 # 5
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         printInfo('PRED DIMENSION(S) -> ', [p.shape for p in pout])
@@ -1374,12 +1443,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, approx):
             pout[0] = np.dot(pout[0], pout[0].T)
             mem('3A DOT')
 
-    answer = challengeMapping[challenge]['score_func'](*(pout + tout))
-    print('SCORE -> %.16f' % answer)
-    return answer
-
-    # return challengeMapping[challenge]['score_func'](*(pout + tout))
-
+    return challengeMapping[challenge]['score_func'](*(pout + tout))
     # return 'success'
 
 def printInfo(*string):
@@ -1403,7 +1467,8 @@ def mem(note):
     vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     if (MEM and (FINAL_MEM and note == 'DONE' or not FINAL_MEM)):
-        print('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+        print('[ M E M ] total: %s (max: %s) @ %s' % (vt, vmax, note))
+        # print('[ M E M ] total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
         sys.stdout.flush()
 
 def mem_pretty(mem):
@@ -1431,7 +1496,7 @@ if __name__ == '__main__':
     parser.add_argument("--vcf")
     parser.add_argument("-o", "--outputfile")
     parser.add_argument('-v', action='store_true', default=False)
-    parser.add_argument('--approx', action='store_true', default=False)
+    parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
 
     args = parser.parse_args()
 
@@ -1471,10 +1536,47 @@ if __name__ == '__main__':
             jtxt = json.dumps(out)
             handle.write(jtxt)
     else:
+        # VERIFY
         if args.v:
             res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
+        # APPROXIMATE
+        elif args.approx:
+            sample_fraction = args.approx[0]
+            iterations = int(np.floor(args.approx[1]))
+            if sample_fraction >= 1.0 or sample_fraction <= 0.0:
+                print('Sample Fraction value must be 0.0 < x < 1.0')
+                sys.exit(1)
+            results = []
+            for i in xrange(iterations):
+                print('Running Iteration %d with Sampling Fraction %.2f' % (i + 1, sample_fraction))
+                resample = True
+                while (resample):
+                    try:
+                        res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, sample_fraction)
+                        print('Score[%d] -> %.5f' % (i + 1, res))
+                        results.append(res)
+                        resample = False
+                    except SampleError as e:
+                        # print(e.value)
+                        print('resampling..')
+                        resample = True
+            mean = np.mean(results)
+            median = np.median(results)
+            std = np.std(results)
+            print('')
+            print('#############')
+            print('## RESULTS ##')
+            print('#############')
+            print('Mean -> %.5f' % mean)
+            print('Median -> %.5f' % median)
+            print('Standard Deviation -> %.5f' % std)
+            print('')
+            res = mean
+        # REAL SCORE
         else:
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, args.approx)
+            print('Running Challenge %s' % args.challenge)
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
