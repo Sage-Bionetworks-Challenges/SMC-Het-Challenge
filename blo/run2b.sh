@@ -9,12 +9,7 @@ if [[ -z "$1" ]]; then
 fi
 
 DATA="$1"
-DIRECTORY="./run-2B";
-
-if [ ! -z "$2" ]; then
-	NAME="$2"
-	DIRECTORY="${DIRECTORY}-${2}"
-fi
+DIRECTORY="./output-2b";
 
 mkdir $DIRECTORY;
 
