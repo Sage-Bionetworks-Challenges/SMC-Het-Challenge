@@ -26,6 +26,7 @@ WRITE_3B_FILES  = False
 class ValidationError(Exception):
     def __init__(self, value):
         self.value = value
+        print('VALIDATION ERROR: %s' % value)
     def __str__(self):
         return repr(self.value)
 
@@ -35,7 +36,7 @@ class SampleError(Exception):
     def __str__(self):
         return repr(self.value)
 
-def validate1A(data):
+def validate1A(data, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) < 1:
@@ -66,7 +67,7 @@ def calculate1A(pred, truth, err='abs'):
     else:
         raise KeyError('Invalid error penalty for scoring SC 1A. Choose one of "abs" or "sqr".')
 
-def validate1B(data):
+def validate1B(data, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) != 1:
@@ -93,7 +94,7 @@ def calculate1B(pred, truth, method='normalized'):
     else:
         raise KeyError('Invalid method for scoring SC 1B. Choose one of "orig" or "normalized".')
 
-def validate1C(data, nssms):
+def validate1C(data, nssms, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     data = [x.strip() for x in data]
@@ -103,6 +104,7 @@ def validate1C(data, nssms):
         raise ValidationError("Number of lines is greater than 10")
 
     data2 = [x.split('\t') for x in data]
+
     for i in range(len(data)):
         if len(data2[i]) != 3:
             raise ValidationError("Number of tab separated columns in line %d is not 3" % (i+1))
@@ -165,7 +167,6 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
     data = [x for i, x in enumerate(data) if i in mask] if mask else data
 
     if len(data) != nssms:
-        printInfo("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
         raise ValidationError("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
     cluster_entries = set()
     # make a set of all entries in truth file
@@ -174,7 +175,6 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
             data[i] = int(data[i])
             cluster_entries.add(data[i])
         except ValueError:
-            printInfo("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i + 1, data[i][0]))
             raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i + 1, data[i][0]))
     used_clusters = sorted(list(cluster_entries))
     # expect the set to be equal to seq(1, len(set), 1)
@@ -182,7 +182,6 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
 
     # only raise ValidationError if the clusters are not equal AND no mask is used
     if used_clusters != expected_clusters and not mask:
-        printInfo("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
     # raise a SampleError if the clusters are not equal AND a mask is being used
@@ -229,31 +228,23 @@ def validate2B(filename, nssms, mask=None):
             truth_ccm = np.loadtxt(data, ndmin=2)
             ccm[:nssms, :nssms] = truth_ccm
     except ValueError as e:
-        printInfo("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
         raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
 
     actual_ccm = ccm[:nssms, :nssms]
 
     if actual_ccm.shape != (nssms, nssms):
-        printInfo("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
         raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
     if not np.allclose(actual_ccm.diagonal(), np.ones((nssms))):
-        printInfo("Diagonal entries of co-clustering matrix not 1")
         raise ValidationError("Diagonal entries of co-clustering matrix not 1")
     if np.any(np.isnan(actual_ccm)):
-        printInfo("Co-clustering matrix contains NaNs")
         raise ValidationError("Co-clustering matrix contains NaNs")
     if np.any(np.isinf(actual_ccm)):
-        printInfo("Co-clustering matrix contains non-finite entries")
         raise ValidationError("Co-clustering matrix contains non-finite entries")
     if np.any(actual_ccm > 1):
         raise ValidationError("Co-clustering matrix contains entries greater than 1")
-        printInfo("Co-clustering matrix contains entries greater than 1")
     if np.any(actual_ccm < 0):
         raise ValidationError("Co-clustering matrix contains entries less than 0")
-        printInfo("Co-clustering matrix contains entries less than 0")
     if not isSymmetric(actual_ccm):
-        printInfo("Co-clustering matrix is not symmetric")
         raise ValidationError("Co-clustering matrix is not symmetric")
     return ccm
 
@@ -574,6 +565,10 @@ def mystd(vec1, vec2, m1, m2):
     s1 = np.sqrt(s1)
     s2 = np.sqrt(s2)
 
+    # bad
+    # s1 = np.ndarray.std(vec1)
+    # s2 = np.ndarray.std(vec2)
+
     return s1, s2
 
 def calculate2_aupr(pred, truth, full_matrix=True):
@@ -665,27 +660,22 @@ def validate3A(data, cas, nssms, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) != predK:
-        printInfo("Input file contains a different number of lines (%d) than expected (%d)")
         raise ValidationError("Input file contains a different number of lines (%d) than expected (%d)")
     data = [x.split('\t') for x in data]
     for i in range(len(data)):
         if len(data[i]) != 2:
-            printInfo("Number of tab separated columns in line %d is not 2" % (i+1))
             raise ValidationError("Number of tab separated columns in line %d is not 2" % (i+1))
         try:
             data[i][0] = int(data[i][0])
             data[i][1] = int(data[i][1])
         except ValueError:
-            printInfo("Entry in line %d could not be cast as integer" % (i+1))
             raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
 
     if [x[0] for x in data] != range(1, predK+1):
-        printInfo("First column must have %d entries in acending order starting with 1" % predK)
         raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
 
     for i in range(len(data)):
         if data[i][1] not in set(range(predK+1)):
-            printInfo("Parent node label in line %d is not valid." % (i+1))
             raise ValidationError("Parent node label in line %d is not valid." % (i+1))
 
     # Form descendant of dict.  Each entry, keyed by cluster number, consists of a list of nodes that are decendents of the key.
@@ -730,29 +720,21 @@ def validate3B(filename, ccm, nssms, mask=None):
         else:
             ad = filename
     except ValueError:
-        printInfo("Entry in AD matrix could not be cast as a float")
         raise ValidationError("Entry in AD matrix could not be cast as a float")
 
     if ad.shape != ccm.shape:
-        printInfo("Shape of AD matrix %s is wrong.  Should be %s" % (str(ad.shape), str(ccm.shape)))
         raise ValidationError("Shape of AD matrix %s is wrong.  Should be %s" % (str(ad.shape), str(ccm.shape)))
     if not np.allclose(ad.diagonal(), np.zeros(ad.shape[0])):
-        printInfo("Diagonal entries of AD matrix not 0")
         raise ValidationError("Diagonal entries of AD matrix not 0")
     if np.any(np.isnan(ad)):
-        printInfo("AD matrix contains NaNs")
         raise ValidationError("AD matrix contains NaNs")
     if np.any(np.isinf(ad)):
-        printInfo("AD matrix contains non-finite entries")
         raise ValidationError("AD matrix contains non-finite entries")
     if np.any(ad > 1):
-        printInfo("AD matrix contains entries greater than 1")
         raise ValidationError("AD matrix contains entries greater than 1")
     if np.any(ad < 0):
-        printInfo("AD matrix contains entries less than 0")
         raise ValidationError("AD matrix contains entries less than 0")
     if checkForBadTriuIndices(ad, ad.T, ccm):
-        printInfo("For some i, j the sum of AD(i, j) + AD(j, i) + CCM(i, j) > 1.")
         raise ValidationError("For some i, j the sum of AD(i, j) + AD(j, i) + CCM(i, j) > 1.")
 
     return ad
@@ -1011,7 +993,7 @@ def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, metho
               (method, str(ccm_res), str(ad_res), str(ad_res_t), str(cous_res), str(res)))
     return res
 
-def parseVCF1C(data):
+def parseVCF1C(data, sample_mask=None):
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
@@ -1348,7 +1330,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
 
     if challengeMapping[challenge]['vcf_func']:
-# 1
         nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'], sample_mask=masks['samples'])
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
@@ -1360,7 +1341,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
     printInfo('total lines -> ' + str(nssms[0]))
     printInfo('total truth lines -> ' + str(nssms[1]))
-    printInfo('head nssms[2] -> ' + str(nssms[2][:20]))
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
@@ -1368,6 +1348,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
     tout = []
     pout = []
+
 
     for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
         if truthfile.endswith('.gz') and challenge not in ['2B', '3B']:
@@ -1377,7 +1358,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         targs = tout + nssms[1]
 
         if challenge in ['2A', '2B']:
-# 2
             try:
                 vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
             except SampleError as e:
@@ -1389,7 +1369,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
                 np.savetxt('truth2B.txt.gz', vout)
 
             mem('VERIFY TRUTH %s' % truthfile)
-# 3
             vout_with_pseudo_counts = add_pseudo_counts(vout)
             tout.append(vout_with_pseudo_counts)
             mem('APC TRUTH %s' % truthfile)
@@ -1397,18 +1376,20 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
             mem('VERIFY TRUTH %s' % truthfile)
 
-        printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+        if challenge in ['2A', '2B', '3A', '3B']:
+            printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
 
         pargs = pout + nssms[0]
-# 4
+
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
 
         mem('VERIFY PRED %s' % predfile)
-        printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+        if challenge in ['2A', '2B', '3A', '3B']:
+            printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
 
         if challenge in ['2A'] and WRITE_2B_FILES:
             np.savetxt('pred2B.txt.gz', pout[-1])
@@ -1424,7 +1405,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     printInfo('pout sum -> ', np.sum(pout[0]))
 
     if challengeMapping[challenge]['filter_func']:
-# 5
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         printInfo('PRED DIMENSION(S) -> ', [p.shape for p in pout])
 
