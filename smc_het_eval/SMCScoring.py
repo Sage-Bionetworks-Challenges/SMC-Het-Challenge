@@ -18,8 +18,9 @@ import os
 import gzip
 
 INFO            = True
+TIME            = True
 MEM             = True
-FINAL_MEM       = True
+FINAL_MEM       = False
 WRITE_2B_FILES  = False
 WRITE_3B_FILES  = False
 
@@ -1447,7 +1448,7 @@ def mem(note):
     vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
     if (MEM and (FINAL_MEM and note == 'DONE' or not FINAL_MEM)):
-        print('[ M E M ] total: %s (max: %s) @ %s' % (vt, vmax, note))
+        print('[ M E M ]   total: %s (max: %s) @ %s' % (vt, vmax, note))
         # print('[ M E M ] total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
         sys.stdout.flush()
 
@@ -1565,7 +1566,8 @@ if __name__ == '__main__':
     mem('DONE')
 
     end_time = time.time() - start_time
-    printInfo("run took %s seconds!" % round(end_time, 2))
+    if TIME:
+        print("[ T I M E ] %s seconds!" % round(end_time, 2))
 
     if len(err_msgs) > 0:
         for msg in err_msgs:
