@@ -9,13 +9,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--challenge', required=True, choices=['1A', '1B', '1C', '2A', '2B', '3A', '3B'])
 parser.add_argument('--data', choices=['tiny', 'half', 'full', '1k', '5k', '10k', '20k', '50k', '100k'])
 parser.add_argument('--approx', nargs=2, type=float) # 2 args (fraction, iterations)
+parser.add_argument('--og', action='store_true')
 args = parser.parse_args()
 
 if args.challenge[0] != '1' and args.data == None:
 	print 'INPUT ERROR: you forgot to specify --data'
 	quit()
-
-print args
 
 if args.approx != None:
 	approx_fraction = args.approx[0]
@@ -28,7 +27,7 @@ if args.approx != None:
 
 #### work
 
-SCRIPT_PATH = '../smc_het_eval/SMCScoring.py'
+SCRIPT_PATH = '../smc_het_eval/SMCScoring.py' if not args.og else '../smc_het_eval/SMCScoring.original.py'
 DATA_ROOT_DIR = '../../data/kbuckets'
 OUTPUT_DIR = './output-%s' % args.challenge[0]
 
