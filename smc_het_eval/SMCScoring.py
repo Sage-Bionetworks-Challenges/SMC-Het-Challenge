@@ -17,7 +17,7 @@ import resource
 import os
 import gzip
 
-INFO            = False
+INFO            = True
 TIME            = True
 MEM             = True
 FINAL_MEM       = True
@@ -208,6 +208,7 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
         return ccm
 
 def validate2Afor3A(data, nssms, mask=None):
+    # mask works for free!
     return validate2A(data, nssms, return_ccm=False, mask=mask)
 
 def validate2B(filename, nssms, mask=None):
@@ -654,6 +655,7 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 #### SUBCHALLENGE 3 #########################################################################################
 
 def validate3A(data, cas, nssms, mask=None):
+    # why do we even do a validate2A if we're basically just re-assembling the 2A file..
     predK = cas.shape[1]
     cluster_assignments = np.argmax(cas, 1) + 1
 
@@ -707,18 +709,24 @@ def validate3A(data, cas, nssms, mask=None):
     return ad
 
 def validate3B(filename, ccm, nssms, mask=None):
+    # dude, we're just doing a validate2B for the ccm.shape[0].. ?
     size = ccm.shape[0]
     try:
         if filename.endswith('.gz'):
             ad = np.zeros((size, size))
             gzipfile = gzip.open(str(filename), 'r')
-            line_num = 0
-            for line in gzipfile:
-                ad[line_num, :size] = np.fromstring(line, sep='\t')
-                line_num += 1
+            ad_i = 0
+            for i, line in enumerate(gzipfile):
+                if mask == None:
+                    ad[i, ] = np.fromstring(line, sep='\t')
+                elif i in mask:
+                    matrix_line = line.split(' ')
+                    ad[ad_i, ] = [x for i, x in enumerate(matrix_line) if i in mask]
+                    ad_i += 1
             gzipfile.close()
         else:
             ad = filename
+
     except ValueError:
         raise ValidationError("Entry in AD matrix could not be cast as a float")
 
