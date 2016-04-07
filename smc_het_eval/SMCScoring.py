@@ -17,15 +17,27 @@ import resource
 import os
 import gzip
 
-INFO = False
+INFO            = True
+TIME            = True
+MEM             = True
+FINAL_MEM       = False
+WRITE_2B_FILES  = False
+WRITE_3B_FILES  = False
 
 class ValidationError(Exception):
+    def __init__(self, value):
+        self.value = value
+        print('VALIDATION ERROR: %s' % value)
+    def __str__(self):
+        return repr(self.value)
+
+class SampleError(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
         return repr(self.value)
 
-def validate1A(data):
+def validate1A(data, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) < 1:
@@ -56,7 +68,7 @@ def calculate1A(pred, truth, err='abs'):
     else:
         raise KeyError('Invalid error penalty for scoring SC 1A. Choose one of "abs" or "sqr".')
 
-def validate1B(data):
+def validate1B(data, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     if len(data) != 1:
@@ -83,7 +95,7 @@ def calculate1B(pred, truth, method='normalized'):
     else:
         raise KeyError('Invalid method for scoring SC 1B. Choose one of "orig" or "normalized".')
 
-def validate1C(data, nssms):
+def validate1C(data, nssms, mask=None):
     data = data.split('\n')
     data = filter(None, data)
     data = [x.strip() for x in data]
@@ -93,6 +105,7 @@ def validate1C(data, nssms):
         raise ValidationError("Number of lines is greater than 10")
 
     data2 = [x.split('\t') for x in data]
+
     for i in range(len(data)):
         if len(data2[i]) != 3:
             raise ValidationError("Number of tab separated columns in line %d is not 3" % (i+1))
@@ -143,13 +156,17 @@ def calculate1C(pred, truth, err='abs'):
 
     return sum(1-se)/float(len(truthvs))
 
-def validate2A(data, nssms, return_ccm=True):
+def validate2A(data, nssms, return_ccm=True, mask=None):
     # validate2A only fails input if..
-    #   - length(truthfile) != length(mask)
-    #   - if an entry in truthfile can't be cast to int
-    #   - if set(truthfile) != seq(1, len(set(truthfile)), 1)
+    #   - length(file) != length(mask)
+    #   - if an entry in file can't be cast to int
+    #   - if set(file) != seq(1, len(set(file)), 1)
     data = data.split('\n')
     data = filter(None, data)
+
+    # apply mask if it exists
+    data = [x for i, x in enumerate(data) if i in mask] if mask else data
+
     if len(data) != nssms:
         raise ValidationError("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
     cluster_entries = set()
@@ -164,12 +181,21 @@ def validate2A(data, nssms, return_ccm=True):
     # expect the set to be equal to seq(1, len(set), 1)
     expected_clusters = range(1, len(cluster_entries) + 1)
 
-    if used_clusters != expected_clusters:
+    # only raise ValidationError if the clusters are not equal AND no mask is used
+    if used_clusters != expected_clusters and not mask:
         raise ValidationError("Cluster IDs used (%s) is not what is expected (%s)" % (str(used_clusters), str(expected_clusters)))
 
+    # raise a SampleError if the clusters are not equal AND a mask is being used
+    # the mask could be selecting rows that don't end up giving the complete cluster
+    # raise the error, and trigger a re-sample
+    if used_clusters != expected_clusters and mask != None:
+        raise SampleError('Sampling gave incomplete clusters: expected (%s) and got (%s)' % (str(expected_clusters), str(used_clusters)))
+
+    # make a matrix of zeros ( n x m ), n = len(file), m = len(set)
     # use dtype=np.int8 for c_m/ccm because we just need 0 and 1 integer values
     c_m = np.zeros((len(data), len(cluster_entries)), dtype=np.int8)
 
+    # for each value in file, put a 1 in the m index of the n row
     for i in xrange(len(data)):
         c_m[i, data[i] - 1] = 1
 
@@ -179,12 +205,12 @@ def validate2A(data, nssms, return_ccm=True):
         ccm = np.dot(c_m, c_m.T)
         return ccm
 
-def validate2Afor3A(data, nssms):
-    return validate2A(data, nssms, False)
+def validate2Afor3A(data, nssms, mask=None):
+    return validate2A(data, nssms, return_ccm=False, mask=mask)
 
-def validate2B(filename, nssms, with_pseudo_counts=False):
+def validate2B(filename, nssms, mask=None):
     # if pseudo_counts are requested, create the matrix with the extended size
-    ccm_size = nssms + np.sqrt(nssms) if with_pseudo_counts else nssms
+    ccm_size = nssms
     # we only really need the identity matrix for 2B truth matrices but we will be overwriting them anyway downstream
     ccm = np.identity(ccm_size)
     try:
@@ -264,6 +290,7 @@ def calculate2_quaid(pred, truth):
         except Warning:
             print ones_score, zeros_score
             return 0
+
 #@profile
 def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None):
     '''
@@ -303,17 +330,11 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
 
         for m in functions:
             gc.collect()
-            timmie = time.time()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
-            timmie2 = time.time() - timmie
-            printInfo("method %s took %s seconds" % (m, round(timmie2, 2)))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
         for m in functions:
             gc.collect()
-            timmie = time.time()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
-            timmie2 = time.time() - timmie
-            printInfo("worst scores method %s took %s seconds" % (m, round(timmie2, 2)))
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = 1 - (scores[i] / worst_scores[i])
@@ -423,9 +444,8 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
         pred_row = (1 - rnd) * pred_cp[x, ] + rnd
         truth_row = (1 - rnd) * truth_cp[x, ] + rnd
 
-
-        pred_row = pred_row / np.sum(pred_row)
-        truth_row = truth_row / np.sum(truth_row)
+        pred_row /= np.sum(pred_row)
+        truth_row /= np.sum(truth_row)
         if sym:
             res += np.sum(truth_row * np.log(truth_row/pred_row)) + np.sum(pred_row * np.log(pred_row/truth_row))
         else:
@@ -486,46 +506,65 @@ def calculate2_pearson(pred, truth, full_matrix=True):
     return call_pearson(pred, truth)
 
 def call_pearson(p, t):
-    pbar=0
+    pbar = 0
     tbar = 0
     N = p.shape[0]
+
     pbar, tbar = mymean(p, t)
-
     sp, st = mystd(p, t, pbar, tbar)
-
     res = myscale(p, t, pbar, tbar, sp, st)
-    return res/(N**2-1.0)
+
+    return res/(N**2 - 1.0)
 
 def mymean(vec1, vec2):
-    m1 = 0
-    m2 = 0
-    N = vec1.shape[0]
-    M = float(N**2)
-    for i in xrange(N):
-        for j in xrange(N):
-            # cast point if using int8 matrices
-            m1 += vec1[i, j]/ M
-            m2 += vec2[i, j]/ M
+    # np.ndarray.mean() actually costs nothing
+    m1 = np.ndarray.mean(vec1)
+    m2 = np.ndarray.mean(vec2)
     return m1, m2
 
 def myscale(vec1, vec2, m1, m2, s1, s2):
     N = vec1.shape[0]
     out = 0
+
+    # original
+    # for i in xrange(N):
+    #     for j in xrange(N):
+    #         out += ((vec1[i, j] - m1)/s1) * ((vec2[i, j] - m2)/s2)
+
+    # optimized - row operations
     for i in xrange(N):
-        for j in xrange(N):
-            out += ((vec1[i, j] - m1)/s1) * ((vec2[i, j] - m2)/s2)
+        out += np.dot(((vec1[i, ] - m1)/s1), ((vec2[i, ] - m2)/s2))
+
     return out
 
 def mystd(vec1, vec2, m1, m2):
-    s1 = 0 
+    s1 = 0
     s2 = 0
     N = vec1.shape[0]
     M = float(N**2)
+
+    # original
+    # for i in xrange(N):
+    #     for j in xrange(N):
+    #         s1 += ((vec1[i, j] - m1)**2) / (M - 1)
+    #         s2 += ((vec2[i, j] - m2)**2) / (M - 1)
+    # s1 = np.sqrt(s1)
+    # s2 = np.sqrt(s2)
+
+    # optimized - row operations
     for i in xrange(N):
-        for j in xrange(N):
-            s1 += (vec1[i, j] - m1)**2/(M-1)
-            s2 += (vec2[i, j] - m2)**2/(M-1)
-    return np.sqrt(s1), np.sqrt(s2)
+        s1 += np.ndarray.sum((vec1[i, ] - m1)**2)
+        s2 += np.ndarray.sum((vec2[i, ] - m2)**2)
+    s1 /= (M - 1)
+    s2 /= (M - 1)
+    s1 = np.sqrt(s1)
+    s2 = np.sqrt(s2)
+
+    # bad
+    # s1 = np.ndarray.std(vec1)
+    # s2 = np.ndarray.std(vec2)
+
+    return s1, s2
 
 def calculate2_aupr(pred, truth, full_matrix=True):
     n = truth.shape[0]
@@ -546,6 +585,8 @@ def calculate2_aupr(pred, truth, full_matrix=True):
 
 def calculate2_mcc(pred, truth, full_matrix=True):
     n = truth.shape[0]
+    ptype = str(pred.dtype)
+    ttype = str(truth.dtype)
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -553,28 +594,39 @@ def calculate2_mcc(pred, truth, full_matrix=True):
         inds = np.triu_indices(n, k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
-    # TruePositive, TrueNegative, FalsePositive, FalseNegative
-    tp = 0
-    tn = 0
-    fp = 0
-    fn = 0
-    # np.savetxt("test_pred_cp.txt", pred_cp)
-    for i in xrange(pred_cp.shape[0]):
-        for j in xrange(pred_cp.shape[1]):
-            # correct because truth_cp values should be boolean casted ints?
-            if truth_cp[i, j] and pred_cp[i, j] >= 0.5:
-                tp = tp + 1.0
-            elif truth_cp[i, j] and pred_cp[i, j] < 0.5:
-                fn = fn + 1.0
-            if (not truth_cp[i, j]) and pred_cp[i, j] >= 0.5:
-                fp = fp + 1.0
-            elif (not truth_cp[i, j]) and pred_cp[i, j] < 0.5:
-                tn = tn + 1.0
 
-    #tp = float(np.sum(pred_cp[truth_cp==1] >= 0.5)) # Use 0.5 as the threshold for turning a probabalistic matrix into a binary matrix
-    #tn = float(np.sum(pred_cp[truth_cp==0] < 0.5))
-    #fp = float(np.sum(pred_cp[truth_cp==0] >= 0.5))
-    #fn = float(np.sum(pred_cp[truth_cp==1] < 0.5))
+    tp = 0.0
+    tn = 0.0
+    fp = 0.0
+    fn = 0.0
+
+    # original
+    # for i in xrange(pred_cp.shape[0]):
+    #     for j in xrange(pred_cp.shape[1]):
+    #         if truth_cp[i,j] and pred_cp[i,j] >= 0.5:
+    #             tp = tp +1.0
+    #         elif truth_cp[i,j] and pred_cp[i,j] < 0.5:
+    #             fn = fn + 1.0
+    #         if (not truth_cp[i,j]) and pred_cp[i,j] >= 0.5:
+    #             fp = fp +1.0
+    #         elif (not truth_cp[i,j]) and pred_cp[i,j] < 0.5:
+    #             tn = tn + 1.0
+
+    # optimized with fancy boolean magic algorithm to calculate MCC
+    for i in xrange(pred_cp.shape[0]):
+        # only round if the matrices are floats
+        pred_line = np.round(pred_cp[i, ] + 10.0**(-10)) if 'float' in ptype else pred_cp[i, ]
+        truth_line = np.round(truth_cp[i, ] + 10.0**(-10)) if 'float' in ttype else truth_cp[i, ]
+
+        ors = np.logical_or(truth_line, pred_line)
+        ands = np.logical_and(truth_line, pred_line)
+        evalthis = truth_line.astype(np.int8) + ors + ands
+
+        counts = np.bincount(evalthis)
+        tn += counts[0]
+        fp += counts[1]
+        fn += counts[2]
+        tp += counts[3]
 
     # To avoid divide-by-zero cases
     denom_terms = [(tp+fp), (tp+fn), (tn+fp), (tn+fn)]
@@ -596,7 +648,7 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 
 #### SUBCHALLENGE 3 #########################################################################################
 
-def validate3A(data, cas, nssms):
+def validate3A(data, cas, nssms, mask=None):
     predK = cas.shape[1]
     cluster_assignments = np.argmax(cas, 1) + 1
 
@@ -646,9 +698,10 @@ def validate3A(data, cas, nssms):
         for j in range(n):
             if cluster_assignments[j] in descendant_of[cluster_assignments[i]]:
                 ad[i, j] = 1
+
     return ad
 
-def validate3B(filename, ccm, nssms):
+def validate3B(filename, ccm, nssms, mask=None):
     size = ccm.shape[0]
     try:
         if filename.endswith('.gz'):
@@ -935,7 +988,7 @@ def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, metho
               (method, str(ccm_res), str(ad_res), str(ad_res_t), str(cous_res), str(res)))
     return res
 
-def parseVCF1C(data):
+def parseVCF1C(data, sample_mask=None):
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
@@ -943,16 +996,22 @@ def parseVCF1C(data):
         raise ValidationError("Input VCF contains no SSMs")
     return [[len(data)], [len(data)]]
 
-def parseVCF2and3(data):
+def parseVCF2and3(data, sample_mask=None):
+
     data = data.split('\n')
     data = [x for x in data if x != '']
     data = [x for x in data if x[0] != '#']
+
+    # apply sample_mask to data, sample_mask exists
+    data = [x for i, x in enumerate(data) if i in sample_mask] if sample_mask else data
+
     if len(data) == 0:
         raise ValidationError("Input VCF contains no SSMs")
-    total_ssms = len(data)
+    vcf_lines = len(data)
+    # check if line is true or false, array of 0/1's
     mask = [x[-4:] == "True" for x in data]
     mask = [i for i, x in enumerate(mask) if x]
-    tp_ssms = len(mask)
+    true_lines = len(mask)
 
     # return
     # [
@@ -960,25 +1019,41 @@ def parseVCF2and3(data):
     #     [ total true lines in vcf (mask) ],
     #     [ array of indices of objects in mask that are true ]
     # ]
-    return [[total_ssms], [tp_ssms], mask]
+    return [[vcf_lines], [true_lines], mask]
 
 def filterFPs(x, mask):
-    # filters in memory, and returns a view
-    # matrix[np.ix_(mask, mask)] is considered advanced indexing and creates a copy, allocating new memory
+    # EVERYTHING is done in memory
+    #   1 - the elements at the indicies specified by mask are "picked" and assembled into a matrix
+    #       that grows out of the upper-left corner of the original matrix (the original matrix will
+    #       always be bigger than the eventual masked matrix)
+    #   2 - the matrix is resized into a 1D array
+    #   3 - the elements of the array are "shifted" so that they satisfy the [i,j] indices for
+    #       a matrix of the new (masked) size
+    #   4 - the array is "shrunk" to discard the difference between the old size and the new size
+    #   5 - the array is resized into an actual nxn matrix
+    # NOTE: matrix[np.ix_(mask, mask)] is considered advanced indexing and creates a copy, allocating new memory
+    #       that's why we don't do it anymore
     if x.shape[0] == x.shape[1]:
+        # 1 assemble masked matrix within the original matrix
         for i, m1 in enumerate(mask):
             for j, m2 in enumerate(mask):
                 x[i, j] = x[m1, m2]
-        # zero out "top right quadrant" of matrix after masking
-        for i in xrange(len(mask)):
-            for j in xrange(len(mask), x.shape[0]):
-                x[i, j] = 0
-        # zero out "bottom quadrants" of matrix after masking
-        for i in xrange(len(mask), x.shape[0]):
-            for j in xrange(x.shape[0]):
-                x[i, j] = 0
-        # return a view, does not allocate new memory
-        return x[:len(mask), :len(mask)]
+
+        old_n = x.shape[0]
+        new_n = len(mask)
+
+        # 2 resize into array
+        x.resize((old_n**2), refcheck=False)
+
+        # 3 shift elements
+        for k in xrange(new_n):
+            x[(k*new_n):((k+1)*new_n)] = x[(k*old_n):(k*old_n+new_n)]
+
+        # 4 shrink array
+        x.resize((new_n**2), refcheck=False)
+        # 5 resize to array
+        x.resize((new_n, new_n), refcheck=False)
+        return x
     else:
         return x[mask, :]
 
@@ -994,45 +1069,54 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     :param num: number of pseudo counts to add
     :return: modified ccm and ad matrices
     """
-    size = np.array(ccm.shape)[1]
+
+    old_n = ccm.shape[0]
 
     if num is None:
-        num = np.sqrt(size)
+        num = np.floor(np.sqrt(old_n))
     elif num == 0:
         return ccm, ad
 
-    # added dtype=ccm.dtype because some matrices (that only have integer values of 0 and 1) can use int8 instead of the default float64
-    # this shoudn't cause issues downstream in calculations because there is (from what I can tell) always a float value to cast the expression to float
-    new_ccm = np.identity(size + num, dtype=ccm.dtype)
-    new_ccm[:size, :size] = np.copy(ccm)
-    ccm = new_ccm
+    # EVERYTHING is done in memory
+    #   The matrix is extended from nxn to mxm where { m = n + sqrt(n) }
+    #   The "extended" portion of the matrix is basically taken from an identity matrix
+    #   n = original ccm size
+    #   m = n + sqrt(n)
+    #   1 - the ccm is resized from an nxn matrix to an m^2 length array
+    #   2 - the array is modified so that the elements are "shifted" from nxn [i,j] indices
+    #       to mxm [i,j] indices. the "new" elements that exist at ccm[:n, n:m] and ccm[n:m, ]
+    #       are set to 0. the "identity" spots at [ccm[x, x] for x in n:m] are set to 1.
+    #   3 - the array is finally resized into an actual mxm matrix
 
+    new_n = int(old_n + num)
+
+    # 1 resize to array
+    ccm.resize((new_n**2), refcheck=False)
+
+    # 2 shift elements
+    for i in reversed(xrange(new_n)):
+        if i < old_n:
+            ccm[(i*new_n):(i*new_n + old_n)] = ccm[(i*old_n):(i*old_n + old_n)]
+            ccm[(i*new_n + old_n):((i+1)*new_n)] = 0
+        else:
+            ccm[(i*new_n):((i+1)*new_n)] = 0
+            ccm[i*(new_n+1)] = 1
+
+    # 3 resize to matrix again
+    ccm.resize((new_n, new_n), refcheck=False)
+
+    # didn't optimize this. YET
+    # either way, it should be cheap to do, i think all ad's are int8 matrices..
     if ad is not None:
-        new_ad = np.zeros([size + num]*2)
-        new_ad[:size, :size] = np.copy(ad)
-        new_ad[(size+num/2):(size+3*num/4), :(size)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
-        new_ad[:(size), (size+3*num/4):(size+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
+        new_ad = np.zeros([old_n + num] * 2)
+        new_ad[:old_n, :old_n] = np.copy(ad)
+        new_ad[(old_n+num/2):(old_n+3*num/4), :(old_n)] = 1 # one quarter of the pseudo counts are ancestors of (almost) every other cluster
+        new_ad[:(old_n), (old_n+3*num/4):(old_n+num)] = 1 # one quarter of the pseudo counts are descendants of (almost) every other cluster
         ad = new_ad                                         # half of the pseudo counts are cousins to all other clusters
         return ccm, ad
 
     return ccm
 
-def add_pseudo_counts_in_place(ccm, nssms):
-    # REQUIRES ccm to be at (nssms + sqrt(nssms)) size
-    # aka, requires ccm to be large enough to fit the counts
-    # adds pseudo counts in memory and returns a view
-
-    final_size = nssms + np.sqrt(nssms)
-    final_size = int(final_size)
-
-    # identity-fy the portion ccm[nssms:final_size, nssms:final_size]
-    for i in xrange(nssms, final_size):
-        ccm[i, i] = 1
-
-    # return :final_size bounded ccm just in case the ccm reference holds a larger view of the matrix
-    return ccm[:final_size, :final_size]
-
-#
 def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
     """
     Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
@@ -1097,25 +1181,72 @@ def get_bad_ad(nssms, scenario='OneCluster'):
         raise ValueError('Scenario must be one of OneCluster or NCluster')
 
 
-def verify(filename, role, func, *args):
+def verify(filename, role, func, *args, **kwargs):
+    # printInfo('ARGS -> %s | %s | %s | %s | %s' % (filename, role, func, args, kwargs))
     global err_msgs
     try:
         if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
-            pred = func(filename, *args)
+            verified = func(filename, *args, **kwargs)
         else:
             # really shouldn't do read() here, stores the whole thing in memory when we could read it in chunks/lines
             f = open(filename)
-            pred_data = f.read()
+            data = f.read()
             f.close()
-            pred = func(pred_data, *args)
+            verified = func(data, *args, **kwargs)
     except (IOError, TypeError) as e:
         err_msgs.append("Error opening %s, from function %s using file %s in : %s" %  (role, func, filename, e.strerror))
         return None
     except (ValidationError, ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))
         return None
-    return pred
+    except SampleError as e:
+        raise e
+    return verified
 
+def makeMasks(vcfFile, sample_fraction):
+    # returns mask dictionary { 'all' : sample_mask, 'truth' : truth_mask }
+    #   where sample_mask and truth_mask are both lists of indices
+    # we need the truth_mask because the truth file ONLY contains truth lines,
+    # whereas the vcf, pred files contain truth and false lines. thus, the truth
+    # file line indicies do NOT match up with vcf and pred, so we need to make a
+    # separate mask just for the truth file
+
+    f = open(vcfFile)
+    vcf = f.read()
+    f.close()
+
+    vcf = vcf.split('\n')
+    vcf = [x for x in vcf if x != '' and x[0] != '#']
+    vcf = [x[-4:] == "True" for x in vcf]
+
+    # can use the combinadics method here..
+    vcf_count = len(vcf)
+    sample_size = int(np.floor(vcf_count * sample_fraction))
+    sample_mask = set()
+    for x in np.random.randint(0, vcf_count, sample_size):
+        sample_mask.add(x)
+    # useless counter to see how many "tries" it does to finish the set
+    i = 0
+
+    # finding the remaining random numbers can take a looooooooooooooong time
+    # probably better to implement deterministic combinadics
+    while len(sample_mask) < sample_size:
+        missing = sample_size - len(sample_mask)
+        for x in np.random.randint(0, vcf_count, missing):
+            sample_mask.add(x)
+        i += 1
+
+    truth_mask = []
+    truth_index = 0
+    for i in xrange(len(vcf)):
+        if vcf[i] and i in sample_mask:
+            truth_mask.append(truth_index)
+        if vcf[i]:
+            truth_index += 1
+
+    sample_mask = sorted(sample_mask)
+
+    return { 'samples' : sample_mask, 'truths' : truth_mask }
 
 challengeMapping = {
     '1A' : {
@@ -1185,12 +1316,14 @@ def verifyChallenge(challenge, predfiles, vcf):
     return "Valid"
 
 
-def scoreChallenge(challenge, predfiles, truthfiles, vcf):
-    mem('START %s' % challenge)
+def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     global err_msgs
+    mem('START %s' % challenge)
+
+    masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
 
     if challengeMapping[challenge]['vcf_func']:
-        nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'])
+        nssms = verify(vcf, "input VCF", challengeMapping[challenge]['vcf_func'], sample_mask=masks['samples'])
         if nssms == None:
             err_msgs.append("Could not read input VCF. Exiting")
             return "NA"
@@ -1199,8 +1332,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
     mem('VERIFY VCF %s' % vcf)
 
-    printInfo('total vcf lines -> ' + str(nssms[0]))
-    printInfo('total mask lines -> ' + str(nssms[1]))
+    printInfo('total lines -> ' + str(nssms[0]))
+    printInfo('total truth lines -> ' + str(nssms[1]))
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
         err_msgs.append("Not enough input files for Challenge %s" % challenge)
@@ -1209,6 +1342,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
     tout = []
     pout = []
 
+
     for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
         if truthfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -1216,58 +1350,64 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
 
         targs = tout + nssms[1]
 
-        if challenge in ['2A']:
-            # we can afford to perform the copy in add_pseudo_counts because we're just using int8 matrices
-            vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
+        if challenge in ['2A', '2B']:
+            try:
+                vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
+            except SampleError as e:
+                raise e
+
             printInfo('TRUTH DIMENSIONS -> ', vout.shape)
+
+            if WRITE_2B_FILES:
+                np.savetxt('truth2B.txt.gz', vout)
+
             mem('VERIFY TRUTH %s' % truthfile)
-            vout2 = add_pseudo_counts(vout)
-            tout.append(vout2)
-            mem('APC TRUTH %s' % truthfile)
-        elif challenge in ['2B']:
-            # adds pseudo counts during creation to save memory by avoiding copy-required add_pseudo_counts call
-            # append True to request pseudo counts in validate2B call
-            targs.append(True)
-            vout_with_pseudo_counts = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs)
+            vout_with_pseudo_counts = add_pseudo_counts(vout)
             tout.append(vout_with_pseudo_counts)
-            mem('VERIFY/APC TRUTH %s' % truthfile)
+            mem('APC TRUTH %s' % truthfile)
         else:
-            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs))
+            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
             mem('VERIFY TRUTH %s' % truthfile)
 
-        printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+        if challenge in ['2A', '2B', '3A', '3B']:
+            printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
 
         if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
 
         pargs = pout + nssms[0]
-        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs))
+
+        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
 
         mem('VERIFY PRED %s' % predfile)
-        printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+        if challenge in ['2A', '2B', '3A', '3B']:
+            printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
 
-        if tout[-1] == None or pout[-1] == None:
+        if challenge in ['2A'] and WRITE_2B_FILES:
+            np.savetxt('pred2B.txt.gz', pout[-1])
+
+        if tout[-1] is None or pout[-1] is None:
             return "NA"
 
-    if challengeMapping[challenge]['filter_func']:
-        print('Filtering Challenge %s' % challenge)
-        # validate3B(pout[1], np.dot(pout[0], pout[0].T), nssms[0])
-        if challenge in ['2B']:
-            # save a ref of a view of the pred matrix to do pseudo counts
-            predsave = pout[0]
+    if challenge in ['3A'] and WRITE_3B_FILES:
+        np.savetxt('pred3B.txt.gz', pout[-1])
+        np.savetxt('truth3B.txt.gz', tout[-1])
 
+    printInfo('tout sum -> ', np.sum(tout[0]))
+    printInfo('pout sum -> ', np.sum(pout[0]))
+
+    if challengeMapping[challenge]['filter_func']:
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         printInfo('PRED DIMENSION(S) -> ', [p.shape for p in pout])
 
         mem('FILTER PRED(S)')
 
-        if challenge in ['2A']:
+        printInfo('tout sum filtered -> ', np.sum(tout[0]))
+        printInfo('pout sum filtered -> ', np.sum(pout[0]))
+
+        if challenge in ['2A', '2B']:
             pout = [ add_pseudo_counts(*pout) ]
-            mem('APC PRED')
-            printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
-        elif challenge in ['2B']:
-            pout = [ add_pseudo_counts_in_place(predsave, *nssms[1]) ]
             mem('APC PRED')
             printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
 
@@ -1276,14 +1416,12 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf):
             pout[0] = np.dot(pout[0], pout[0].T)
             mem('3A DOT')
 
-    answer = challengeMapping[challenge]['score_func'](*(pout + tout))
-    printInfo('%.16f' % answer)
-    return answer
-
+    return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 def printInfo(*string):
     if (INFO):
         print([string])
+        sys.stdout.flush()
 
 def mem(note):
     pid = os.getpid()
@@ -1300,7 +1438,10 @@ def mem(note):
 
     vrammax = mem_pretty(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-    printInfo('## MEM -> total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+    if (MEM and (FINAL_MEM and note == 'DONE' or not FINAL_MEM)):
+        print('[ M E M ]   total: %s (max: %s) @ %s' % (vt, vmax, note))
+        # print('[ M E M ] total: %s (max: %s) | ram: %s (max: %s) | swap: %s @ %s' % (vt, vmax, vram, vrammax, vswap, note))
+        sys.stdout.flush()
 
 def mem_pretty(mem):
     denom = 1
@@ -1327,6 +1468,7 @@ if __name__ == '__main__':
     parser.add_argument("--vcf")
     parser.add_argument("-o", "--outputfile")
     parser.add_argument('-v', action='store_true', default=False)
+    parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
 
     args = parser.parse_args()
 
@@ -1366,10 +1508,47 @@ if __name__ == '__main__':
             jtxt = json.dumps(out)
             handle.write(jtxt)
     else:
+        # VERIFY
         if args.v:
             res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
+        # APPROXIMATE
+        elif args.approx:
+            sample_fraction = args.approx[0]
+            iterations = int(np.floor(args.approx[1]))
+            if sample_fraction >= 1.0 or sample_fraction <= 0.0:
+                print('Sample Fraction value must be 0.0 < x < 1.0')
+                sys.exit(1)
+            results = []
+            for i in xrange(iterations):
+                print('Running Iteration %d with Sampling Fraction %.2f' % (i + 1, sample_fraction))
+                resample = True
+                while (resample):
+                    try:
+                        res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, sample_fraction)
+                        print('Score[%d] -> %.5f' % (i + 1, res))
+                        results.append(res)
+                        resample = False
+                    except SampleError as e:
+                        # print(e.value)
+                        print('resampling..')
+                        resample = True
+            mean = np.mean(results)
+            median = np.median(results)
+            std = np.std(results)
+            print('')
+            print('#############')
+            print('## RESULTS ##')
+            print('#############')
+            print('Mean -> %.5f' % mean)
+            print('Median -> %.5f' % median)
+            print('Standard Deviation -> %.5f' % std)
+            print('')
+            res = mean
+        # REAL SCORE
         else:
+            print('Running Challenge %s' % args.challenge)
             res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )
@@ -1378,20 +1557,10 @@ if __name__ == '__main__':
     mem('DONE')
 
     end_time = time.time() - start_time
-    printInfo("run took %s seconds!" % round(end_time, 2))
+    if TIME:
+        print("[ T I M E ] %s seconds!" % round(end_time, 2))
 
     if len(err_msgs) > 0:
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
-'''
-if __name__ == "__main__":
-    filename = '/home/nwilson/Documents/SMC-Het/Galaxy34-[Co-Cluster_(Sub_Challenge_2B)](1).txt.part'
-    f = open(filename)
-    pred_data = f.read()
-    f.close()
-    #parseVCF2and3(pred_data)
-
-    tst = np.identity(10)
-    add_pseudo_counts(tst)
-'''
