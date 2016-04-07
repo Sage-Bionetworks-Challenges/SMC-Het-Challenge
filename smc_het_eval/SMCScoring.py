@@ -1478,7 +1478,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--outputfile")
     parser.add_argument('-v', action='store_true', default=False)
     parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
-
+    parser.add_argument('--approx_seed', nargs=1, type=int, default=[75])
     args = parser.parse_args()
 
     if args.pred_config is not None and args.truth_config is not None:
@@ -1522,6 +1522,7 @@ if __name__ == '__main__':
             res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
         # APPROXIMATE
         elif args.approx:
+            np.random.seed(args.approx_seed)
             sample_fraction = args.approx[0]
             iterations = int(np.floor(args.approx[1]))
             if sample_fraction >= 1.0 or sample_fraction <= 0.0:
@@ -1545,12 +1546,16 @@ if __name__ == '__main__':
             median = np.median(results)
             std = np.std(results)
             print('')
-            print('#############')
-            print('## RESULTS ##')
-            print('#############')
-            print('Mean -> %.5f' % mean)
-            print('Median -> %.5f' % median)
-            print('Standard Deviation -> %.5f' % std)
+            print('###################')
+            print('## R E S U L T S ##')
+            print('###################')
+            print('Sampling Fraction\t%.2f' % sample_fraction)
+            print('Sample Iterations\t%d' % iterations)
+            print('Sampling Seed\t\t%d' % args.approx_seed[0])
+            print('Scores\t\t\t%s' % str(results))
+            print('Mean\t\t\t%.5f' % mean)
+            print('Median\t\t\t%.5f' % median)
+            print('Standard Deviation\t%.5f' % std)
             print('')
             res = mean
         # REAL SCORE
