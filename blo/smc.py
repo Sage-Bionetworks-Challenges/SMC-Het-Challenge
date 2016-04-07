@@ -12,7 +12,10 @@ parser.add_argument('--challenge', required=True, choices=['1A', '1B', '1C', '2A
 parser.add_argument('--data', choices=['tiny', 'half', 'full', '1k', '5k', '10k', '20k', '50k', '100k'])
 parser.add_argument('--approx', nargs=2, type=float) # 2 args (fraction, iterations)
 parser.add_argument('--og', action='store_true')
-args = parser.parse_args()
+all_args = parser.parse_known_args()
+
+args = all_args[0]
+overflow_args = all_args[1]
 
 if args.challenge[0] != '1' and args.data == None:
 	print 'INPUT ERROR: you forgot to specify --data'
@@ -95,6 +98,10 @@ if args.approx != None:
 	command_pieces.append('--approx')
 	command_pieces.append(str(approx_fraction))
 	command_pieces.append(str(approx_iterations))
+
+## overflow args
+
+command_pieces.extend(overflow_args)
 
 ## done
 
