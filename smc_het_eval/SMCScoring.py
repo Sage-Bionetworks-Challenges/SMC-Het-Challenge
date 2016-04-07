@@ -17,10 +17,10 @@ import resource
 import os
 import gzip
 
-INFO            = True
+INFO            = False
 TIME            = True
 MEM             = True
-FINAL_MEM       = True
+FINAL_MEM       = False
 WRITE_2B_FILES  = False
 WRITE_3B_FILES  = False
 
@@ -709,7 +709,6 @@ def validate3A(data, cas, nssms, mask=None):
     return ad
 
 def validate3B(filename, ccm, nssms, mask=None):
-    # dude, we're just doing a validate2B for the ccm.shape[0].. ?
     size = ccm.shape[0]
     try:
         if filename.endswith('.gz'):
