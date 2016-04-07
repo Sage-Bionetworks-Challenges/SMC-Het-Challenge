@@ -17,10 +17,10 @@ import resource
 import os
 import gzip
 
-INFO            = True
+INFO            = False
 TIME            = True
 MEM             = True
-FINAL_MEM       = False
+FINAL_MEM       = True
 WRITE_2B_FILES  = False
 WRITE_3B_FILES  = False
 
@@ -211,17 +211,18 @@ def validate2Afor3A(data, nssms, mask=None):
     return validate2A(data, nssms, return_ccm=False, mask=mask)
 
 def validate2B(filename, nssms, mask=None):
-    # if pseudo_counts are requested, create the matrix with the extended size
-    ccm_size = nssms
-    # we only really need the identity matrix for 2B truth matrices but we will be overwriting them anyway downstream
-    ccm = np.identity(ccm_size)
+    ccm = np.zeros((nssms, nssms))
     try:
         if filename.endswith('.gz'):
             gzipfile = gzip.open(str(filename), 'r')
-            line_num = 0
-            for line in gzipfile:
-                ccm[line_num, :nssms] = np.fromstring(line, sep='\t')
-                line_num += 1
+            ccm_i = 0
+            for i, line in enumerate(gzipfile):
+                if mask == None:
+                    ccm[i, ] = np.fromstring(line, sep='\t')
+                elif i in mask:
+                    matrix_line = line.split(' ')
+                    ccm[ccm_i, ] = [x for i, x in enumerate(matrix_line) if i in mask]
+                    ccm_i += 1
             gzipfile.close()
         else:
             # TODO - optimize with line by line
@@ -231,21 +232,19 @@ def validate2B(filename, nssms, mask=None):
     except ValueError as e:
         raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
 
-    actual_ccm = ccm[:nssms, :nssms]
-
-    if actual_ccm.shape != (nssms, nssms):
-        raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
-    if not np.allclose(actual_ccm.diagonal(), np.ones((nssms))):
+    if ccm.shape != (nssms, nssms):
+        raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms, nssms))))
+    if not np.allclose(ccm.diagonal(), np.ones((nssms))):
         raise ValidationError("Diagonal entries of co-clustering matrix not 1")
-    if np.any(np.isnan(actual_ccm)):
+    if np.any(np.isnan(ccm)):
         raise ValidationError("Co-clustering matrix contains NaNs")
-    if np.any(np.isinf(actual_ccm)):
+    if np.any(np.isinf(ccm)):
         raise ValidationError("Co-clustering matrix contains non-finite entries")
-    if np.any(actual_ccm > 1):
+    if np.any(ccm > 1):
         raise ValidationError("Co-clustering matrix contains entries greater than 1")
-    if np.any(actual_ccm < 0):
+    if np.any(ccm < 0):
         raise ValidationError("Co-clustering matrix contains entries less than 0")
-    if not isSymmetric(actual_ccm):
+    if not isSymmetric(ccm):
         raise ValidationError("Co-clustering matrix is not symmetric")
     return ccm
 
