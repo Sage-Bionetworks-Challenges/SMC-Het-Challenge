@@ -17,9 +17,9 @@ import resource
 import os
 import gzip
 
-INFO            = True
-TIME            = True
-MEM             = True
+INFO            = False
+TIME            = False
+MEM             = False
 FINAL_MEM       = False
 WRITE_2B_FILES  = False
 WRITE_3B_FILES  = False
