@@ -206,20 +206,22 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
         return ccm
 
 def validate2Afor3A(data, nssms, mask=None):
+    # mask works for free!
     return validate2A(data, nssms, return_ccm=False, mask=mask)
 
 def validate2B(filename, nssms, mask=None):
-    # if pseudo_counts are requested, create the matrix with the extended size
-    ccm_size = nssms
-    # we only really need the identity matrix for 2B truth matrices but we will be overwriting them anyway downstream
-    ccm = np.identity(ccm_size)
+    ccm = np.zeros((nssms, nssms))
     try:
         if filename.endswith('.gz'):
             gzipfile = gzip.open(str(filename), 'r')
-            line_num = 0
-            for line in gzipfile:
-                ccm[line_num, :nssms] = np.fromstring(line, sep='\t')
-                line_num += 1
+            ccm_i = 0
+            for i, line in enumerate(gzipfile):
+                if mask == None:
+                    ccm[i, ] = np.fromstring(line, sep='\t')
+                elif i in mask:
+                    matrix_line = line.split(' ')
+                    ccm[ccm_i, ] = [x for i, x in enumerate(matrix_line) if i in mask]
+                    ccm_i += 1
             gzipfile.close()
         else:
             # TODO - optimize with line by line
@@ -229,21 +231,19 @@ def validate2B(filename, nssms, mask=None):
     except ValueError as e:
         raise ValidationError("Entry in co-clustering matrix could not be cast as a float. Error message: %s" % e.message)
 
-    actual_ccm = ccm[:nssms, :nssms]
-
-    if actual_ccm.shape != (nssms, nssms):
-        raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(actual_ccm.shape), str((nssms, nssms))))
-    if not np.allclose(actual_ccm.diagonal(), np.ones((nssms))):
+    if ccm.shape != (nssms, nssms):
+        raise ValidationError("Shape of co-clustering matrix %s is wrong.  Should be %s" % (str(ccm.shape), str((nssms, nssms))))
+    if not np.allclose(ccm.diagonal(), np.ones((nssms))):
         raise ValidationError("Diagonal entries of co-clustering matrix not 1")
-    if np.any(np.isnan(actual_ccm)):
+    if np.any(np.isnan(ccm)):
         raise ValidationError("Co-clustering matrix contains NaNs")
-    if np.any(np.isinf(actual_ccm)):
+    if np.any(np.isinf(ccm)):
         raise ValidationError("Co-clustering matrix contains non-finite entries")
-    if np.any(actual_ccm > 1):
+    if np.any(ccm > 1):
         raise ValidationError("Co-clustering matrix contains entries greater than 1")
-    if np.any(actual_ccm < 0):
+    if np.any(ccm < 0):
         raise ValidationError("Co-clustering matrix contains entries less than 0")
-    if not isSymmetric(actual_ccm):
+    if not isSymmetric(ccm):
         raise ValidationError("Co-clustering matrix is not symmetric")
     return ccm
 
@@ -649,6 +649,7 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 #### SUBCHALLENGE 3 #########################################################################################
 
 def validate3A(data, cas, nssms, mask=None):
+    # why do we even do a validate2A if we're basically just re-assembling the 2A file..
     predK = cas.shape[1]
     cluster_assignments = np.argmax(cas, 1) + 1
 
@@ -707,13 +708,18 @@ def validate3B(filename, ccm, nssms, mask=None):
         if filename.endswith('.gz'):
             ad = np.zeros((size, size))
             gzipfile = gzip.open(str(filename), 'r')
-            line_num = 0
-            for line in gzipfile:
-                ad[line_num, :size] = np.fromstring(line, sep='\t')
-                line_num += 1
+            ad_i = 0
+            for i, line in enumerate(gzipfile):
+                if mask == None:
+                    ad[i, ] = np.fromstring(line, sep='\t')
+                elif i in mask:
+                    matrix_line = line.split(' ')
+                    ad[ad_i, ] = [x for i, x in enumerate(matrix_line) if i in mask]
+                    ad_i += 1
             gzipfile.close()
         else:
             ad = filename
+
     except ValueError:
         raise ValidationError("Entry in AD matrix could not be cast as a float")
 
@@ -1469,7 +1475,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--outputfile")
     parser.add_argument('-v', action='store_true', default=False)
     parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
-
+    parser.add_argument('--approx_seed', nargs=1, type=int, default=[75])
     args = parser.parse_args()
 
     if args.pred_config is not None and args.truth_config is not None:
@@ -1513,6 +1519,7 @@ if __name__ == '__main__':
             res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
         # APPROXIMATE
         elif args.approx:
+            np.random.seed(args.approx_seed)
             sample_fraction = args.approx[0]
             iterations = int(np.floor(args.approx[1]))
             if sample_fraction >= 1.0 or sample_fraction <= 0.0:
@@ -1536,12 +1543,16 @@ if __name__ == '__main__':
             median = np.median(results)
             std = np.std(results)
             print('')
-            print('#############')
-            print('## RESULTS ##')
-            print('#############')
-            print('Mean -> %.5f' % mean)
-            print('Median -> %.5f' % median)
-            print('Standard Deviation -> %.5f' % std)
+            print('###################')
+            print('## R E S U L T S ##')
+            print('###################')
+            print('Sampling Fraction\t%.2f' % sample_fraction)
+            print('Sample Iterations\t%d' % iterations)
+            print('Sampling Seed\t\t%d' % args.approx_seed[0])
+            print('Scores\t\t\t%s' % str(results))
+            print('Mean\t\t\t%.5f' % mean)
+            print('Median\t\t\t%.5f' % median)
+            print('Standard Deviation\t%.5f' % std)
             print('')
             res = mean
         # REAL SCORE
