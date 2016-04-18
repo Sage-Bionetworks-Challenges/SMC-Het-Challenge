@@ -1519,7 +1519,7 @@ if __name__ == '__main__':
         if args.v:
             res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
         # APPROXIMATE
-        elif args.approx:
+        elif args.approx and args.challenge in ['2A', '2B', '3A', '3B']:
             np.random.seed(args.approx_seed)
             sample_fraction = args.approx[0]
             iterations = int(np.floor(args.approx[1]))
