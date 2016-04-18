@@ -331,7 +331,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         for m in functions:
             gc.collect()
             scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
-            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)   
+            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
         for m in functions:
             gc.collect()
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
@@ -1171,10 +1171,11 @@ def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster
 
 def get_bad_ccm(nssms, scenario='OneCluster'):
     # no need to use default float64 matrices, we're just making ones and identity matrices
+    dim = int(nssms)
     if scenario is 'OneCluster':
-        return np.ones([nssms, nssms], dtype=np.int8)
+        return np.ones([dim, dim], dtype=np.int8)
     elif scenario is 'NCluster':
-        return np.identity(nssms, dtype=np.int8)
+        return np.identity(dim, dtype=np.int8)
     else:
         raise ValueError('Scenario must be one of OneCluster or NCluster')
 
