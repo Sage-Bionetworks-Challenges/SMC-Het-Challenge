@@ -10,6 +10,9 @@ SMCScoring.py
 --pred-config ${pred_config}
 --truth-config ${truth_config}
 -o ${outfile}
+#if approx.enable == 'yes':
+--approx ${approx.sample_fraction} ${approx.iterations}
+#end if
     ]]></command>
   <inputs>
       
@@ -89,7 +92,18 @@ SMCScoring.py
             </when>
           </conditional>
         </when>
-      </conditional> 
+      </conditional>
+
+      <conditional name="approx">
+        <param type="select" name="enable" label="Enable approximate evaluation" help="Approximate Evaluation">
+          <option value="yes">Yes</option>
+          <option value="no" selected="True">No</option>
+        </param>
+        <when value="yes">
+          <param name="sample_fraction" type="float" label="Sample Fraction" value="0.1"/>
+          <param name="iterations" type="integer" label="Iterations" value="10"/>
+        </when>
+      </conditional>
   </inputs>
   <outputs>
       <data name="outfile" format="txt" label="Evaluation Scores"/>
@@ -139,7 +153,7 @@ SMCScoring.py
  {"3A" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2A.txt", "${sample}.truth.3A.txt"]}}
  #end if
  #if $cocluster_assignment.submit == 'yes' and $cocluster_assignment.ancestor.submit == 'yes':
- {"3B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2B.txt", "${sample}.truth.3B.gz"]}}
+ {"3B" : {"vcf" : "${sample}.truth.scoring_vcf.vcf", "truth" : ["${sample}.truth.2B.gz", "${sample}.truth.3B.gz"]}}
  #end if
 ]]></configfile>
   </configfiles>
