@@ -48,7 +48,7 @@ except ImportError:
 CONFIG_FILE = os.path.join(os.environ['HOME'], ".dreamSubmitConfig")
 
 EVAL_TOOL_ID = 'smc_het_eval'
-INPUT_NAMES = [ "VCF_INPUT", "CNA_INPUT" ]
+INPUT_NAMES = [ "VCF_INPUT", "CNA_INPUT", "CELLULARITY_INPUT" ]
 GALAXY_API_KEY_FILE = "/etc/galaxy/api.key"
 CHALLENGE_ADMIN_TEAM_ID = 3323402
 EVALUATION_QUEUE_ID = 4487063
