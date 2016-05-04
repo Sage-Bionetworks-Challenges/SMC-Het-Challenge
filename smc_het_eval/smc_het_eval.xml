@@ -10,7 +10,7 @@ SMCScoring.py
 --pred-config ${pred_config}
 --truth-config ${truth_config}
 -o ${outfile}
-#if approx.enable == 'yes':
+#if $approx.enable == 'yes':
 --approx ${approx.sample_fraction} ${approx.iterations}
 #end if
     ]]></command>
