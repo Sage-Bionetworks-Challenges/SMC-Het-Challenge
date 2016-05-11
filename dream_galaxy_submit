@@ -252,7 +252,7 @@ def main_check(workflow_url, apikey, **kwds):
 
 
 def tag_clean(tag):
-    return re.sub(r':', "_", tag)
+    return re.sub(r'[\:\/]', "_", tag)
     """
     if tag.endswith(":latest"):
         raise ValueError("Docker tag %s doesn't specify an exact version. Please don't use \":latest\"." % (tag))
