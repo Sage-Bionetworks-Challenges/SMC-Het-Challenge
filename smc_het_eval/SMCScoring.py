@@ -37,6 +37,13 @@ class SampleError(Exception):
     def __str__(self):
         return repr(self.value)
 
+def is_gzip(path):
+    with open(path,'rb') as handle: 
+        # test for gzip
+        if (file.read(2) == b'\x1f\x8b'):
+            return True
+    return False
+
 def validate1A(data, mask=None):
     data = data.split('\n')
     data = filter(None, data)
@@ -212,7 +219,7 @@ def validate2Afor3A(data, nssms, mask=None):
 def validate2B(filename, nssms, mask=None):
     ccm = np.zeros((nssms, nssms))
     try:
-        if filename.endswith('.gz'):
+        if is_gzip(filename):
             gzipfile = gzip.open(str(filename), 'r')
             ccm_i = 0
             for i, line in enumerate(gzipfile):
@@ -705,7 +712,7 @@ def validate3A(data, cas, nssms, mask=None):
 def validate3B(filename, ccm, nssms, mask=None):
     size = ccm.shape[0]
     try:
-        if filename.endswith('.gz'):
+        if is_gzip(filename):
             ad = np.zeros((size, size))
             gzipfile = gzip.open(str(filename), 'r')
             ad_i = 0
@@ -1192,7 +1199,7 @@ def verify(filename, role, func, *args, **kwargs):
     # printInfo('ARGS -> %s | %s | %s | %s | %s' % (filename, role, func, args, kwargs))
     global err_msgs
     try:
-        if filename.endswith('.gz'): #pass compressed files directly to 2B or 3B validate functions
+        if is_gzip(filename): #pass compressed files directly to 2B or 3B validate functions
             verified = func(filename, *args, **kwargs)
         else:
             # really shouldn't do read() here, stores the whole thing in memory when we could read it in chunks/lines
@@ -1351,7 +1358,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
 
     for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
-        if truthfile.endswith('.gz') and challenge not in ['2B', '3B']:
+        if is_gzip(truthfile) and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
 
@@ -1379,7 +1386,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         if challenge in ['2A', '2B', '3A', '3B']:
             printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
 
-        if predfile.endswith('.gz') and challenge not in ['2B', '3B']:
+        if is_gzip(predfile) and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
 
