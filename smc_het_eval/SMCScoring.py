@@ -40,7 +40,7 @@ class SampleError(Exception):
 def is_gzip(path):
     with open(path,'rb') as handle: 
         # test for gzip
-        if (file.read(2) == b'\x1f\x8b'):
+        if (handle.read(2) == b'\x1f\x8b'):
             return True
     return False
 
