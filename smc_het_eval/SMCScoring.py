@@ -220,8 +220,11 @@ def validate2Afor3A(data, nssms, mask=None):
 def validate2B(filename, nssms, mask=None):
     ccm = np.zeros((nssms, nssms))
     try:
-        if is_gzip(filename):
-            gzipfile = gzip.open(str(filename), 'r')
+        if os.path.exists(filename):
+            if is_gzip(filename):
+                gzipfile = gzip.open(str(filename), 'r')
+            else:
+                gzipfile = open(str(filename), 'r')
             ccm_i = 0
             for i, line in enumerate(gzipfile):
                 if mask == None:
@@ -713,9 +716,12 @@ def validate3A(data, cas, nssms, mask=None):
 def validate3B(filename, ccm, nssms, mask=None):
     size = ccm.shape[0]
     try:
-        if is_gzip(filename):
+        if os.path.exists(filename):
             ad = np.zeros((size, size))
-            gzipfile = gzip.open(str(filename), 'r')
+            if is_gzip(filename):
+                gzipfile = gzip.open(str(filename), 'r')
+            else:
+                gzipfile = open(str(filename), 'r')
             ad_i = 0
             for i, line in enumerate(gzipfile):
                 if mask == None:
@@ -726,7 +732,12 @@ def validate3B(filename, ccm, nssms, mask=None):
                     ad_i += 1
             gzipfile.close()
         else:
-            ad = filename
+            #ad = filename
+            # TODO - optimize with line by line 
+            data = StringIO.StringIO(filename)
+            ad = np.zeros((nssms, nssms))
+            cm = np.loadtxt(data, ndmin=2)
+            ad[:nssms, :nssms] = cm
 
     except ValueError:
         raise ValidationError("Entry in AD matrix could not be cast as a float")
@@ -1395,7 +1406,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         pargs = pout + nssms[0]
 
         pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
-
+        if pout[-1] is None:
+            err_msgs.append("Unable to open prediction file")
+            return "NA"
         mem('VERIFY PRED %s' % predfile)
         if challenge in ['2A', '2B', '3A', '3B']:
             printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
