@@ -10,6 +10,7 @@ import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
 import gc
+import traceback
 
 # blo
 import time
@@ -1208,7 +1209,8 @@ def verify(filename, role, func, *args, **kwargs):
             f.close()
             verified = func(data, *args, **kwargs)
     except (IOError, TypeError) as e:
-        err_msgs.append("Error opening %s, from function %s using file %s in : %s" %  (role, func, filename, e.strerror))
+        traceback.print_exc()
+        err_msgs.append("Error opening %s, from function %s using file %s in" %  (role, func, filename))
         return None
     except (ValidationError, ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))

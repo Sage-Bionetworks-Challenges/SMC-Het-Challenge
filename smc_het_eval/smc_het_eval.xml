@@ -80,7 +80,7 @@ SMCScoring.py
           <option value="no" selected="True">No</option>
         </param>
         <when value="yes">
-          <param name="predfile" type="data" format="txt" label="Co-clustering Matrix"/>
+          <param name="predfile" type="data" label="Co-clustering Matrix"/>
           
           <conditional name="ancestor">
             <param type="select" name="submit" label="Submit Ancestor Matrix" help="Input for Challenge 3B">
@@ -88,7 +88,7 @@ SMCScoring.py
               <option value="no" selected="True">No</option>
             </param>
             <when value="yes">
-              <param name="predfile" type="data" format="txt" label="Ancestor Matrix"/>
+              <param name="predfile" type="data" label="Ancestor Matrix"/>
             </when>
           </conditional>
         </when>
