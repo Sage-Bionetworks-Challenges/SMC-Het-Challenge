@@ -1,0 +1,463 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import argparse
+import json
+import gzip
+import re
+import traceback
+import urlparse
+import tarfile
+import logging
+import subprocess
+from xml.dom.minidom import parse as parseXML
+
+try:
+    import requests
+except ImportError:
+    print "Please Install the requests library"
+    print ">>> pip install requests"
+    sys.exit(1)
+
+try:
+    import synapseclient
+    from synapseclient import File, Folder, Project
+    from synapseclient import Evaluation, Submission, SubmissionStatus
+except ImportError:
+    print "Please Install Synapse Client Library"
+    print ">>> pip install synapseclient"
+    sys.exit(1)
+
+try:
+    import vcf
+except ImportError:
+    vcf = None
+
+#Some of the evaluation interface methods require an up-to-date copy of the Synapse client
+try:
+    from distutils.version import StrictVersion
+    if StrictVersion(re.sub(r'\.dev\d+', '', synapseclient.__version__)) < StrictVersion('1.0.0'):
+        print "Please Upgrade Synapse Client Library"
+        print ">>> pip install -U synapseclient"
+        sys.exit(1)
+except ImportError:
+    pass
+
+
+CONFIG_FILE = os.path.join(os.environ['HOME'], ".dreamSubmitConfig")
+
+EVAL_TOOL_ID = 'smc_het_eval'
+INPUT_NAMES = [ "VCF_INPUT", "CNA_INPUT", "CELLULARITY_INPUT" ]
+GALAXY_API_KEY_FILE = "/etc/galaxy/api.key"
+CHALLENGE_ADMIN_TEAM_ID = 3323402
+EVALUATION_QUEUE_ID = 4487063
+
+def validate_workflow(workflow):
+    eval_found = False
+    for step in workflow['steps'].values():
+        if step['tool_id'] == EVAL_TOOL_ID:
+            eval_found = True
+    if not eval_found:
+        print "Result Evaluation Tool not found"
+        return 1
+
+    input_found = False
+    for step in workflow['steps'].values():
+        if step['type'] == 'data_input':
+            if step['inputs'][0]['name'] in INPUT_NAMES:
+                input_found = True
+    if not input_found:
+        print "Labeled Input dataset not found"
+        return 1
+
+    for step in workflow['steps'].values():
+        if step['type'] == 'data_input':
+            name = step['inputs'][0]['name']
+            if name not in INPUT_NAMES and not name.startswith("syn"):
+                print "Unrecognized input, %s" % (name)
+                return 1
+
+    return 0
+
+"""
+XML Parsing Code to read Tool config files
+"""
+def getText(nodelist):
+    rc = []
+    for node in nodelist:
+        if node.nodeType == node.TEXT_NODE:
+            rc.append(node.data)
+    return ''.join(rc)
+
+
+def dom_scan(node, query):
+    stack = query.split("/")
+    if node.localName == stack[0]:
+        return dom_scan_iter(node, stack[1:], [stack[0]])
+
+def dom_scan_iter(node, stack, prefix):
+    if len(stack):
+        for child in node.childNodes:
+            if child.nodeType == child.ELEMENT_NODE:
+                if child.localName == stack[0]:
+                    for out in dom_scan_iter(child, stack[1:], prefix + [stack[0]]):
+                        yield out
+                elif '*' == stack[0]:
+                    for out in dom_scan_iter(child, stack[1:], prefix + [child.localName]):
+                        yield out
+    else:
+        if node.nodeType == node.ELEMENT_NODE:
+            yield node, prefix, dict(node.attributes.items()), getText( node.childNodes )
+        elif node.nodeType == node.TEXT_NODE:
+            yield node, prefix, None, getText( node.childNodes )
+
+
+
+def get_tool_archive_docker_tag(tarpath):
+    tar = tarfile.open(tarpath)
+    for i in tar:
+        if i.name.endswith(".xml"):
+            tool_conf = tar.extractfile(i)
+            dom = parseXML(tool_conf)
+            s = dom_scan(dom.childNodes[0], "tool")
+            if s is not None:
+                scan = dom_scan(dom.childNodes[0], "tool/requirements/container")
+                if scan is not None:
+                    for node, prefix, attrs, text in scan:
+                        if 'type' in attrs and attrs['type'] == 'docker':
+                            tag = text
+                            return tag
+    return None
+
+def which(file):
+    for path in os.environ["PATH"].split(":"):
+        p = os.path.join(path, file)
+        if os.path.exists(p):
+            return p
+
+def get_docker_path():
+    docker_path = which('docker')
+    if docker_path is None:
+        raise Exception("Cannot find docker")
+    return docker_path
+
+
+def call_docker_save(
+    tag,
+    output,
+    host=None,
+    sudo=False,
+    ):
+
+
+    docker_path = get_docker_path()
+
+    cmd = [
+        docker_path, "save", "-o", output, tag
+    ]
+    sys_env = dict(os.environ)
+    if host is not None:
+        sys_env['DOCKER_HOST'] = host
+    if sudo:
+        cmd = ['sudo'] + cmd
+    logging.info("executing: " + " ".join(cmd))
+    proc = subprocess.Popen(cmd, close_fds=True, env=sys_env)
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        raise Exception("Call Failed: %s" % (cmd))
+
+
+def get_google_instance_type():
+    """
+    Query the `Google cloud metadata API <https://cloud.google.com/compute/docs/metadata>`_ to
+    get the instance type we're running on.
+    """
+    response = requests.get('http://metadata/computeMetadata/v1/instance/machine-type', headers={'Metadata-Flavor': 'Google'})
+    if response.status_code == 200 and '/' in response.text:
+        return response.text.rsplit('/', 1)[1]
+    else:
+        "failed to detect instance type"
+
+
+def give_synapse_permissions(syn, synapse_object, principal_id):
+    acl = syn._getACL(synapse_object)
+    acl['resourceAccess'].append({
+        'principalId': principal_id,
+        'accessType': [
+            'CREATE',
+            'READ',
+            'SEND_MESSAGE',
+            'DOWNLOAD',
+            'UPDATE',
+            'UPDATE_SUBMISSION',
+            'READ_PRIVATE_SUBMISSION']})
+    print "ACL", acl
+    syn._storeACL(synapse_object, acl)
+    return acl
+
+def find_or_add_to_synapse(paths, folder):
+    """
+    Sync a list of tools or images to a Synapse folder, checking first to ensure that no
+    File of the same name already exists.
+    :param paths: a list of file paths of tools or images to upload to Synapse
+    :param folder: the Synapse folder where the files will be stored
+    """
+    entities = []
+    for path in paths:
+        entity = None
+        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % folder):
+            if row['entity.name'] == os.path.basename(path):
+                entity = row['entity.id']
+                print "Tool previously uploaded: %s as %s" % (os.path.basename(path), entity)
+        if entity is None:
+            entity_obj = syn.store(synapseclient.File(path, parentId=folder), createOrUpdate=True) #BUG: should createOrUpdate be False?
+            entity = entity_obj.id
+        entities.append(entity)
+    return entities
+
+
+def name_clean(name):
+    return re.sub(r'[^\w]', "_", name)
+
+
+def main_check(workflow_url, apikey, **kwds):
+    print "Checking Workflow"
+    
+    print "Downloading: %s" % (workflow_url)
+
+    if not workflow_url.startswith("http://") or workflow_url.startswith("https://"):
+        print "Please provide URL to Galaxy Workflow"
+        raise Exception("Invalid Galaxy workflow URL: %s" % ())
+
+    #if there provided the URL for the share page add a '/json' to the end
+    if not workflow_url.endswith("/json") and not workflow_url.endswith("/download"):
+        workflow_url = workflow_url + "/json"
+    if workflow_url.endswith("/download"):
+        workflow_url += "?key=%s" % (apikey)
+
+
+    #Download the Workflow JSON
+    print "Downloading Workflow", workflow_url
+    #try:
+    req = requests.get(workflow_url)
+    workflow = req.json()
+
+    if validate_workflow(workflow):
+        raise Exception("Workflow failed validation")
+        
+    workflow_name = name_clean(workflow['name'])
+    
+    return workflow_url, workflow, workflow_name
+
+
+def tag_clean(tag):
+    return re.sub(r'[\:\/]', "_", tag)
+    """
+    if tag.endswith(":latest"):
+        raise ValueError("Docker tag %s doesn't specify an exact version. Please don't use \":latest\"." % (tag))
+    elif ":" in tag:
+        return re.sub(r':', "_", tag)
+    else:
+        raise ValueError("Docker tag %s doesn't specify a version." % (tag))
+    """
+
+def workflow_package(name, workflow, api_base, apikey, outdir):
+    output_paths = {
+        "workflow" : None,
+        "archives" : {},
+        "images" : {}
+    }
+    print "Downloading Workflow"
+    workflow_file = os.path.join(outdir,"%s.ga" % (name))
+    with open(workflow_file, "w") as handle:
+        handle.write( json.dumps(workflow, indent=4) )
+    output_paths['workflow'] = workflow_file
+    print "ENV:", os.environ
+    for step_id, step in workflow['steps'].items():
+        if step['type'] == 'tool':
+            tool_id = step['tool_id']
+            if tool_id != EVAL_TOOL_ID:
+                tool_version = step['tool_version']
+                tool_info_url = api_base + "tools/%s?key=%s" % (tool_id, apikey)
+                print "tool info url", tool_info_url
+                tool_desc = requests.get(tool_info_url).json()
+                print tool_desc
+                config_file = tool_desc['config_file']
+                archive_dir = os.path.dirname(config_file)
+                archive_name = os.path.basename(archive_dir)
+                if archive_name not in output_paths['archives']:
+                    build_cmd = "planemo docker_build %s" % (config_file)
+                    print "Calling", build_cmd
+                    subprocess.check_call(build_cmd, shell=True)
+
+                    archive_tar = os.path.join(outdir, "%s.tar.gz" % (archive_name))
+                    pack_cmd = "tar -C %s -cvzf %s %s" % (os.path.dirname(archive_dir), archive_tar, archive_name)
+                    print "Calling", pack_cmd
+                    subprocess.check_call(pack_cmd, shell=True)
+                    output_paths['archives'][archive_name] = archive_tar
+
+                docker_tag = get_tool_archive_docker_tag(output_paths['archives'][archive_name])
+                if docker_tag is None:
+                    print "Can't determine Docker image for tool: %s" % (tool_id)
+                    raise Exception("Unable to find docker image for: %s" % (tool_id))
+                print "Docker Image:", docker_tag
+                docker_file = os.path.join(outdir, "docker_%s.tar" % tag_clean(docker_tag))
+                if docker_tag not in output_paths['images']:
+                    call_docker_save(tag=docker_tag, output=docker_file)
+                    output_paths['images'][docker_tag] = docker_file
+    return output_paths
+
+def main_sync(syn, workflow_url, apikey, project_id, workdir, no_upload=False, gce_info=False, **kwds):
+    if not os.path.exists(workdir):
+        os.mkdir(workdir)
+
+    workflow_url, workflow, workflow_name = main_check(workflow_url, apikey)
+    galaxy_url = urlparse.urlparse(workflow_url)
+    api_base = "%s://%s/api/" % (galaxy_url.scheme, galaxy_url.netloc)
+    
+    output_paths = workflow_package(workflow_name, workflow, api_base, apikey, workdir)
+
+    if not no_upload:
+        project = syn.get(project_id)
+        image_folder_id = None
+        tool_folder_id = None
+        workflow_folder_id = None
+        for row in syn.chunkedQuery('select * from entity where parentId=="%s"' % (project_id)):
+            if row['entity.name'] == 'DockerImages':
+                image_folder_id = row['entity.id']
+            if row['entity.name'] == 'Tools':
+                tool_folder_id = row['entity.id']
+            if row['entity.name'] == 'Workflows':
+                workflow_folder_id = row['entity.id']
+        if image_folder_id is None:
+            image_folder = Folder('DockerImages', parent=project)
+            image_folder = syn.store(image_folder)
+            image_folder_id = image_folder.id
+        if tool_folder_id is None:
+            tool_folder = Folder('Tools', parent=project)
+            tool_folder = syn.store(tool_folder)
+            tool_folder_id = tool_folder.id
+        if workflow_folder_id is None:
+            workflow_folder = Folder('Workflows', parent=project)
+            workflow_folder = syn.store(workflow_folder)
+            workflow_folder_id = workflow_folder.id
+
+        workflow_data = synapseclient.File(output_paths['workflow'], parentId=workflow_folder_id)
+        workflow_data = syn.store(workflow_data, createOrUpdate=True) #BUG: should createOrUpdate=False ?
+
+        tool_entities = find_or_add_to_synapse(output_paths['archives'].values(), tool_folder_id)
+        image_entities = find_or_add_to_synapse(output_paths['images'].values(), image_folder_id)
+    
+        data_entities = []
+        for step in workflow['steps'].values():
+            if step['type'] == 'data_input':
+                name = step['inputs'][0]['name']
+                if name.startswith("syn"):
+                    data_entities.append(name)
+
+        print "Finished uploading"
+        return {
+            'paths':output_paths,
+            'workflow_entity': workflow_data.id,
+            'tool_entities': tool_entities,
+            'image_entities': image_entities,
+            'data_entities' : data_entities
+        }
+    else:
+        return {
+            'paths':output_paths,
+        }
+
+
+def main_submit(syn, workflow_url, apikey, project_id, workdir, meta, gce_info=False, **kwds):
+    """
+    """
+    submission = {}    
+    with open(meta) as handle:
+        meta_data = json.loads(handle.read())
+    for k,v in meta_data.items():
+        if k not in ['workflow', 'synapse_apikey', 'synapse_email', 'name', 'teamName']:
+            submission[k] = v
+    name = meta_data['name']
+    teamName = meta_data['teamName']
+    
+    output = main_sync(syn, apikey=apikey, workflow_url=workflow_url, meta=meta, project_id=project_id, workdir=workdir)
+    print output
+    for k in ['workflow_entity', 'tool_entities', 'image_entities', 'data_entities']:
+        submission[k] = output[k]
+
+    if args.gce_info:
+        submission['instance_type'] = get_google_instance_type()
+
+    print "Submitting %s" % (submission)
+
+    ## When you submit, you grant permissions to the Admin team
+    syn.setAnnotations(syn.get(output['workflow_entity']), submission)
+    give_synapse_permissions(syn, syn.get(project_id), CHALLENGE_ADMIN_TEAM_ID)
+    print "Submitting workflow %s saved as %s for evaluation." % (name, synapseclient.utils.id_of(output['workflow_entity']))
+    submission = syn.submit(EVALUATION_QUEUE_ID, output['workflow_entity'], name=name, team=teamName)
+    print "Created submission ID: %s" % submission.id
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Submit Files to the DREAM mutation calling challenge. Please see https://www.synapse.org/#!Synapse:syn312572/wiki/60703 for usage instructions.')
+    #Stack.addJobTreeOptions(parser)
+    parser.add_argument("--synapse_email", help="Synapse UserName", default=None)
+    parser.add_argument("--synapse_key", help="Synapse APIKey", default=None)
+    parser.add_argument("--workflow", dest="workflow_url", required=True, help="Galaxy Workflow Address")
+    parser.add_argument("--apikey", help="Galaxy API Key", default=None)
+    
+    parser.add_argument("--meta", help="Submission Metadata", required=True)
+
+    parser.add_argument("--project-id", help="The SYN id of your personal private working directory")
+
+    parser.add_argument("--check", action="store_true", default=False)
+
+    parser.add_argument("--submit", action="store_true", default=False)
+    parser.add_argument("--no-upload", action="store_true", default=False)
+    
+    parser.add_argument("--gce-info", action="store_true", default=False)
+
+    parser.add_argument("-w", "--workdir", default="work")
+
+    args = parser.parse_args()
+    if not args.no_upload and not args.check:
+        syn = synapseclient.Synapse()
+        if args.synapse_email is not None and args.synapse_key is not None:
+            syn.login(email=args.synapse_email, apiKey=args.synapse_key)
+        else:
+            if 'SYNAPSE_APIKEY' in os.environ and 'SYNAPSE_EMAIL' in os.environ:
+                syn.login(email=os.environ['SYNAPSE_EMAIL'], apiKey=os.environ['SYNAPSE_APIKEY'])
+            else:
+                syn.login()
+    else:
+        syn = None
+
+    if args.apikey is None:
+        if os.path.exists( GALAXY_API_KEY_FILE ):
+            with open( GALAXY_API_KEY_FILE ) as handle:
+                args.apikey = handle.read().rstrip()
+        else:
+            print "Need Galaxy API key: --apikey"
+
+    submit = args.submit
+    run_check = args.check
+    kwds=dict(vars(args))
+    del kwds['submit']
+    del kwds['check']
+    del kwds['synapse_email']
+    del kwds['synapse_key']
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as handle:
+            text = handle.read()
+        data = json.loads(text)
+        for k,v in data.items():
+            if k not in kwds:
+                kwds[k] = v
+    if run_check:
+        main_check(**kwds)
+    elif submit:
+        main_submit(syn, **kwds)
+    else:
+        main_sync(syn, **kwds)
