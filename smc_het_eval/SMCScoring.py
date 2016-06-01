@@ -1483,6 +1483,11 @@ def mem_pretty(mem):
         unit ='mb'
     return str(mem / denom) + unit
 
+def adj_final(res):
+    if ((res-1) < 0.00001 and res > 1):
+        res = 1;
+    return res
+
 if __name__ == '__main__':
     start_time = time.time()
     global err_msgs
@@ -1539,7 +1544,7 @@ if __name__ == '__main__':
     else:
         # VERIFY
         if args.v:
-            res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
+            res = adj_final(verifyChallenge(args.challenge, args.predfiles, args.vcf))
         # APPROXIMATE
         elif args.approx and args.challenge in ['2A', '2B', '3A', '3B']:
             np.random.seed(args.approx_seed)
@@ -1577,11 +1582,11 @@ if __name__ == '__main__':
             print('Median\t\t\t%.5f' % median)
             print('Standard Deviation\t%.5f' % std)
             print('')
-            res = mean
+            res = adj_final(mean)
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            res = adj_final(scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf))
             print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:
