@@ -597,7 +597,7 @@ def calculate2_simpleKL(pred, truth, rnd=0.01):
 
 
 def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=True):
-    """Normalized version of the pseudo V measure where the return values are between 0 and 1
+    """Normalized version of the pseudo V measure printwhere the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
     :param pred:
@@ -645,6 +645,7 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     return res
 
 def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=False, sym=False, modify=False, pseudo_counts=None):
+    print o_m
     res = 0
     t = 0
     pred_cluster_start_index = 0
@@ -665,6 +666,11 @@ def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=False, sym=False, modify=Fa
                 fn = np.sum(o_m[row]) - tp
                 fp = np.sum(o_m[:,column]) - tp
                 tn = t + tp - np.sum(o_m[row]) - np.sum(o_m[:,column])
+
+                tp1 = tp
+                fp1 = fp
+                tn1 = tn
+                fn1 = fp
 
                 if not full_matrix:
                     # print "index", triu_index, change from row+1
@@ -701,6 +707,8 @@ def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=False, sym=False, modify=Fa
                 # print tp, fp, tn, fn
                
                 if tp < 0 or fn < 0 or fp < 0 or tn < 0:
+                    print tp, fp, tn, fn
+                    print tp1, fp1, tn1, fn1
                     raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
 
                 sum_of_truth_row = tp + fn + (fp + tn)*rnd
@@ -1987,8 +1995,10 @@ def mem_pretty(mem):
     return str(mem / denom) + unit
 
 def adj_final(res):
+    if (res < 0):
+        res = 0
     if ((res-1) < 0.00001 and res > 1):
-        res = 1;
+        res = 1
     return res
 
 if __name__ == '__main__':
@@ -2106,3 +2116,4 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
+
