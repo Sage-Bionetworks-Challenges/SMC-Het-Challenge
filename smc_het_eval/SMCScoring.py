@@ -231,6 +231,7 @@ def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, mask=None):
             raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast to an int", (i+1, pred_data[i][0]))
 
     num_pred_clusters = max(pred_cluster_entries)
+
     truth_data = truth_data.split('\n')
     truth_data = filter(None, truth_data)
     truth_data = [x for i, x in enumerate(truth_data) if i in mask] if mask else truth_data
@@ -250,8 +251,12 @@ def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, mask=None):
 
     o_m = np.zeros((num_truth_clusters, num_pred_clusters), dtype=int)
 
+
     for i in xrange(len(pred_data)):
-        o_m[truth_data[i]-1, pred_data[i]-1] += 1
+        try:
+            o_m[truth_data[i]-1, pred_data[i]-1] += 1
+        except IndexError:
+            raise ValidationError("Number of clusters in truth file does not match number of clusters in prediction file")
 
     return o_m
 
@@ -282,17 +287,23 @@ def om_calculate2A(o_m, full_matrix=True, method='default', add_pseudo=True, pse
     }
     func = func_dict.get(method, None)
     tp, fp, tn, fn = calculate_overlap_matrix(o_m)
+    if add_pseudo:
+        tp, fp, tn, fn = add_pseudo_counts_om_eff(tp, fp, tn, fn)
     if func is None:
         scores = []
         worst_scores = []
 
-        functions = ['spearman','mcc', 'aupr']
+        functions = ['aupr','spearman','mcc']
 
         for m in functions:
             gc.collect()
-            if add_pseudo:
-                tp, fp, tn, fn = add_pseudo_counts_om_eff(tp, fp, tn, fn)
-            scores.append(func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix))
+            # def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
+            if m is 'pseudoV' or m is 'sym_pseudoV':
+                scores.append(func_dict[m](o_m, full_matrix=full_matrix, modify=add_pseudo, pseudo_counts=pseudo_counts))
+            else:
+                scores.append(func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix))
+
+            # print m, func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix)
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
         for m in functions:
             gc.collect()
@@ -312,8 +323,6 @@ def om_calculate2A(o_m, full_matrix=True, method='default', add_pseudo=True, pse
             else:
                 score = func(o_m, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
         else:
-            if add_pseudo:
-                tp, fp, tn, fn = add_pseudo_counts_om_eff(tp, fp, tn, fn)
             score = func(tp, fp, tn, fn, full_matrix=full_matrix)
 
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
@@ -475,7 +484,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        functions = ['pseudoV', 'aupr', 'mcc']
+        functions = ['pseudoV', 'pearson', 'mcc']
         # functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
@@ -635,12 +644,20 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
             res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
-def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=True, sym=False):
-
+def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=False, sym=False, modify=False, pseudo_counts=None):
     res = 0
     t = 0
+    pred_cluster_start_index = 0
+    truth_cluster_start_index = 0
+    triu_index = 0
+
     for row in range(o_m.shape[0]):
         t += np.sum(o_m[row])
+
+    if modify:
+        if pseudo_counts is None:
+            pseudo_counts = int(np.floor(np.sqrt(t)))
+
     for row in range(o_m.shape[0]):
         for column in range(o_m.shape[1]):
             for count in range(o_m[row, column]):
@@ -648,26 +665,65 @@ def om_calculate2_pseudoV(o_m, rnd=0.01, full_matrix=True, sym=False):
                 fn = np.sum(o_m[row]) - tp
                 fp = np.sum(o_m[:,column]) - tp
                 tn = t + tp - np.sum(o_m[row]) - np.sum(o_m[:,column])
+
+                if not full_matrix:
+                    # print "index", triu_index, change from row+1
+                    for i in range(row+1):
+                        for j in range(column+1):
+                            pred_cluster_start_index += o_m[i, j]
+                    for i in range(row+1):
+                        for j in range(column+1):
+                            truth_cluster_start_index += o_m[i, j]
+                    # print "truth, pred: ", truth_cluster_start_index, pred_cluster_start_index
+
+                    if pred_cluster_start_index > truth_cluster_start_index:
+                        tn -= truth_cluster_start_index
+                        fn -= (pred_cluster_start_index - truth_cluster_start_index)
+                        tp -= triu_index - pred_cluster_start_index + 1
+                        if tp < 0:
+                            # print "Haha", triu_index - pred_cluster_start_index + 1
+                            print triu_index
+                    else:
+                        tn -= pred_cluster_start_index
+                        fp -= (truth_cluster_start_index - pred_cluster_start_index)
+                        tp -= triu_index - truth_cluster_start_index + 1
+                        if tp < 0:
+                            print "triu_index", triu_index
+                            print "truth_cluster_start_index", truth_cluster_start_index 
+                            #print row, column
+                    triu_index += 1
+                    pred_cluster_start_index = 0
+                    truth_cluster_start_index = 0 
+
+                if modify:
+                    tn += pseudo_counts
+
+                # print tp, fp, tn, fn
+               
                 if tp < 0 or fn < 0 or fp < 0 or tn < 0:
-                    raise ValidationError("True postive, false negative, false postive and true negative should not be negative values")
+                    raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
 
                 sum_of_truth_row = tp + fn + (fp + tn)*rnd
                 sum_of_pred_row = tp + fp + (fn + tn)*rnd
 
-                sym1 = (np.log(sum_of_truth_row/sum_of_pred_row)*tp/sum_of_pred_row + 
-                    np.log(sum_of_truth_row/(sum_of_pred_row*rnd))*fp/sum_of_pred_row + 
-                    np.log(sum_of_truth_row*rnd/sum_of_pred_row)*rnd*fn/sum_of_pred_row + 
-                    np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn/sum_of_pred_row)
-
-                sym2 = (np.log(sum_of_pred_row/sum_of_truth_row)*tp/sum_of_truth_row + 
-                    np.log(sum_of_pred_row*rnd/sum_of_truth_row)*rnd*fp/sum_of_truth_row + 
-                    np.log(sum_of_pred_row/(sum_of_truth_row*rnd))*fn/sum_of_truth_row + 
-                    np.log(sum_of_pred_row/sum_of_truth_row)*rnd*tn/sum_of_truth_row)
+                if tp != 0 or fp != 0 or tn != 0 or fn != 0:
+                    sym2 = (np.log(sum_of_pred_row/sum_of_truth_row)*tp + 
+                        np.log(sum_of_pred_row*rnd/sum_of_truth_row)*rnd*fp + 
+                        np.log(sum_of_pred_row/(sum_of_truth_row*rnd))*fn + 
+                        np.log(sum_of_pred_row/sum_of_truth_row)*rnd*tn)/sum_of_truth_row
+                    res += sym2
 
                 if sym:
-                    res += sym2 + sym1
-                else:
-                    res += sym2
+                    if tp != 0 or fp != 0 or tn != 0 or fn != 0:
+                        sym1 = (np.log(sum_of_truth_row/sum_of_pred_row)*tp + 
+                            np.log(sum_of_truth_row/(sum_of_pred_row*rnd))*fp + 
+                            np.log(sum_of_truth_row*rnd/sum_of_pred_row)*rnd*fn + 
+                            np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
+
+                        res += sym1
+                
+
+        # no need to consider the other pseudo_count rows, since sym1 and sym2 evaluate to zero for these rows
 
     return res
 
@@ -685,7 +741,7 @@ def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix
     spv_val = calculate2_sym_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 - spv_val / max_val, 0)
 
-def om_calculate2_sym_pseudoV_norm(om, rnd=0.01, max_val=8000, full_matrix=True, modify=False, pseudo_count=None):
+def om_calculate2_sym_pseudoV_norm(om, rnd=0.01, max_val=8000, full_matrix=True, modify=False, pseudo_counts=None):
     spv_val = calculate2_sym_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
     return max(1 - spv_val / max_val, 0)
 
@@ -693,7 +749,7 @@ def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
     return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
 
 def om_calculate2_sym_pseudoV(o_m, rnd=0.01, full_matrix=True, modify=False, pseudo_counts=None):
-    return calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, sym=True, modify=modify, pseudo_count=pseudo_count)
+    return calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, sym=True, modify=modify, pseudo_counts=pseudo_counts)
 
 def calculate2_spearman(pred, truth, full_matrix=True):
     # use only the upper triangular matrix of the truth and
@@ -932,11 +988,13 @@ def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True):
         tn /= 2
 
     denom_terms = [(tp+fp), (tp+fn), (tn+fp), (tn+fn)]
+    # print tp, fp, tn, fn
 
     for index, term in enumerate(denom_terms):
         if term == 0:
             denom_terms[index] = 1
     denom = np.sqrt(reduce(np.multiply, denom_terms, 1))
+    # print "denom: ", denom
 
     if tp == 0 and fn == 0:
         num = (tn - fp)
@@ -944,7 +1002,7 @@ def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True):
         num = (tp - fn)
     else:
         num = (tp*tn - fp*fn)
-
+    # print num / float(denom) 
     return num / float(denom)
 
 
