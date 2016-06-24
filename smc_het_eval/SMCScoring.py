@@ -147,13 +147,13 @@ def validate1C(data, nssms, mask=None):
         raise ValidationError("Total number of reported mutations is %d. Should be %d" % (reported_nssms, nssms))
     return zip([int(x[1]) for x in data2], [float(x[2]) for x in data2])
 
-def calculate1C(pred, truth, err='abs'):
+def calculate_original1C(pred, truth, err='abs'):
     pred.sort(key = lambda x: x[1])
     truth.sort(key = lambda x: x[1])
     #itertools.chain(*x) flattens a list of lists
     predvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in pred])))
     truthvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in truth])))
-
+ 
     # calculate the score using the given error penalty
     if err is 'abs':
         se = abs(truthvs - predvs)
@@ -161,8 +161,43 @@ def calculate1C(pred, truth, err='abs'):
         se = ((truthvs - predvs) ** 2)
     else:
         raise KeyError('Invalid error penalty for scoring SC 1C. Choose one of "abs" or "sqr".')
-
+ 
     return sum(1-se)/float(len(truthvs))
+ 
+def calculate_scaled1C(pred, truth, err='abs'):
+    pred.sort(key = lambda x: x[1])
+    truth.sort(key = lambda x: x[1])
+    truth = truth[1:]
+    predvs = compute_scaled_sc(pred)
+    truthvs = compute_scaled_sc(truth)
+    # calculate the score using the given error penalty
+    if err is 'abs':
+        se = abs(truthvs - predvs)
+    elif err is 'sqr':
+        se = ((truthvs - predvs) ** 2)
+    else:
+        raise KeyError('Invalid error penalty for scoring SC 1C. Choose one of "abs" or "sqr".')
+ 
+    return sum(1-se)/float(len(truthvs))
+   
+def compute_scaled_sc(sc):
+    out = np.zeros((1000))
+    t_ssms = sum([float(x[0]) for x in sc])
+    sc = [list(x)+[float(x[0])/t_ssms] for x in sc]
+    for i in range(1000):
+            try:
+                    ind = sum(np.cumsum([x[2] for x in sc]) < i/1000.0)
+                    out[i] = sc[ind][1]
+            except IndexError:
+                    print i,ind,sc
+                    raise
+    return out
+ 
+def calculate1C(pred, truth, err='abs'):
+    orig = calculate_original1C(pred,truth,err)
+    scaled = calculate_scaled1C(pred, truth, err)
+    return max(orig,scaled)
+
 
 def validate2A(data, nssms, return_ccm=True, mask=None):
     # validate2A only fails input if..
@@ -212,6 +247,156 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
     else:
         ccm = np.dot(c_m, c_m.T)
         return ccm
+
+# nssms should be the length of the pred file as well as the length of the truth file
+def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, mask=None):
+    pred_data = pred_data.split('\n')
+    pred_data = filter(None, pred_data)
+    pred_data = [x for i, x in enumerate(pred_data) if i in mask] if mask else pred_data
+     
+    if len(pred_data) != nssms_x:
+        raise ValidationError("Prediction file contains a different number of lines than the specification file. Input: %s lines. Specification: %s lines" % (len(pred_data), nssms_x))
+    pred_cluster_entries = set()
+
+    for i in xrange(len(pred_data)):
+        try:
+            pred_data[i] = int(pred_data[i])
+            pred_cluster_entries.add(pred_data[i])
+        except ValueError:
+            raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast to an int", (i+1, pred_data[i][0]))
+
+    num_pred_clusters = max(pred_cluster_entries)
+
+    truth_data = truth_data.split('\n')
+    truth_data = filter(None, truth_data)
+    truth_data = [x for i, x in enumerate(truth_data) if i in mask] if mask else truth_data
+
+    if len(truth_data) != nssms_y:
+        raise ValidationError("Truth file contains a different number of lines than the specification file. Input: %s lines. Specification: %s lines" % (len(truth_data), nssms_y))
+
+    truth_cluster_entries = set()
+    for i in xrange(len(truth_data)):
+        try:
+            truth_data[i] = int(truth_data[i])
+            truth_cluster_entries.add(truth_data[i])
+        except ValueError:
+            raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast to an int", (i+1, truth_data[i][0]))
+
+    num_truth_clusters = max(truth_cluster_entries)
+
+    om = np.zeros((num_truth_clusters, num_pred_clusters), dtype=int)
+
+
+    for i in xrange(len(pred_data)):
+        try:
+            om[truth_data[i]-1, pred_data[i]-1] += 1
+        except IndexError:
+            raise ValidationError("Number of clusters in truth file does not match number of clusters in prediction file")
+
+    return om
+
+def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseudo_counts=None):
+    '''
+    Calculate the score for SubChallenge 2
+    :param pred: predicted co-clustering matrix
+    :param truth: true co-clustering matrix
+    :param full_matrix: logical for whether to use the full matrix or just the upper triangular matrices when calculating the score
+    :param method: scoring metric used, default is average of Pseudo V,
+    :param pseudo_counts: logical for how many psuedo counts to add to the matrices
+    :return: subchallenge 2 score for the predicted co-clustering matrix
+    '''
+
+    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+    # y = np.array(pred.shape)[1]
+    # nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
+    import gc
+
+    func_dict = {
+        "orig"           : om_calculate2_orig,
+        "sqrt"           : om_calculate2_sqrt,
+        "spearman"       : om_calculate2_spearman,
+        "aupr"           : om_calculate2_aupr,
+        "pseudoV"        : om_calculate2_pseudoV,
+        "sym_pseudoV"    : om_calculate2_sym_pseudoV,
+        "mcc"            : om_calculate2_mcc
+    }
+    func = func_dict.get(method, None)
+    tp, fp, tn, fn = calculate_overlap_matrix(om)
+    if add_pseudo:
+        tp, fp, tn, fn = add_pseudo_counts_om_eff(tp, fp, tn, fn)
+    if func is None:
+        scores = []
+        worst_scores = []
+
+        functions = ['pseudoV','mcc', 'mcc']
+
+        for m in functions:
+            gc.collect()
+            # def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
+            if m is 'pseudoV' or m is 'sym_pseudoV':
+                scores.append(func_dict[m](om, full_matrix=full_matrix, modify=add_pseudo, pseudo_counts=pseudo_counts))
+            else:
+                scores.append(func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix))
+
+            # print m, func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix)
+            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
+        for m in functions:
+            gc.collect()
+            worst_scores.append(get_worst_score_om(om, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
+        for i, m in enumerate(functions):
+            if m in larger_is_worse_methods:
+                scores[i] = 1 - (scores[i] / worst_scores[i])
+            else:
+                scores[i] = (scores[i] - worst_scores[i]) / (1 - worst_scores[i])
+        return np.mean(scores)
+
+    else:
+        # if it is pseudo_count, immediately modify true
+        if func is func_dict['pseudoV'] or func is func_dict['sym_pseudoV']:
+            if add_pseudo:
+                score = func(om, full_matrix=full_matrix, modify=True, pseudo_counts=pseudo_counts)
+            else:
+                score = func(om, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
+        else:
+            score = func(tp, fp, tn, fn, full_matrix=full_matrix)
+
+        if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
+            worst_score = get_worst_score_om(om, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
+            score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
+        else:
+            worst_score = get_worst_score_om(om, func, larger_is_worse=False)
+            score = (score - worst_score) / (1 - worst_score)
+        return score
+
+def calculate_overlap_matrix(om):
+    # tp is the number of true postives, p is the number of ones in the truth matrix and t is the total number of entries (size of the file)
+    tp = 0
+    p = 0
+    t = 0
+
+    # calculate number of true positives and total positives
+    for row in range(om.shape[0]):
+        p += np.sum(om[row])**2
+        for column in range(om.shape[1]):
+            tp += om[row, column]**2
+            t += om[row, column]
+
+    # fn is the number of false negatives       
+    fn = p - tp
+
+    # n is the number of zeros in the truth matrix
+    n = t**2 - p
+    
+    # pp is the number of predicted postives
+    pp = 0
+    for column in range(om.shape[1]):
+        pp += np.sum(om[:,column])**2
+
+    fp = pp - tp
+
+    tn = n - fp
+
+    return tp, fp, tn, fn
 
 def validate2Afor3A(data, nssms, mask=None):
     # mask works for free!
@@ -379,6 +564,18 @@ def calculate2_orig(pred, truth, full_matrix=True):
     res = res / count
     return 1 - res
 
+def om_calculate2_orig(tp, fp, tn, fn, full_matrix=True):
+    if full_matrix:
+        tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
+    else:
+        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2.0)
+        fn /= 2 
+        fp /= 2
+        tn /= 2
+    res = fp + fn
+    count = tp + fn + fp + tn
+
+    return 1-float(res)/count
 
 def calculate2_sqrt(pred, truth, full_matrix=True):
     n = truth.shape[0]
@@ -393,6 +590,20 @@ def calculate2_sqrt(pred, truth, full_matrix=True):
     res = np.sum(np.abs(pred_cp - truth_cp))
     res = res / count
     return np.sqrt(1 - res)
+
+def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True):
+    if full_matrix:
+        tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
+    else:
+        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
+        fn /= 2 
+        fp /= 2
+        tn /= 2
+
+    res = fp + fn
+    count = tp + fn + fp + tn
+
+    return np.sqrt(1-float(res)/count)
 
 def calculate2_simpleKL_norm(pred, truth, rnd=0.01):
     """Normalized version of the pseudo V measure where the return values are between 0 and 1
@@ -434,6 +645,11 @@ def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=Tru
     pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
+def om_calculate2_pseudoV_norm(om, rnd=0.01, max_val=4000, full_matrix=True, modify=False, pseudo_counts=None):
+
+    pv_val = calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
+    return max(1 -  pv_val/ max_val, 0) 
+
 def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
@@ -463,6 +679,55 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
             res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
+def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
+
+    res = 0
+    t = 0
+
+    for row in range(om.shape[0]):
+        t += np.sum(om[row])
+
+    if modify:
+        if pseudo_counts is None:
+            pseudo_counts = int(np.floor(np.sqrt(t)))
+
+    for row in range(om.shape[0]):
+        for column in range(om.shape[1]):
+            for count in range(om[row, column]):
+                tp = om[row, column]
+                fn = np.sum(om[row]) - tp
+                fp = np.sum(om[:,column]) - tp
+                tn = t + tp - np.sum(om[row]) - np.sum(om[:,column])
+
+                if modify:
+                    tn += pseudo_counts
+
+                if tp < 0 or fn < 0 or fp < 0 or tn < 0:
+                    raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
+
+                sum_of_truth_row = tp + fn + (fp + tn)*rnd
+                sum_of_pred_row = tp + fp + (fn + tn)*rnd
+
+                if tp != 0 or fp != 0 or tn != 0 or fn != 0:
+                    sym2 = (np.log(sum_of_pred_row/sum_of_truth_row)*tp + 
+                        np.log(sum_of_pred_row*rnd/sum_of_truth_row)*rnd*fp + 
+                        np.log(sum_of_pred_row/(sum_of_truth_row*rnd))*fn + 
+                        np.log(sum_of_pred_row/sum_of_truth_row)*rnd*tn)/sum_of_truth_row
+                    res += sym2
+
+                if sym:
+                    if tp != 0 or fp != 0 or tn != 0 or fn != 0:
+                        sym1 = (np.log(sum_of_truth_row/sum_of_pred_row)*tp + 
+                            np.log(sum_of_truth_row/(sum_of_pred_row*rnd))*fp + 
+                            np.log(sum_of_truth_row*rnd/sum_of_pred_row)*rnd*fn + 
+                            np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
+
+                        res += sym1
+
+        # no need to consider the other pseudo_count rows, since sym1 and sym2 evaluate to zero for these rows
+
+    return res
+
 def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
@@ -477,8 +742,15 @@ def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix
     spv_val = calculate2_sym_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 - spv_val / max_val, 0)
 
+def om_calculate2_sym_pseudoV_norm(om, rnd=0.01, max_val=8000, full_matrix=True, modify=False, pseudo_counts=None):
+    spv_val = calculate2_sym_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
+    return max(1 - spv_val / max_val, 0)
+
 def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
     return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
+
+def om_calculate2_sym_pseudoV(om, rnd=0.01, full_matrix=True, modify=False, pseudo_counts=None):
+    return calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, sym=True, modify=modify, pseudo_counts=pseudo_counts)
 
 def calculate2_spearman(pred, truth, full_matrix=True):
     # use only the upper triangular matrix of the truth and
@@ -505,6 +777,40 @@ def calculate2_spearman(pred, truth, full_matrix=True):
 
     return row
 
+def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True):
+    if (not full_matrix):
+        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
+        fn /= 2 
+        fp /= 2
+        tn /= 2
+
+    # number of ones in pred file
+    pos_pred = tp + fp
+    # number of ones in truth file
+    pos_truth = tp + fn
+    # number of zeros in pred file
+    neg_pred = tn + fn
+    # number of zeros in truth file
+    neg_truth = tn + fp
+
+    rank_zero_pred = (neg_pred+1)/2.0
+    rank_one_pred = (pos_pred+1)/2.0 + neg_pred
+
+    rank_zero_truth = (neg_truth+1)/2.0
+    rank_one_truth = (pos_truth+1)/2.0 + neg_truth
+
+    n = np.sqrt(tp+fn+fp+tn)
+
+    tp_score = ((rank_one_truth - rank_one_pred)/n)**2
+    tn_score = ((rank_zero_truth - rank_zero_pred)/n)**2
+    fn_score = ((rank_one_truth - rank_zero_pred)/n)**2
+    fp_score = ((rank_zero_truth - rank_one_pred)/n)**2
+
+    sum_of_scores = tp_score*tp + tn_score*tn + fn_score*fn + fp_score*fp
+ 
+    row = 1 - (6 * sum_of_scores)/((tp+fn+fp+tn)**2-1)
+    return row
+
 def calculate2_pearson(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
@@ -513,8 +819,8 @@ def calculate2_pearson(pred, truth, full_matrix=True):
         inds = np.triu_indices(n, k=1)
         pred = pred[inds]
         truth = truth[inds]
-
-    return call_pearson(pred, truth)
+    a = call_pearson(pred, truth)
+    return a
 
 def call_pearson(p, t):
     pbar = 0
@@ -590,6 +896,25 @@ def calculate2_aupr(pred, truth, full_matrix=True):
     aucpr = mt.auc(recall, precision)
     return aucpr
 
+def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True, subchallenge="2A"):
+    if (not full_matrix):
+        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
+        fn /= 2 
+        fp /= 2
+        tn /= 2
+
+    if subchallenge is "2A":
+        precision = []
+        recall = []
+        precision.append((tp+fn)/float(tp+fp+tn+fn))
+        precision.append(tp / float(tp + fp))
+        precision.append(1)
+        recall.append(1)
+        recall.append(tp / float(tp + fn))
+        recall.append(0)
+    aucpr = mt.auc(np.asarray(recall), np.asarray(precision))
+    return aucpr
+
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
 # note about casting: should be int/float friendly for pred/truth matrices
@@ -654,6 +979,31 @@ def calculate2_mcc(pred, truth, full_matrix=True):
     else:
         num = (tp*tn - fp*fn)
 
+    return num / float(denom)
+
+def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True):
+    if (not full_matrix):
+        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
+        fn /= 2 
+        fp /= 2
+        tn /= 2
+
+    denom_terms = [(tp+fp), (tp+fn), (tn+fp), (tn+fn)]
+    # print tp, fp, tn, fn
+
+    for index, term in enumerate(denom_terms):
+        if term == 0:
+            denom_terms[index] = 1
+    denom = np.sqrt(reduce(np.multiply, denom_terms, 1))
+    # print "denom: ", denom
+
+    if tp == 0 and fn == 0:
+        num = (tn - fp)
+    elif tn == 0 and fp == 0:
+        num = (tp - fn)
+    else:
+        num = (tp*tn - fp*fn)
+    # print num / float(denom) 
     return num / float(denom)
 
 
@@ -936,7 +1286,7 @@ method_funcs = {"pseudoV": calculate2_pseudoV,
                 "orig": calculate2_orig
     }
 
-def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, method="orig_nc", verbose=False, full_matrix=True, in_mat=2):
+def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, method="orig", verbose=False, full_matrix=True, in_mat=2):
     """Calculate the score for subchallenge 3 using the given metric
 
     :param pred_ccm: predicted co-clustering matrix
@@ -1142,6 +1492,41 @@ def add_pseudo_counts(ccm, ad=None, num=None):
 
     return ccm
 
+def add_pseudo_counts_om(om, ad=None, num=None):
+
+    if num is None:
+        N = 0
+        for row in range(om.shape[0]):
+            for column in range(om.shape[1]):
+                N += om[row, column]
+        num = np.floor(np.sqrt(N))
+
+    old_width = om.shape[0]
+    om_width = int(old_width + num)
+
+    old_length = om.shape[1]
+    om_length = int(old_length + num)
+
+    new_om = np.zeros((om_width, om_length), dtype = int)
+
+    for row in range(old_width):
+        for column in range(old_length):
+            new_om[row, column] = om[row, column]
+
+    for i in range(int(np.floor(np.sqrt(N)))):
+        new_om[old_width+i, old_length+i] = 1
+
+    return new_om
+
+def add_pseudo_counts_om_eff(tp, fp, tn, fn):
+    N = np.floor(np.sqrt(tp+fp+tn+fn))
+    K = np.floor(np.sqrt(N))
+    tp +=  K
+    tn += K**2 + 2*N*K - K
+    return tp, fp, tn, fn 
+
+
+
 def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
     """
     Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
@@ -1165,7 +1550,7 @@ def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge=
                 return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
                            get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
 
-    elif subchallenge is 'SC2':
+    elif subchallenge is 'SC2': 
         if larger_is_worse:
             return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
                        get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
@@ -1176,15 +1561,62 @@ def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge=
     else:
         raise ValueError('Subchallenge must be one of SC2 or SC3')
 
+def get_worst_score_om(om, scoring_func, subchallenge="SC2", larger_is_worse=True):
+    """
+    Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
+
+    :param nssms: number of SSMs in the input
+    :param truth_ccm: true co-clustering matrix
+    :param truth_ad: true ancestor-descendent matrix (optional)
+    :param subchallenge: subchallenge to use in scoring, one of 'SC2' or 'SC3'.
+                If SC3 is selected then truth_ad cannot be None
+    :return: worst score of NCluster and OneCluster for SC2 or SC3 (depending on the input)
+    """
+
+    # if subchallenge is 'SC3':
+        # if a_d is None:
+            # raise ValueError('ad must not be None when scoring SC3')
+        # else:
+            # if larger_is_worse:
+                # return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                           # get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+            # else:
+                # return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
+                           # get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+
+    if subchallenge is 'SC2': 
+        if larger_is_worse:
+            return max(get_bad_score_om(om, scoring_func, 'OneCluster', subchallenge),
+                       get_bad_score_om(om, scoring_func, 'NCluster', subchallenge))
+        else:
+            return min(get_bad_score_om(om, scoring_func, 'OneCluster', subchallenge),
+                       get_bad_score_om(om, scoring_func, 'NCluster', subchallenge))
+
+    else:
+        raise ValueError('Subchallenge must be one of SC2 or SC3')
+
+def get_bad_score_om(om, score_func, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None):
+    if subchallenge is 'SC2':
+        if score_func is om_calculate2_pseudoV or score_func is om_calculate2_pseudoV_norm or score_func is om_calculate2_sym_pseudoV:
+            bad_om = get_bad_om(om, scenario)
+            return score_func(bad_om, modify=True, pseudo_counts=pseudo_counts)
+        else:
+            tp, fp, tn, fn = add_pseudo_counts_om_eff(*calculate_overlap_matrix(get_bad_om(om, scenario)))
+            return score_func(tp, fp, tn, fn)
+    # elif subchallenge is 'SC3':
+        # bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario), num=pseudo_counts)
+        # return score_func(bad_ccm, bad_ad, true_ccm, true_ad)
+    else:
+        raise ValueError('Scenario must be one of SC2 or SC3')
 
 
-def get_bad_score(nssms, true_ccm, score_fun, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None):
+def get_bad_score(nssms, true_ccm, score_func, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None):
     if subchallenge is 'SC2':
         bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario), num=pseudo_counts)
-        return score_fun(bad_ccm, true_ccm)
+        return score_func(bad_ccm, true_ccm)
     elif subchallenge is 'SC3':
         bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario), num=pseudo_counts)
-        return score_fun(bad_ccm, bad_ad, true_ccm, true_ad)
+        return score_func(bad_ccm, bad_ad, true_ccm, true_ad)
     else:
         raise ValueError('Scenario must be one of SC2 or SC3')
 
@@ -1195,6 +1627,30 @@ def get_bad_ccm(nssms, scenario='OneCluster'):
         return np.ones([dim, dim], dtype=np.int8)
     elif scenario is 'NCluster':
         return np.identity(dim, dtype=np.int8)
+    else:
+        raise ValueError('Scenario must be one of OneCluster or NCluster')
+
+def get_bad_om(om, scenario='OneCluster'):
+    num_mutations = 0
+    for row in range(om.shape[0]):
+        num_mutations += np.sum(om[row])
+
+    if scenario is 'NCluster':
+        worst_matrix = np.zeros([om.shape[0], num_mutations], dtype=int)
+        start = 0
+        for row in range(om.shape[0]):
+            cluster_length = np.sum(om[row])
+            if cluster_length > num_mutations:
+                raise ValidationError('Number of mutations in cluster %i exceeds total number of mutations' % (row+1))
+            for column in range(start, start+cluster_length):
+                worst_matrix[row][column] = 1
+            start += cluster_length
+        return worst_matrix
+    elif scenario is 'OneCluster':
+        worst_matrix = np.zeros([om.shape[0], 1], dtype=int)
+        for row in range(om.shape[0]):
+            worst_matrix[row] = np.sum(om[row])
+        return worst_matrix
     else:
         raise ValueError('Scenario must be one of OneCluster or NCluster')
 
@@ -1222,6 +1678,26 @@ def verify(filename, role, func, *args, **kwargs):
     except (IOError, TypeError) as e:
         traceback.print_exc()
         err_msgs.append("Error opening %s, from function %s using file %s in" %  (role, func, filename))
+        return None
+    except (ValidationError, ValueError) as e:
+        err_msgs.append("%s does not validate: %s" % (role, e.value))
+        return None
+    except SampleError as e:
+        raise e
+    return verified
+
+def verify2A(filename_pred, filename_truth, role, *args, **kwargs):
+    global err_msgs
+    try:
+        f = open(filename_pred)
+        data1 = f.read()
+        f = open(filename_truth)
+        data2 = f.read()
+        f.close()
+        verified = om_validate2A(data1, data2, *args, **kwargs)
+    except (IOError, TypeError) as e:
+        traceback.print_exc()
+        err_msgs.append("Error opening %s, from function new_validate2A using file %s and %s in" %  (role, filename_pred, filename_truth))
         return None
     except (ValidationError, ValueError) as e:
         err_msgs.append("%s does not validate: %s" % (role, e.value))
@@ -1294,11 +1770,12 @@ challengeMapping = {
         'vcf_func' : parseVCF1C,
         'filter_func' : None
     },
+    # According to Quaid, there is no need to filter false positves with the new method developed for scoring subchallenge 2A
     '2A' : {
-        'val_funcs' : [validate2A],
-        'score_func' : calculate2,
+        'val_funcs' : [om_validate2A],
+        'score_func' : om_calculate2A,
         'vcf_func' : parseVCF2and3,
-        'filter_func' : filterFPs
+        'filter_func' : None
     },
     '2B' : {
         'val_funcs' : [validate2B],
@@ -1359,7 +1836,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
     mem('VERIFY VCF %s' % vcf)
 
+    # total number of predicted lines?
     printInfo('total lines -> ' + str(nssms[0]))
+    # total number of truth lines
     printInfo('total truth lines -> ' + str(nssms[1]))
 
     if len(predfiles) != len(challengeMapping[challenge]['val_funcs']) or len(truthfiles) != len(challengeMapping[challenge]['val_funcs']):
@@ -1368,16 +1847,29 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
     tout = []
     pout = []
+    tpout = []
 
 
     for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
         if is_gzip(truthfile) and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
-
         targs = tout + nssms[1]
 
-        if challenge in ['2A', '2B']:
+        vcfargs = [] + nssms[0] + nssms[1] 
+        # an overlapping matrix is created for challenge 2A
+        if challenge in ['2A']:
+            try:
+                # Got to check if this is correct
+                vout = verify2A(predfile, truthfile, "Combined truth and pred file for Challenge 2A", *vcfargs, mask=masks['truths'])
+            except SampleError as e:
+                raise e
+
+            printInfo('OVERLAPPING MATRIX DIMENSIONS -> ', vout.shape)
+
+            tpout.append(vout)
+
+        elif challenge in ['2B']:
             try:
                 vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
             except SampleError as e:
@@ -1395,36 +1887,44 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         else:
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
             mem('VERIFY TRUTH %s' % truthfile)
-
-        if challenge in ['2A', '2B', '3A', '3B']:
+        
+        # removing '2A' and '3A'
+        if challenge in ['2B', '3B']:
             printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
 
+
+        # starts reading in predfile here
         if is_gzip(predfile) and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
             return "NA"
 
-        pargs = pout + nssms[0]
+        # read in from pred file
+        if challenge not in ['2A']:
+            pargs = pout + nssms[0]
 
-        pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
-        if pout[-1] is None:
-            err_msgs.append("Unable to open prediction file")
-            return "NA"
-        mem('VERIFY PRED %s' % predfile)
-        if challenge in ['2A', '2B', '3A', '3B']:
+            pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
+            if pout[-1] is None:
+                err_msgs.append("Unable to open prediction file")
+                return "NA"
+            mem('VERIFY PRED %s' % predfile)
+
+        if challenge in ['2B', '3A', '3B']:
             printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
 
-        if challenge in ['2A'] and WRITE_2B_FILES:
-            np.savetxt('pred2B.txt.gz', pout[-1])
+        # no longer writes co-clustering matrix for 2B
+        # if challenge in ['2A'] and WRITE_2B_FILES:
+            # np.savetxt('pred2B.txt.gz', pout[-1])
 
-        if tout[-1] is None or pout[-1] is None:
-            return "NA"
+        if challenge not in ['2A']:
+            if tout[-1] is None or pout[-1] is None:
+                return "NA"
 
     if challenge in ['3A'] and WRITE_3B_FILES:
         np.savetxt('pred3B.txt.gz', pout[-1])
         np.savetxt('truth3B.txt.gz', tout[-1])
-
-    printInfo('tout sum -> ', np.sum(tout[0]))
-    printInfo('pout sum -> ', np.sum(pout[0]))
+    if challenge not in ['2A']:
+        printInfo('tout sum -> ', np.sum(tout[0]))
+        printInfo('pout sum -> ', np.sum(pout[0]))
 
     if challengeMapping[challenge]['filter_func']:
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
@@ -1435,7 +1935,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         printInfo('tout sum filtered -> ', np.sum(tout[0]))
         printInfo('pout sum filtered -> ', np.sum(pout[0]))
 
-        if challenge in ['2A', '2B']:
+        if challenge in ['2B']:
             pout = [ add_pseudo_counts(*pout) ]
             mem('APC PRED')
             printInfo('FINAL PRED DIMENSION -> ', pout[-1].shape)
@@ -1444,6 +1944,9 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
             tout[0] = np.dot(tout[0], tout[0].T)
             pout[0] = np.dot(pout[0], pout[0].T)
             mem('3A DOT')
+
+    if challenge in ['2A']:
+        return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None)
 
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
@@ -1482,6 +1985,13 @@ def mem_pretty(mem):
         denom = 1000.0
         unit ='mb'
     return str(mem / denom) + unit
+
+def adj_final(res):
+    if (res < 0):
+        res = 0
+    if ((res-1) < 0.00001 and res > 1):
+        res = 1
+    return res
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -1539,7 +2049,7 @@ if __name__ == '__main__':
     else:
         # VERIFY
         if args.v:
-            res = verifyChallenge(args.challenge, args.predfiles, args.vcf)
+            res = adj_final(verifyChallenge(args.challenge, args.predfiles, args.vcf))
         # APPROXIMATE
         elif args.approx and args.challenge in ['2A', '2B', '3A', '3B']:
             np.random.seed(args.approx_seed)
@@ -1577,11 +2087,11 @@ if __name__ == '__main__':
             print('Median\t\t\t%.5f' % median)
             print('Standard Deviation\t%.5f' % std)
             print('')
-            res = mean
+            res = adj_final(mean)
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            res = adj_final(scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf))
             print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:
