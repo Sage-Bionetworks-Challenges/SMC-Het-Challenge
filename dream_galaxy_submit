@@ -22,7 +22,6 @@ except ImportError:
 
 try:
     import synapseclient
-     # why not just from synapseclient import File, Folder, Project, Evaluation, Submission, SubmissionStatus?
     from synapseclient import File, Folder, Project
     from synapseclient import Evaluation, Submission, SubmissionStatus
 except ImportError:
@@ -54,58 +53,32 @@ GALAXY_API_KEY_FILE = "/etc/galaxy/api.key"
 CHALLENGE_ADMIN_TEAM_ID = 3323402
 EVALUATION_QUEUE_ID = 4487063
 
-# to replace the commented out function below; instead of three for loops, there is one
 def validate_workflow(workflow):
     eval_found = False
-    input_found = False
     for step in workflow['steps'].values():
         if step['tool_id'] == EVAL_TOOL_ID:
             eval_found = True
+    if not eval_found:
+        print "Result Evaluation Tool not found"
+        return 1
+
+    input_found = False
+    for step in workflow['steps'].values():
         if step['type'] == 'data_input':
             if step['inputs'][0]['name'] in INPUT_NAMES:
                 input_found = True
+    if not input_found:
+        print "Labeled Input dataset not found"
+        return 1
+
+    for step in workflow['steps'].values():
+        if step['type'] == 'data_input':
             name = step['inputs'][0]['name']
             if name not in INPUT_NAMES and not name.startswith("syn"):
                 print "Unrecognized input, %s" % (name)
                 return 1
 
-    if not eval_found:
-        print "Result Evaluation Tool not found"
-        return 1
-        
-    if not input_found:
-        print "Labeled Input dataset not found"
-        return 1
-
     return 0
-
-# def validate_workflow(workflow):
-#     eval_found = False
-#     for step in workflow['steps'].values():
-#         if step['tool_id'] == EVAL_TOOL_ID:
-#             eval_found = True
-
-#     if not eval_found:
-#         print "Result Evaluation Tool not found"
-#         return 1
-
-#     input_found = False
-#     for step in workflow['steps'].values():
-#         if step['type'] == 'data_input':
-#             if step['inputs'][0]['name'] in INPUT_NAMES:
-#                 input_found = True
-#     if not input_found:
-#         print "Labeled Input dataset not found"
-#         return 1
-
-#     for step in workflow['steps'].values():
-#         if step['type'] == 'data_input':
-#             name = step['inputs'][0]['name']
-#             if name not in INPUT_NAMES and not name.startswith("syn"):
-#                 print "Unrecognized input, %s" % (name)
-#                 return 1
-
-#     return 0
 
 """
 XML Parsing Code to read Tool config files
@@ -170,10 +143,19 @@ def get_docker_path():
     return docker_path
 
 
-def call_docker_save(tag, output, host=None,sudo=False,):
+def call_docker_save(
+    tag,
+    output,
+    host=None,
+    sudo=False,
+    ):
+
+
     docker_path = get_docker_path()
 
-    cmd = [docker_path, "save", "-o", output, tag]
+    cmd = [
+        docker_path, "save", "-o", output, tag
+    ]
     sys_env = dict(os.environ)
     if host is not None:
         sys_env['DOCKER_HOST'] = host
@@ -479,3 +461,4 @@ if __name__ == "__main__":
         main_submit(syn, **kwds)
     else:
         main_sync(syn, **kwds)
+

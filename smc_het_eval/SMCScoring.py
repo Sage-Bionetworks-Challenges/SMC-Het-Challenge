@@ -147,13 +147,13 @@ def validate1C(data, nssms, mask=None):
         raise ValidationError("Total number of reported mutations is %d. Should be %d" % (reported_nssms, nssms))
     return zip([int(x[1]) for x in data2], [float(x[2]) for x in data2])
 
-def calculate1C(pred, truth, err='abs'):
+def calculate_original1C(pred, truth, err='abs'):
     pred.sort(key = lambda x: x[1])
     truth.sort(key = lambda x: x[1])
     #itertools.chain(*x) flattens a list of lists
     predvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in pred])))
     truthvs = np.array(list(itertools.chain(*[[x[1]]*x[0] for x in truth])))
-
+ 
     # calculate the score using the given error penalty
     if err is 'abs':
         se = abs(truthvs - predvs)
@@ -161,8 +161,43 @@ def calculate1C(pred, truth, err='abs'):
         se = ((truthvs - predvs) ** 2)
     else:
         raise KeyError('Invalid error penalty for scoring SC 1C. Choose one of "abs" or "sqr".')
-
+ 
     return sum(1-se)/float(len(truthvs))
+ 
+def calculate_scaled1C(pred, truth, err='abs'):
+    pred.sort(key = lambda x: x[1])
+    truth.sort(key = lambda x: x[1])
+    truth = truth[1:]
+    predvs = compute_scaled_sc(pred)
+    truthvs = compute_scaled_sc(truth)
+    # calculate the score using the given error penalty
+    if err is 'abs':
+        se = abs(truthvs - predvs)
+    elif err is 'sqr':
+        se = ((truthvs - predvs) ** 2)
+    else:
+        raise KeyError('Invalid error penalty for scoring SC 1C. Choose one of "abs" or "sqr".')
+ 
+    return sum(1-se)/float(len(truthvs))
+   
+def compute_scaled_sc(sc):
+    out = np.zeros((1000))
+    t_ssms = sum([float(x[0]) for x in sc])
+    sc = [list(x)+[float(x[0])/t_ssms] for x in sc]
+    for i in range(1000):
+            try:
+                    ind = sum(np.cumsum([x[2] for x in sc]) < i/1000.0)
+                    out[i] = sc[ind][1]
+            except IndexError:
+                    print i,ind,sc
+                    raise
+    return out
+ 
+def calculate1C(pred, truth, err='abs'):
+    orig = calculate_original1C(pred,truth,err)
+    scaled = calculate_scaled1C(pred, truth, err)
+    return max(orig,scaled)
+
 
 def validate2A(data, nssms, return_ccm=True, mask=None):
     # validate2A only fails input if..
@@ -293,7 +328,7 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         scores = []
         worst_scores = []
 
-        functions = ['aupr','spearman','mcc']
+        functions = ['pseudoV','mcc', 'mcc']
 
         for m in functions:
             gc.collect()
@@ -644,12 +679,10 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
             res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
-def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=False, sym=False, modify=False, pseudo_counts=None):
+def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
+
     res = 0
     t = 0
-    pred_cluster_start_index = 0
-    truth_cluster_start_index = 0
-    triu_index = 0
 
     for row in range(om.shape[0]):
         t += np.sum(om[row])
@@ -666,40 +699,9 @@ def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=False, sym=False, modify=Fal
                 fp = np.sum(om[:,column]) - tp
                 tn = t + tp - np.sum(om[row]) - np.sum(om[:,column])
 
-                if not full_matrix:
-                    # print "index", triu_index, change from row+1
-                    for i in range(row+1):
-                        for j in range(column+1):
-                            pred_cluster_start_index += om[i, j]
-                    for i in range(row+1):
-                        for j in range(column+1):
-                            truth_cluster_start_index += om[i, j]
-                    # print "truth, pred: ", truth_cluster_start_index, pred_cluster_start_index
-
-                    if pred_cluster_start_index > truth_cluster_start_index:
-                        tn -= truth_cluster_start_index
-                        fn -= (pred_cluster_start_index - truth_cluster_start_index)
-                        tp -= triu_index - pred_cluster_start_index + 1
-                        if tp < 0:
-                            # print "Haha", triu_index - pred_cluster_start_index + 1
-                            print triu_index
-                    else:
-                        tn -= pred_cluster_start_index
-                        fp -= (truth_cluster_start_index - pred_cluster_start_index)
-                        tp -= triu_index - truth_cluster_start_index + 1
-                        if tp < 0:
-                            print "triu_index", triu_index
-                            print "truth_cluster_start_index", truth_cluster_start_index 
-                            #print row, column
-                    triu_index += 1
-                    pred_cluster_start_index = 0
-                    truth_cluster_start_index = 0 
-
                 if modify:
                     tn += pseudo_counts
 
-                # print tp, fp, tn, fn
-               
                 if tp < 0 or fn < 0 or fp < 0 or tn < 0:
                     raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
 
@@ -721,7 +723,6 @@ def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=False, sym=False, modify=Fal
                             np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
 
                         res += sym1
-                
 
         # no need to consider the other pseudo_count rows, since sym1 and sym2 evaluate to zero for these rows
 
@@ -1004,7 +1005,6 @@ def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True):
         num = (tp*tn - fp*fn)
     # print num / float(denom) 
     return num / float(denom)
-
 
 
 #### SUBCHALLENGE 3 #########################################################################################
