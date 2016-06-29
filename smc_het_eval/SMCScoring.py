@@ -468,7 +468,7 @@ def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=Tru
     pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=False, sym=False):
+def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
