@@ -249,7 +249,7 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
         return ccm
 
 # nssms should be the length of the pred file as well as the length of the truth file
-def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, mask=None):
+def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mask=None):
     pred_data = pred_data.split('\n')
     pred_data = filter(None, pred_data)
     pred_data = [x for i, x in enumerate(pred_data) if i in mask] if mask else pred_data
@@ -286,20 +286,23 @@ def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, mask=None):
 
     om = np.zeros((num_truth_clusters, num_pred_clusters), dtype=int)
 
+    # print len(filter_mut)
+    new_pred_data = []
+    if filter_mut is not None:
+        for i in range(len(pred_data)):     
+            if i in filter_mut:
+                new_pred_data.append(pred_data[i])
 
-    for i in xrange(len(pred_data)):
-        try:
-            om[truth_data[i]-1, pred_data[i]-1] += 1
-        except IndexError:
-            raise ValidationError("Number of clusters in truth file does not match number of clusters in prediction file")
+    for i in range(len(new_pred_data)):
+        # print(new_pred_data[i]), 
+        om[truth_data[i]-1, new_pred_data[i]-1] += 1
 
     return om
 
 def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseudo_counts=None):
     '''
     Calculate the score for SubChallenge 2
-    :param pred: predicted co-clustering matrix
-    :param truth: true co-clustering matrix
+    :param om: overlapping matrix
     :param full_matrix: logical for whether to use the full matrix or just the upper triangular matrices when calculating the score
     :param method: scoring metric used, default is average of Pseudo V,
     :param pseudo_counts: logical for how many psuedo counts to add to the matrices
@@ -307,10 +310,7 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
     '''
 
     larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
-    # y = np.array(pred.shape)[1]
-    # nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
     import gc
-
     func_dict = {
         "orig"           : om_calculate2_orig,
         "sqrt"           : om_calculate2_sqrt,
@@ -328,26 +328,27 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         scores = []
         worst_scores = []
 
-        functions = ['pseudoV','mcc', 'mcc']
+        # pearson and mcc give the same score for 2A
+        functions = ['pseudoV','mcc','mcc']
 
         for m in functions:
             gc.collect()
-            # def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
             if m is 'pseudoV' or m is 'sym_pseudoV':
                 scores.append(func_dict[m](om, full_matrix=full_matrix, modify=add_pseudo, pseudo_counts=pseudo_counts))
+                # print func_dict[m](om, full_matrix=full_matrix, modify=add_pseudo, pseudo_counts=pseudo_counts)
             else:
                 scores.append(func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix))
+                # print func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix)
 
-            # print m, func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix)
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
         for m in functions:
             gc.collect()
             worst_scores.append(get_worst_score_om(om, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
-                scores[i] = 1 - (scores[i] / worst_scores[i])
+                scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
             else:
-                scores[i] = (scores[i] - worst_scores[i]) / (1 - worst_scores[i])
+                scores[i] = set_to_zero((scores[i] - worst_scores[i]) / (1 - worst_scores[i]))
         return np.mean(scores)
 
     else:
@@ -362,10 +363,10 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
 
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
             worst_score = get_worst_score_om(om, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
-            score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
+            score = set_to_zero(1 - (score / worst_score))                   # and the OneCluster matrix - similar to above
         else:
             worst_score = get_worst_score_om(om, func, larger_is_worse=False)
-            score = (score - worst_score) / (1 - worst_score)
+            score = set_to_zero((score - worst_score) / (1 - worst_score))
         return score
 
 def calculate_overlap_matrix(om):
@@ -1173,7 +1174,7 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     one_score = sum(one_scores) / 3.0
     n_score = sum(n_scores) / 3.0
 
-    return 1 - (score / max(one_score, n_score))
+    return set_to_zero(1 - (score / max(one_score, n_score)))
 
 def makeCMatrix(*matrices):
     # perform (1 - *matrices) without loading all the matrices into memory
@@ -1686,7 +1687,7 @@ def verify(filename, role, func, *args, **kwargs):
         raise e
     return verified
 
-def verify2A(filename_pred, filename_truth, role, *args, **kwargs):
+def verify2A(filename_pred, filename_truth, role, pred_size, truth_size, filter_mut=None, mask=None):
     global err_msgs
     try:
         f = open(filename_pred)
@@ -1694,7 +1695,7 @@ def verify2A(filename_pred, filename_truth, role, *args, **kwargs):
         f = open(filename_truth)
         data2 = f.read()
         f.close()
-        verified = om_validate2A(data1, data2, *args, **kwargs)
+        verified = om_validate2A(data1, data2, pred_size, truth_size, filter_mut=filter_mut, mask=mask)
     except (IOError, TypeError) as e:
         traceback.print_exc()
         err_msgs.append("Error opening %s, from function new_validate2A using file %s and %s in" %  (role, filename_pred, filename_truth))
@@ -1856,12 +1857,12 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
             return "NA"
         targs = tout + nssms[1]
 
-        vcfargs = [] + nssms[0] + nssms[1] 
+        vcfargs = [] + nssms[0] + nssms[1]
         # an overlapping matrix is created for challenge 2A
         if challenge in ['2A']:
             try:
                 # Got to check if this is correct
-                vout = verify2A(predfile, truthfile, "Combined truth and pred file for Challenge 2A", *vcfargs, mask=masks['truths'])
+                vout = verify2A(predfile, truthfile, "Combined truth and pred file for Challenge 2A", *vcfargs, filter_mut=nssms[2], mask=masks['truths'])
             except SampleError as e:
                 raise e
 
@@ -1987,10 +1988,13 @@ def mem_pretty(mem):
     return str(mem / denom) + unit
 
 def adj_final(res):
-    if (res < 0):
-        res = 0
     if ((res-1) < 0.00001 and res > 1):
         res = 1
+    return res
+
+def set_to_zero(res):
+    if(res < 0):
+        res = 0
     return res
 
 if __name__ == '__main__':
@@ -2091,7 +2095,7 @@ if __name__ == '__main__':
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = adj_final(scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf))
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
             print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:
