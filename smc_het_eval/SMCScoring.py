@@ -960,6 +960,11 @@ def calculate2_mcc(pred, truth, full_matrix=True):
         evalthis = truth_line.astype(np.int8) + ors + ands
 
         counts = np.bincount(evalthis)
+        # If there are no true postives, counts will be size 3 and there would be an index error. Resize will give counts[3] a value of zero
+        if counts.size < 4: 
+            counts.resize(1, 4)
+            counts = counts[0]
+
         tn += counts[0]
         fp += counts[1]
         fn += counts[2]
@@ -2083,7 +2088,7 @@ if __name__ == '__main__':
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            res = adj_final(scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf))
             print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:

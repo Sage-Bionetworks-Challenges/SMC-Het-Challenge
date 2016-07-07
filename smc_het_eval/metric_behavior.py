@@ -703,8 +703,12 @@ def get_ccm(scenario, t_ccm=None, t_clusters=None, size_clusters=100, n_clusters
     elif "ParentIs" in scenario:
         return t_ccm
     elif scenario is "OneCluster":
+        if nssms is None:
+            return np.ones(t_ccm.shape)
         return np.ones((nssms,nssms), dtype=np.int8)
     elif "NCluster" in scenario:
+        if nssms is None:
+            return np.identity(t_ccm.shape[0])
         return np.identity(nssms, dtype=np.int8)
     elif "SplitCluster" in scenario:
         clusters = np.zeros((n_clusters*size_clusters,n_clusters+1))
@@ -1027,6 +1031,7 @@ if __name__ == '__main__':
         '1A':['abs', 'sqr'],
         '1B':['orig', 'normalized'],
         '1C':['abs', 'sqr'],
+        '2A':['mcc'],
         '2':["orig",
             "sqrt",
             "pseudoV",
@@ -1061,8 +1066,9 @@ if __name__ == '__main__':
         scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=False)
 
 
-    print 'Scoring 3A Behavior...'
-    scoring3A_behavior_all(verbose=True)
+    # print 'Scoring 3A Behavior...'
+    # scoring3A_behavior_all(verbose=True)
 
-    print 'Scoring 3A Behavior using multiple metrics with different weights...'
-    scoring3A_weight_behavior(verbose=True)
+    # print 'Scoring 3A Behavior using multiple metrics with different weights...'
+    # scoring3A_weight_behavior(verbose=True)
+
