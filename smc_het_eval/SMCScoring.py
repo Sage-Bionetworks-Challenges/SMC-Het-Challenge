@@ -185,12 +185,12 @@ def compute_scaled_sc(sc):
     t_ssms = sum([float(x[0]) for x in sc])
     sc = [list(x)+[float(x[0])/t_ssms] for x in sc]
     for i in range(1000):
-            try:
-                    ind = sum(np.cumsum([x[2] for x in sc]) < i/1000.0)
-                    out[i] = sc[ind][1]
-            except IndexError:
-                    print i,ind,sc
-                    raise
+        try:
+            ind = sum(np.cumsum([x[2] for x in sc]) < i/1000.0)
+            out[i] = sc[ind][1]
+        except IndexError:
+            print i,ind,sc
+            raise
     return out
  
 def calculate1C(pred, truth, err='abs'):
@@ -540,7 +540,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         return np.mean(scores)
 
     else:
-        score = func(pc_pred, pc_truth, full_matrix=full_matrix)
+        score = func(pred, truth, full_matrix=full_matrix)
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
             worst_score = get_worst_score(nssms, truth, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
             score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
@@ -1130,11 +1130,6 @@ def checkForBadTriuIndices(*matrices):
     else:
         raise ValidationError('Unequal shapes passed to checkForBadTriuIndices')
     return not fail
-
-#def calculate3A(pred_ca, pred_ad, truth_ca, truth_ad):
-#    pred_ccm = np.dot(pred_ca, pred_ca.T)
-#    truth_ccm = np.dot(np.dot(truth_ca, truth_ca.T))
-#    return calculate3(np.dot(pred_ca, pred_ca.T), pred_ad, , truth_ad)
 
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
     f = calculate2_sym_pseudoV
@@ -1850,7 +1845,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     pout = []
     tpout = []
 
-
     for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
         if is_gzip(truthfile) and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -1861,13 +1855,11 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         # an overlapping matrix is created for challenge 2A
         if challenge in ['2A']:
             try:
-                # Got to check if this is correct
                 vout = verify2A(predfile, truthfile, "Combined truth and pred file for Challenge 2A", *vcfargs, filter_mut=nssms[2], mask=masks['truths'])
             except SampleError as e:
                 raise e
 
             printInfo('OVERLAPPING MATRIX DIMENSIONS -> ', vout.shape)
-
             tpout.append(vout)
 
         elif challenge in ['2B']:
@@ -1911,10 +1903,6 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
         if challenge in ['2B', '3A', '3B']:
             printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
-
-        # no longer writes co-clustering matrix for 2B
-        # if challenge in ['2A'] and WRITE_2B_FILES:
-            # np.savetxt('pred2B.txt.gz', pout[-1])
 
         if challenge not in ['2A']:
             if tout[-1] is None or pout[-1] is None:

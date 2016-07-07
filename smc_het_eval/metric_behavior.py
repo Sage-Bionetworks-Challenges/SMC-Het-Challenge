@@ -46,7 +46,7 @@ def scoring1C_behavior(method='abs'):
             phis = []
             for p in t_phis:
                 phis.append(np.random.beta(p*c,(1-p)*c))
-            res.append([c,phis,calculate1C(t_entry,zip(t_nssms,phis), method)])
+            res.append([c,phis,calculate1C(zip(t_nssms,phis), t_entry, method)])
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
     f = open(tsv_dir + 'scoring1C_phi_ZM_behavior_' + method + '.tsv', 'w')
@@ -58,7 +58,7 @@ def scoring1C_behavior(method='abs'):
     sys_errors = np.concatenate((sys_errors,-sys_errors))
     res = []
     for sys_error in sys_errors:
-        res.append([sys_error, calculate1C(t_entry,zip(t_nssms,t_phis+sys_error), method)])
+        res.append([sys_error, calculate1C(zip(t_nssms,t_phis+sys_error), t_entry, method)])
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
     f = open(tsv_dir + 'scoring1C_phi_sys_behavior_' + method + '.tsv', 'w')
@@ -76,7 +76,7 @@ def scoring1C_behavior(method='abs'):
             #Randomly assign remainder
             rd[np.random.randint(0,len(rd))] += remainder
             rd = map(int,rd)
-            res.append([c,rd,calculate1C(t_entry,zip(rd,t_phis), method)])
+            res.append([c,rd,calculate1C(zip(rd,t_phis), t_entry, method)])
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
     f = open(tsv_dir + 'scoring1C_nssm_behavior_' + method + '.tsv', 'w')
@@ -107,7 +107,7 @@ def scoring1C_behavior(method='abs'):
                     phis  = t_phis
 
 
-                temp.append(calculate1C(t_entry,zip(rd_nssm,phis), method))
+                temp.append(calculate1C(zip(rd_nssm,phis), t_entry, method))
             res_row.append(np.mean(temp))
         res.append(res_row)
     res = [map(str,x) for x in res]
@@ -117,33 +117,29 @@ def scoring1C_behavior(method='abs'):
     f = open(tsv_dir + 'scoring1C_interaction_behavior_' + method + '.tsv', 'w')
     f.write('\n'.join(res))
     f.close()            
-
-
-
+    
     res = []
     # Collapse first two clusters
     phis = [(.85+.5)/2.0, .3]
     nssms = [400,200]
     entry = zip(nssms,phis)
-    res.append(["Collapse12", calculate1C(t_entry,entry, method)])
-    
+    res.append(["Collapse12", calculate1C(entry, t_entry, method)])
     # Collapse last two clusters
     phis = [.85, (.5+.3)/2.0]
     nssms = [200,400]
     entry = zip(nssms,phis)
-    res.append(["Collapse23", calculate1C(t_entry,entry, method)])
-
+    res.append(["Collapse23", calculate1C(entry, t_entry, method)])
     # Collapse all clusters
     phis = [.55]
     nssms=[600]
     entry = zip(nssms,phis)
-    res.append(["Collapse123", calculate1C(t_entry,entry, method)])
+    res.append(["Collapse123", calculate1C(entry, t_entry, method)])
 
     # Assume all SSMs are clonal
     phis = [.85]
     nssms=[600]
     entry = zip(nssms,phis)
-    res.append(["All_Clonal", calculate1C(t_entry,entry, method)])
+    res.append(["All_Clonal", calculate1C(entry, t_entry, method)])
 
     # For splits, phis were calculated as +/- 0.05 from center.  
     # 0.05 was obtained empirically by calculating the mean of the top and bottom half of a binomial sample with depth = 50. e.g.:
@@ -157,18 +153,18 @@ def scoring1C_behavior(method='abs'):
     phis = [.9,.8, .5, .3]
     nssms = [100,100,200,200]
     entry = zip(nssms,phis)
-    res.append(["Split1", calculate1C(t_entry,entry, method)])
+    res.append(["Split1", calculate1C(entry, t_entry, method)])
 
     # Split cluster 2
     phis = [.85, .55,.45, .3]
     nssms = [200,100,100,200]
     entry = zip(nssms,phis)
-    res.append(["Split2", calculate1C(t_entry,entry, method)])
+    res.append(["Split2", calculate1C(entry, t_entry, method)])
     # Split cluster 3
     phis = [.85, .5,.35,.25]
     nssms = [200,200,100,100]
     entry = zip(nssms,phis)
-    res.append(["Split3", calculate1C(t_entry,entry, method)])
+    res.append(["Split3", calculate1C(entry, t_entry, method)])
     
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
@@ -1024,8 +1020,6 @@ def scoringtotal_behavior(verbose=False):
     f.close()
 
     return scores
-
-
 
 
 if __name__ == '__main__':
