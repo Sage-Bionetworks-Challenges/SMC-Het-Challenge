@@ -1,4 +1,5 @@
 from SMCScoring import *
+from metric_behavior_support import*
 import numpy as np
 import csv
 
@@ -200,7 +201,8 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
         # calculate the CCM
         ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
         # calculate the score for the given scenario
-        res.append([sc ,calculate2(ccm, t_ccm, method=method)])
+        res.append([sc ,om_calculate2A(create_om(ccm, t_ccm), method=method, add_pseudo=False)])
+        # res.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
     res = [map(str,x) for x in res]
     res = ['\t'.join(x) for x in res]
@@ -225,7 +227,8 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
             # calculate the CCM
             ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
             # calculate the score for the given scenario
-            res_more_cl.append([sc ,calculate2(ccm, t_ccm, method=method)])
+            res_more_cl.append([sc ,om_calculate2A(create_om(ccm, t_ccm), method=method, add_pseudo=False)])
+            # res_more_cl.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
         res_more_cl = [map(str,x) for x in res_more_cl]
         res_more_cl = ['\t'.join(x) for x in res_more_cl]
@@ -295,10 +298,12 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
                             clusters['closest'][j,cluster] = 1
                 if tst_rand_reassign:
                     ccm = np.dot(clusters['rand'],clusters['rand'].T)
-                    res['rand'].append([p_err,calculate2(ccm,t_ccm, method=method)])
+                    # res['rand'].append([p_err,calculate2(ccm,t_ccm, method=method)])
+                    res['rand'].append([p_err,om_calculate2A(create_om(ccm,t_ccm), method=method, add_pseudo=False)])
                 if tst_closest_reassign:
                     ccm = np.dot(clusters['closest'],clusters['closest'].T)
-                    res['closest'].append([p_err,calculate2(ccm,t_ccm, method=method)])
+                    # res['closest'].append([p_err,calculate2(ccm,t_ccm, method=method)])
+                    res['closest'].append([p_err,om_calculate2A(create_om(ccm,t_ccm), method=method, add_pseudo=False)])
 
         # Output the results
         if tst_rand_reassign:
@@ -523,7 +528,7 @@ def scoring3A_behavior_all(verbose=True):
             for pc in ['none', 'less', 'more']:
                 for input in range(5):
                     print 'Starting %s - Pseudo Counts: %s - Full Matrix: %s, Input Matrices Index: %s' % (method,pc,fm, input)
-
+                    print method, verbose, pc, fm, input+1
                     scoring3A_behavior(method=method, verbose=verbose,pc_amount=pc, full_matrix=fm, in_mat=input+1)
                     print 'Done %s - Pseudo Counts: %s - Full Matrix: %s, Input Matrices Index: %s' % (method,pc,fm, input)
 
@@ -836,9 +841,13 @@ def get_ad(scenario, t_ad=None, size_clusters=100, nssms=None):
         ad[5*size_clusters:6*size_clusters, range(size_clusters,2*size_clusters)+range(3*size_clusters,5*size_clusters)] = 1 #adjust cluster 6's ancestry
         return ad
     elif scenario is "OneCluster":
+        if nssms is None:
+            return np.zeros(t_ad.shape)
         return np.zeros((nssms,nssms), dtype=np.int8)
     elif scenario is "NClusterOneLineage":
         # np.triu() returns a copy, this does the triu() in memory instead
+        if nssms is None:
+            return np.triu(np.ones(t_ad.shape))
         ad = np.ones((nssms, nssms), dtype=np.int8)
         for i in xrange(nssms):
             for j in xrange(i + 1):
@@ -1066,9 +1075,10 @@ if __name__ == '__main__':
         scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=False)
 
 
-    # print 'Scoring 3A Behavior...'
-    # scoring3A_behavior_all(verbose=True)
+    print 'Scoring 3A Behavior...'
+    scoring3A_behavior_all(verbose=True)
+    scoring3A_behavior(method="mcc", verbose=True,pc_amount="none", full_matrix=False, in_mat=1)
 
-    # print 'Scoring 3A Behavior using multiple metrics with different weights...'
-    # scoring3A_weight_behavior(verbose=True)
+    print 'Scoring 3A Behavior using multiple metrics with different weights...'
+    scoring3A_weight_behavior(verbose=True)
 
