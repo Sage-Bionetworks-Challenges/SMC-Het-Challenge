@@ -854,13 +854,11 @@ def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True):
     return row
 
 def calculate2_pearson(pred, truth, full_matrix=True):
-    n = truth.shape[0]
     if full_matrix:
         pass
     else:
-        inds = np.triu_indices(n, k=1)
-        pred = pred[inds]
-        truth = truth[inds]
+        pred = np.triu(pred, k=1)
+        truth = np.triu(truth, k=1)
     a = call_pearson(pred, truth)
     return a
 
@@ -1356,7 +1354,7 @@ def checkForBadTriuIndices(*matrices):
         raise ValidationError('Unequal shapes passed to checkForBadTriuIndices')
     return not fail
 
-def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad):
+def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     f = calculate2_sym_pseudoV
 
     scores = []
@@ -1441,7 +1439,7 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV", wei
     
     pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad = pred_ccm, pred_ad, truth_ccm, truth_ad
     y = np.array(pc_pred_ad.shape)[1]
-    nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
+    nssms = int(np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1)))
 
     if isinstance(method, list):
         res = [calculate3_onemetric(pc_pred_ccm, pc_pred_ad, pc_truth_ccm, pc_truth_ad,
@@ -1623,6 +1621,15 @@ def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification
     return calculate3_pseudoV(worst_srm, worst_om, worst_P, T)
 
 def calculate3A(om, truth_data, ad_pred, ad_truth):
+
+    n_scores = []
+    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data))
+    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data))
+    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="cousin"))
+
+    del truth_data
+    gc.collect()
+    # print n_scores
     scores = []
     scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth))
     scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="transpose"))
@@ -1633,11 +1640,6 @@ def calculate3A(om, truth_data, ad_pred, ad_truth):
     one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="transpose"))
     one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="cousin"))
     # print one_scores
-    n_scores = []
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data))
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data))
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="cousin"))
-    # print n_scores
 
     score = sum(scores) / 3.0
     one_score = sum(one_scores) / 3.0
