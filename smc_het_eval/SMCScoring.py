@@ -251,6 +251,16 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
 
 # nssms should be the length of the pred file as well as the length of the truth file
 def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mask=None, subchallenge="2A"):
+    '''
+    Creates overlapping matrix for SubChallenge 2 and 3
+    :param pred_data: inputed data from prediction file
+    :param truth_data: inputed data from truth file
+    :param nssms_x: number of mutations prediction file (specified by vcf)
+    :param filter_mut: list of mutations to filter in prediction file
+    :param mask: mask applied
+    :subchallenge: subchallenge scored
+    :return: overlapping matrix and (for subchallenge 3) a list which specifies the cluster of each mutation
+    '''
     pred_data = pred_data.split('\n')
     pred_data = filter(None, pred_data)
     pred_data = [x for i, x in enumerate(pred_data) if i in mask] if mask else pred_data
@@ -372,6 +382,11 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         return score
 
 def calculate_overlap_matrix(om):
+    '''
+    Calculates number of true postives, false postives, true negatives and false negatives from om
+    :param om: overlapping matrix
+    :return: number of true postives, false postives, true negatives and false negatives
+    '''
     # tp is the number of true postives, p is the number of ones in the truth matrix and t is the total number of entries (size of the file)
     tp = 0
     p = 0
@@ -567,6 +582,7 @@ def calculate2_orig(pred, truth, full_matrix=True):
     res = res / count
     return 1 - res
 
+# this function is the same as calculate2_orig but is customized for overlapping matrix
 def om_calculate2_orig(tp, fp, tn, fn, full_matrix=True):
     if full_matrix:
         tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
@@ -594,6 +610,7 @@ def calculate2_sqrt(pred, truth, full_matrix=True):
     res = res / count
     return np.sqrt(1 - res)
 
+# this function is the same as calculate2_sqrt but is customized for overlapping matrix
 def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True):
     if full_matrix:
         tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
@@ -633,7 +650,17 @@ def calculate2_simpleKL(pred, truth, rnd=0.01):
             res += np.log(1-pred[indices[0][i], indices[1][i]])
     return abs(res)
 
+
 def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
+    """Calculates the pseudoV score for subchallenge 3
+    :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
+    :param om: overlapping matrix
+    :param P: matrix that specifies number of ancestors/descendents each cluster has in the prediction file
+    :param T: matrix that specifies number of ancestors/descendents each cluster has in the truth file
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param sym: score will be the same if prediction and truth file were swapped
+    :return: score for subchallenge 3
+    """
     res = 0
     t = 0
     for row in range(om.shape[0]):
@@ -669,7 +696,7 @@ def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
                                 np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
 
                             res += sym1
-                    # print "res: ", res, tp, fp, tn, fn
+
     return res
 
 
@@ -723,6 +750,15 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
 
 def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
 
+    """Calculates the pseudoV score for subchallenge 2
+    :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param full_matrix: used to determine if full matrix should be used
+    :param sym: score will be the same if prediction and truth file were swapped
+    :param modify: used to determine if pseudo_counts should be added
+    :param pseudo_counts: number of pseudo_counts that will be added to overlapping matrix
+    :return: score for subchallenge 2
+    """
     res = 0
     t = 0
 
@@ -819,6 +855,7 @@ def calculate2_spearman(pred, truth, full_matrix=True):
 
     return row
 
+# outputs the same result as calculate2_spearman, but customized for overlapping matrix
 def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True):
     if (not full_matrix):
         tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
@@ -936,22 +973,22 @@ def calculate2_aupr(pred, truth, full_matrix=True):
     aucpr = mt.auc(recall, precision)
     return aucpr
 
-def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True, subchallenge="2A"):
+# does the same thing as calculate2_aupr, but for overlapping matrix
+def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True):
     if (not full_matrix):
         tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
         fn /= 2 
         fp /= 2
         tn /= 2
 
-    if subchallenge is "2A":
-        precision = []
-        recall = []
-        precision.append((tp+fn)/float(tp+fp+tn+fn))
-        precision.append(tp / float(tp + fp))
-        precision.append(1)
-        recall.append(1)
-        recall.append(tp / float(tp + fn))
-        recall.append(0)
+    precision = []
+    recall = []
+    precision.append((tp+fn)/float(tp+fp+tn+fn))
+    precision.append(tp / float(tp + fp))
+    precision.append(1)
+    recall.append(1)
+    recall.append(tp / float(tp + fn))
+    recall.append(0)
     aucpr = mt.auc(np.asarray(recall), np.asarray(precision))
     return aucpr
 
@@ -1026,6 +1063,7 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 
     return num / float(denom)
 
+# does the same thing as calculate2_mcc, but customized for overlapping matrix
 def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True):
     if (not full_matrix):
         tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
@@ -1109,6 +1147,12 @@ def validate3A(data, cas, nssms, mask=None):
     return ad
 
 def om_validate3A(data_3A, predK, mask=None):
+    """Constructs a matrix that describes the relationship between the clusters
+    :param data_3A: inputted data for subchallenge 3A
+    :param predK: number of clusters
+    :param mask: mask used
+    :return:
+    """
     # read in the data
     data_3A = data_3A.split('\n')
     data_3A = filter(None, data_3A)
@@ -1168,6 +1212,12 @@ def om_validate3A(data_3A, predK, mask=None):
 
 
 def construct_relative_matrix(om, pred, truth, mode="ancestor"):
+    """Constructs the shared relative matrix
+    :param om: overlapping matrix
+    :param pred: matrix that specifies the relationship of the clusters of the predicted file
+    :param truth: matrix that specifies the relationship of the clusters of the truth file
+    :return: score for subchallenge 3
+    """
     if (truth.shape[0] != om.shape[0]):
         raise ValidationError("Row size of overlapping matrix does not match size of matrix of truth file. Size of ad: %d. Size of om: %d." % (truth.shape[0], om.shape[0]))
 
