@@ -5,9 +5,9 @@ import itertools
 import json
 import argparse
 import StringIO
-import scipy.stats
+# import scipy.stats
 import sys
-import sklearn.metrics as mt
+# import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
 import gc
@@ -842,6 +842,8 @@ def calculate2_spearman(pred, truth, full_matrix=True):
         pred_cp = pred[inds]
         truth_cp = truth[inds]
 
+    import scipy.stats
+
     # implement spearman coefficient since scipy implementation
     # uses the covariance of the ranks, which could be zero
     # find the rank order of both sets of data
@@ -969,6 +971,7 @@ def calculate2_aupr(pred, truth, full_matrix=True):
         inds = np.triu_indices(n, k=1)
         pred_cp = pred[inds]
         truth_cp = truth[inds]
+    import sklearn.metrics as mt
     precision, recall, thresholds = mt.precision_recall_curve(truth_cp, pred_cp)
     aucpr = mt.auc(recall, precision)
     return aucpr
