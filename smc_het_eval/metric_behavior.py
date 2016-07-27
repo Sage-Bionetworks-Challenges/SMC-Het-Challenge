@@ -201,7 +201,7 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
         # calculate the CCM
         ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
         # calculate the score for the given scenario
-        res.append([sc ,om_calculate2A(create_om(ccm, t_ccm), method=method, add_pseudo=False)])
+        res.append([sc ,calculate2(ccm, t_ccm, method=method)])
         # res.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
     res = [map(str,x) for x in res]
@@ -227,7 +227,7 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
             # calculate the CCM
             ccm = get_ccm(sc ,t_ccm=t_ccm, t_clusters=t_clusters, size_clusters=size_clusters, n_clusters=n_clusters, big_extra_num=big_extra_num)
             # calculate the score for the given scenario
-            res_more_cl.append([sc ,om_calculate2A(create_om(ccm, t_ccm), method=method, add_pseudo=False)])
+            res_more_cl.append([sc ,calculate2(ccm, t_ccm, method=method)])
             # res_more_cl.append([sc ,calculate2(ccm, t_ccm, method=method)])
 
         res_more_cl = [map(str,x) for x in res_more_cl]
@@ -299,11 +299,11 @@ def scoring2A_behavior(tst_big_mat=True, tst_rand_reassign=True, tst_closest_rea
                 if tst_rand_reassign:
                     ccm = np.dot(clusters['rand'],clusters['rand'].T)
                     # res['rand'].append([p_err,calculate2(ccm,t_ccm, method=method)])
-                    res['rand'].append([p_err,om_calculate2A(create_om(ccm,t_ccm), method=method, add_pseudo=False)])
+                    res['rand'].append([p_err,calculate2(ccm,t_ccm, method=method)])
                 if tst_closest_reassign:
                     ccm = np.dot(clusters['closest'],clusters['closest'].T)
                     # res['closest'].append([p_err,calculate2(ccm,t_ccm, method=method)])
-                    res['closest'].append([p_err,om_calculate2A(create_om(ccm,t_ccm), method=method, add_pseudo=False)])
+                    res['closest'].append([p_err,calculate2(ccm,t_ccm, method=method)])
 
         # Output the results
         if tst_rand_reassign:
@@ -1081,4 +1081,3 @@ if __name__ == '__main__':
 
     print 'Scoring 3A Behavior using multiple metrics with different weights...'
     scoring3A_weight_behavior(verbose=True)
-

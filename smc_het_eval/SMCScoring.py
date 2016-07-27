@@ -5,9 +5,7 @@ import itertools
 import json
 import argparse
 import StringIO
-# import scipy.stats
 import sys
-# import sklearn.metrics as mt
 import metric_behavior as mb
 from functools import reduce
 import gc
@@ -18,6 +16,11 @@ import time
 import resource
 import os
 import gzip
+
+global err_msgs
+err_msgs = []
+
+#from metric.py import*
 
 INFO            = False
 TIME            = False
@@ -477,34 +480,6 @@ def isSymmetric(x):
                 break
     return symmetricity
 
-def calculate2_quaid(pred, truth):
-    n = truth.shape[0]
-    indices = np.triu_indices(n, k=1)
-    ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices])
-    ones_count = np.count_nonzero(truth[indices])
-    if ones_count > 0:
-        ones_score = 1 - ones/float(ones_count)
-    else:
-        ones_score = -1
-
-    zeros = np.sum(np.abs(pred[indices] - truth[indices]) * (1 - truth[indices]))
-    zeros_count = len(truth[indices]) - ones_count
-    if zeros_count > 0:
-        zeros_score = 1 - zeros/float(zeros_count)
-    else:
-        zeros_score = -1
-
-    if ones_score == -1:
-        return zeros_score
-    elif zeros_score == -1:
-        return ones_score
-    else:
-        try:
-            return 2.0/(1.0/ones_score + 1.0/zeros_score)
-        except Warning:
-            print ones_score, zeros_score
-            return 0
-
 #@profile
 def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None):
     '''
@@ -565,6 +540,36 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
             worst_score = get_worst_score(nssms, truth, func, larger_is_worse=False)
             score = (score - worst_score) / (1 - worst_score)
         return score
+
+#### METRICS ###############################################################################################
+
+def calculate2_quaid(pred, truth):
+    n = truth.shape[0]
+    indices = np.triu_indices(n, k=1)
+    ones = np.sum(np.abs(pred[indices] - truth[indices]) * truth[indices])
+    ones_count = np.count_nonzero(truth[indices])
+    if ones_count > 0:
+        ones_score = 1 - ones/float(ones_count)
+    else:
+        ones_score = -1
+
+    zeros = np.sum(np.abs(pred[indices] - truth[indices]) * (1 - truth[indices]))
+    zeros_count = len(truth[indices]) - ones_count
+    if zeros_count > 0:
+        zeros_score = 1 - zeros/float(zeros_count)
+    else:
+        zeros_score = -1
+
+    if ones_score == -1:
+        return zeros_score
+    elif zeros_score == -1:
+        return ones_score
+    else:
+        try:
+            return 2.0/(1.0/ones_score + 1.0/zeros_score)
+        except Warning:
+            print ones_score, zeros_score
+            return 0
 
 def calculate2_orig(pred, truth, full_matrix=True):
     n = truth.shape[0]
@@ -992,6 +997,7 @@ def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True):
     recall.append(1)
     recall.append(tp / float(tp + fn))
     recall.append(0)
+    import sklearn.metrics as mt
     aucpr = mt.auc(np.asarray(recall), np.asarray(precision))
     return aucpr
 
@@ -1115,7 +1121,7 @@ def validate3A(data, cas, nssms, mask=None):
             raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
 
     if [x[0] for x in data] != range(1, predK+1):
-        raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
+        raise ValidationError("First column must have %d entries in ascending order starting with 1" % predK)
 
     for i in range(len(data)):
         if data[i][1] not in set(range(predK+1)):
@@ -1499,10 +1505,14 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV", wei
                                     method=m, verbose=verbose, in_mat=in_mat) for m in method] # calculate the score for each method
 
         # normalize the scores to be between (worst of NCluster score and OneCluster score) and (Truth score)
+        ncluster_ccm, ncluster_ad = add_pseudo_counts(mb.get_ccm('NClusterOneLineage', nssms=nssms), mb.get_ad('NClusterOneLineage', nssms=nssms))
         ncluster_score = [calculate3_onemetric(ncluster_ccm, ncluster_ad, pc_truth_ccm, pc_truth_ad,
                                                method=m, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat) for m in method]
+        del ncluster_ccm, ncluster_ad
+        onecluster_ccm, onecluster_ad = add_pseudo_counts(mb.get_ccm('OneCluster', nssms=nssms), mb.get_ad('OneCluster', nssms=nssms))
         onecluster_score = [calculate3_onemetric(onecluster_ccm, onecluster_ad, pc_truth_ccm, pc_truth_ad,
                                                  method=m, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat) for m in method]
+        del onecluster_ccm, onecluster_ad
         for i in range(len(method)):
             if method[i] in larger_is_worse_methods: # normalization for methods where a larger score is worse
                 worst_score = max(ncluster_score[i], onecluster_score[i]) # worst of NCluster and OneCluster scores
@@ -1698,7 +1708,7 @@ def calculate3A(om, truth_data, ad_pred, ad_truth):
     one_score = sum(one_scores) / 3.0
     n_score = sum(n_scores) / 3.0
 
-    return set_to_zero(1 - (score / max(one_score, n_score)))    
+    return (1 - (score / max(one_score, n_score)))    
 
 
 def parseVCF1C(data, sample_mask=None):
@@ -2007,7 +2017,6 @@ def get_NCluster_om_3A(om, truth_data):
 
 def verify(filename, role, func, *args, **kwargs):
     # printInfo('ARGS -> %s | %s | %s | %s | %s' % (filename, role, func, args, kwargs))
-    global err_msgs
     try:
         if is_gzip(filename): #pass compressed files directly to 2B or 3B validate functions
             verified = func(filename, *args, **kwargs)
@@ -2029,7 +2038,6 @@ def verify(filename, role, func, *args, **kwargs):
     return verified
 
 def verify2A(filename_pred, filename_truth, role, pred_size, truth_size, filter_mut=None, mask=None, subchallenge="2A"):
-    global err_msgs
     try:
         f = open(filename_pred)
         data1 = f.read()
@@ -2143,7 +2151,7 @@ challengeMapping = {
 }
 
 def verifyChallenge(challenge, predfiles, vcf):
-    global err_msgs
+    #global err_msgs
     if challengeMapping[challenge]['vcf_func']:
         nssms = verify(vcf, "input VCF", parseVCF1C)
         if nssms == None:
@@ -2166,7 +2174,7 @@ def verifyChallenge(challenge, predfiles, vcf):
 
 
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
-    global err_msgs
+    #global err_msgs
     mem('START %s' % challenge)
 
     masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
@@ -2211,6 +2219,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
                 printInfo('OVERLAPPING MATRIX DIMENSIONS -> ', vout.shape)
                 tpout.append(vout)
+                if vout is None:
+                    return "NA"
                 if raw[0] != -1:
                     tpout.append(raw)
 
@@ -2220,7 +2230,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
                     vpout = verify(predfile, "pred file for Challenge %s" % (challenge), valfunc, vcfargs[0].shape[1], mask=masks['truths'])
                 except SampleError as e:
                     raise e
-
+                if vpout is None or vtout is None:
+                    return "NA"                    
                 tpout.append(vpout)
                 tpout.append(vtout)
 
@@ -2243,10 +2254,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
             tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
             mem('VERIFY TRUTH %s' % truthfile)
         
-        # removing '2A' and '3A'
         if challenge in ['2B', '3B']:
             printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
-
 
         # starts reading in predfile here
         if is_gzip(predfile) and challenge not in ['2B', '3B']:
@@ -2351,8 +2360,8 @@ def set_to_zero(res):
 
 if __name__ == '__main__':
     start_time = time.time()
-    global err_msgs
-    err_msgs = []
+    #global err_msgs
+    #err_msgs = []
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--pred-config", default=None)
