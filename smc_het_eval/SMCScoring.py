@@ -1,6 +1,5 @@
 import math
 import numpy as np
-#np.set_printoptions(threshold=np.inf)
 import itertools
 import json
 import argparse
@@ -8,6 +7,7 @@ import StringIO
 import sys
 import metric_behavior as mb
 from functools import reduce
+from scoring_harness_optimized import *
 import gc
 import traceback
 
@@ -252,172 +252,6 @@ def validate2A(data, nssms, return_ccm=True, mask=None):
         ccm = np.dot(c_m, c_m.T)
         return ccm
 
-# nssms should be the length of the pred file as well as the length of the truth file
-def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mask=None, subchallenge="2A"):
-    '''
-    Creates overlapping matrix for SubChallenge 2 and 3
-    :param pred_data: inputed data from prediction file
-    :param truth_data: inputed data from truth file
-    :param nssms_x: number of mutations prediction file (specified by vcf)
-    :param filter_mut: list of mutations to filter in prediction file
-    :param mask: mask applied
-    :subchallenge: subchallenge scored
-    :return: overlapping matrix and (for subchallenge 3) a list which specifies the cluster of each mutation
-    '''
-    pred_data = pred_data.split('\n')
-    pred_data = filter(None, pred_data)
-    pred_data = [x for i, x in enumerate(pred_data) if i in mask] if mask else pred_data
-     
-    if len(pred_data) != nssms_x:
-        raise ValidationError("Prediction file contains a different number of lines than the specification file. Input: %s lines. Specification: %s lines" % (len(pred_data), nssms_x))
-    pred_cluster_entries = set()
-
-    for i in xrange(len(pred_data)):
-        try:
-            pred_data[i] = int(pred_data[i])
-            pred_cluster_entries.add(pred_data[i])
-        except ValueError:
-            raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast to an int", (i+1, pred_data[i][0]))
-
-    num_pred_clusters = max(pred_cluster_entries)
-
-    truth_data = truth_data.split('\n')
-    truth_data = filter(None, truth_data)
-    truth_data = [x for i, x in enumerate(truth_data) if i in mask] if mask else truth_data
-
-    if len(truth_data) != nssms_y:
-        raise ValidationError("Truth file contains a different number of lines than the specification file. Input: %s lines. Specification: %s lines" % (len(truth_data), nssms_y))
-
-    truth_cluster_entries = set()
-    for i in xrange(len(truth_data)):
-        try:
-            truth_data[i] = int(truth_data[i])
-            truth_cluster_entries.add(truth_data[i])
-        except ValueError:
-            raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast to an int", (i+1, truth_data[i][0]))
-
-    num_truth_clusters = max(truth_cluster_entries)
-
-    om = np.zeros((num_truth_clusters, num_pred_clusters), dtype=int)
-
-    # print len(filter_mut)
-    new_pred_data = []
-    if filter_mut is not None:
-        for i in range(len(pred_data)):     
-            if i in filter_mut:
-                new_pred_data.append(pred_data[i])
-
-    for i in range(len(new_pred_data)):
-        # print(new_pred_data[i]), 
-        om[truth_data[i]-1, new_pred_data[i]-1] += 1
-
-    if subchallenge is "3A":
-        return om, truth_data
-
-    return om
-
-def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseudo_counts=None):
-    '''
-    Calculate the score for SubChallenge 2
-    :param om: overlapping matrix
-    :param full_matrix: logical for whether to use the full matrix or just the upper triangular matrices when calculating the score
-    :param method: scoring metric used, default is average of Pseudo V,
-    :param pseudo_counts: logical for how many psuedo counts to add to the matrices
-    :return: subchallenge 2 score for the predicted co-clustering matrix
-    '''
-
-    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
-    import gc
-    func_dict = {
-        "orig"           : om_calculate2_orig,
-        "sqrt"           : om_calculate2_sqrt,
-        "spearman"       : om_calculate2_spearman,
-        "aupr"           : om_calculate2_aupr,
-        "pseudoV"        : om_calculate2_pseudoV,
-        "sym_pseudoV"    : om_calculate2_sym_pseudoV,
-        "mcc"            : om_calculate2_mcc
-    }
-    func = func_dict.get(method, None)
-    tp, fp, tn, fn = calculate_overlap_matrix(om)
-    if add_pseudo:
-        tp, fp, tn, fn = add_pseudo_counts_om_eff(tp, fp, tn, fn)
-    if func is None:
-        scores = []
-        worst_scores = []
-
-        # pearson and mcc give the same score for 2A
-        functions = ['pseudoV','mcc','mcc']
-
-        for m in functions:
-            gc.collect()
-            if m is 'pseudoV' or m is 'sym_pseudoV':
-                scores.append(func_dict[m](om, full_matrix=full_matrix, modify=add_pseudo, pseudo_counts=pseudo_counts))
-            else:
-                scores.append(func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix))
-
-            # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
-        for m in functions:
-            gc.collect()
-            worst_scores.append(get_worst_score_om(om, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
-        for i, m in enumerate(functions):
-            if m in larger_is_worse_methods:
-                scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
-            else:
-                scores[i] = set_to_zero((scores[i] - worst_scores[i]) / (1 - worst_scores[i]))
-        return np.mean(scores)
-
-    else:
-        # if it is pseudo_count, immediately modify true
-        if func is func_dict['pseudoV'] or func is func_dict['sym_pseudoV']:
-            if add_pseudo:
-                score = func(om, full_matrix=full_matrix, modify=True, pseudo_counts=pseudo_counts)
-            else:
-                score = func(om, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
-        else:
-            score = func(tp, fp, tn, fn, full_matrix=full_matrix)
-
-        if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
-            worst_score = get_worst_score_om(om, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
-            score = set_to_zero(1 - (score / worst_score))                   # and the OneCluster matrix - similar to above
-        else:
-            worst_score = get_worst_score_om(om, func, larger_is_worse=False)
-            score = set_to_zero((score - worst_score) / (1 - worst_score))
-        return score
-
-def calculate_overlap_matrix(om):
-    '''
-    Calculates number of true postives, false postives, true negatives and false negatives from om
-    :param om: overlapping matrix
-    :return: number of true postives, false postives, true negatives and false negatives
-    '''
-    # tp is the number of true postives, p is the number of ones in the truth matrix and t is the total number of entries (size of the file)
-    tp = 0
-    p = 0
-    t = 0
-
-    # calculate number of true positives and total positives
-    for row in range(om.shape[0]):
-        p += np.sum(om[row])**2
-        for column in range(om.shape[1]):
-            tp += om[row, column]**2
-            t += om[row, column]
-
-    # fn is the number of false negatives       
-    fn = p - tp
-
-    # n is the number of zeros in the truth matrix
-    n = t**2 - p
-    
-    # pp is the number of predicted postives
-    pp = 0
-    for column in range(om.shape[1]):
-        pp += np.sum(om[:,column])**2
-
-    fp = pp - tp
-
-    tn = n - fp
-
-    return tp, fp, tn, fn
 
 def validate2Afor3A(data, nssms, mask=None):
     # mask works for free!
@@ -587,20 +421,6 @@ def calculate2_orig(pred, truth, full_matrix=True):
     res = res / count
     return 1 - res
 
-# this function is the same as calculate2_orig but is customized for overlapping matrix
-def om_calculate2_orig(tp, fp, tn, fn, full_matrix=True):
-    if full_matrix:
-        tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
-    else:
-        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2.0)
-        fn /= 2 
-        fp /= 2
-        tn /= 2
-    res = fp + fn
-    count = tp + fn + fp + tn
-
-    return 1-float(res)/count
-
 def calculate2_sqrt(pred, truth, full_matrix=True):
     n = truth.shape[0]
     if full_matrix:
@@ -615,20 +435,6 @@ def calculate2_sqrt(pred, truth, full_matrix=True):
     res = res / count
     return np.sqrt(1 - res)
 
-# this function is the same as calculate2_sqrt but is customized for overlapping matrix
-def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True):
-    if full_matrix:
-        tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
-    else:
-        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
-        fn /= 2 
-        fp /= 2
-        tn /= 2
-
-    res = fp + fn
-    count = tp + fn + fp + tn
-
-    return np.sqrt(1-float(res)/count)
 
 def calculate2_simpleKL_norm(pred, truth, rnd=0.01):
     """Normalized version of the pseudo V measure where the return values are between 0 and 1
@@ -719,11 +525,6 @@ def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=Tru
     pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-def om_calculate2_pseudoV_norm(om, rnd=0.01, max_val=4000, full_matrix=True, modify=False, pseudo_counts=None):
-
-    pv_val = calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
-    return max(1 -  pv_val/ max_val, 0) 
-
 def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
@@ -753,63 +554,6 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
             res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
-def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
-
-    """Calculates the pseudoV score for subchallenge 2
-    :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
-    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
-    :param full_matrix: used to determine if full matrix should be used
-    :param sym: score will be the same if prediction and truth file were swapped
-    :param modify: used to determine if pseudo_counts should be added
-    :param pseudo_counts: number of pseudo_counts that will be added to overlapping matrix
-    :return: score for subchallenge 2
-    """
-    res = 0
-    t = 0
-
-    for row in range(om.shape[0]):
-        t += np.sum(om[row])
-
-    if modify:
-        if pseudo_counts is None:
-            pseudo_counts = int(np.floor(np.sqrt(t)))
-
-    for row in range(om.shape[0]):
-        for column in range(om.shape[1]):
-            for count in range(om[row, column]):
-                tp = om[row, column]
-                fn = np.sum(om[row]) - tp
-                fp = np.sum(om[:,column]) - tp
-                tn = t + tp - np.sum(om[row]) - np.sum(om[:,column])
-
-                if modify:
-                    tn += pseudo_counts
-
-                if tp < 0 or fn < 0 or fp < 0 or tn < 0:
-                    raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
-
-                sum_of_truth_row = tp + fn + (fp + tn)*rnd
-                sum_of_pred_row = tp + fp + (fn + tn)*rnd
-
-                if tp != 0 or fp != 0 or tn != 0 or fn != 0:
-                    sym2 = (np.log(sum_of_pred_row/sum_of_truth_row)*tp + 
-                        np.log(sum_of_pred_row*rnd/sum_of_truth_row)*rnd*fp + 
-                        np.log(sum_of_pred_row/(sum_of_truth_row*rnd))*fn + 
-                        np.log(sum_of_pred_row/sum_of_truth_row)*rnd*tn)/sum_of_truth_row
-                    res += sym2
-
-                if sym:
-                    if tp != 0 or fp != 0 or tn != 0 or fn != 0:
-                        sym1 = (np.log(sum_of_truth_row/sum_of_pred_row)*tp + 
-                            np.log(sum_of_truth_row/(sum_of_pred_row*rnd))*fp + 
-                            np.log(sum_of_truth_row*rnd/sum_of_pred_row)*rnd*fn + 
-                            np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
-
-                        res += sym1
-
-        # no need to consider the other pseudo_count rows, since sym1 and sym2 evaluate to zero for these rows
-
-    return res
 
 def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
@@ -825,15 +569,9 @@ def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix
     spv_val = calculate2_sym_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 - spv_val / max_val, 0)
 
-def om_calculate2_sym_pseudoV_norm(om, rnd=0.01, max_val=8000, full_matrix=True, modify=False, pseudo_counts=None):
-    spv_val = om_calculate2_sym_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
-    return max(1 - spv_val / max_val, 0)
 
 def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
     return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
-
-def om_calculate2_sym_pseudoV(om, rnd=0.01, full_matrix=True, modify=False, pseudo_counts=None):
-    return om_calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, sym=True, modify=modify, pseudo_counts=pseudo_counts)
 
 def calculate2_spearman(pred, truth, full_matrix=True):
     # use only the upper triangular matrix of the truth and
@@ -860,41 +598,6 @@ def calculate2_spearman(pred, truth, full_matrix=True):
     d = np.divide(d, np.sqrt(n)) # avoid overflow warnings
     row = 1 - (6 * sum(np.square(d))) / ((np.square(n) - 1))
 
-    return row
-
-# outputs the same result as calculate2_spearman, but customized for overlapping matrix
-def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True):
-    if (not full_matrix):
-        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
-        fn /= 2 
-        fp /= 2
-        tn /= 2
-
-    # number of ones in pred file
-    pos_pred = tp + fp
-    # number of ones in truth file
-    pos_truth = tp + fn
-    # number of zeros in pred file
-    neg_pred = tn + fn
-    # number of zeros in truth file
-    neg_truth = tn + fp
-
-    rank_zero_pred = (neg_pred+1)/2.0
-    rank_one_pred = (pos_pred+1)/2.0 + neg_pred
-
-    rank_zero_truth = (neg_truth+1)/2.0
-    rank_one_truth = (pos_truth+1)/2.0 + neg_truth
-
-    n = np.sqrt(tp+fn+fp+tn)
-
-    tp_score = ((rank_one_truth - rank_one_pred)/n)**2
-    tn_score = ((rank_zero_truth - rank_zero_pred)/n)**2
-    fn_score = ((rank_one_truth - rank_zero_pred)/n)**2
-    fp_score = ((rank_zero_truth - rank_one_pred)/n)**2
-
-    sum_of_scores = tp_score*tp + tn_score*tn + fn_score*fn + fp_score*fp
- 
-    row = 1 - (6 * sum_of_scores)/((tp+fn+fp+tn)**2-1)
     return row
 
 def calculate2_pearson(pred, truth, full_matrix=True):
@@ -981,26 +684,6 @@ def calculate2_aupr(pred, truth, full_matrix=True):
     aucpr = mt.auc(recall, precision)
     return aucpr
 
-# does the same thing as calculate2_aupr, but for overlapping matrix
-def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True):
-    if (not full_matrix):
-        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
-        fn /= 2 
-        fp /= 2
-        tn /= 2
-
-    precision = []
-    recall = []
-    precision.append((tp+fn)/float(tp+fp+tn+fn))
-    precision.append(tp / float(tp + fp))
-    precision.append(1)
-    recall.append(1)
-    recall.append(tp / float(tp + fn))
-    recall.append(0)
-    import sklearn.metrics as mt
-    aucpr = mt.auc(np.asarray(recall), np.asarray(precision))
-    return aucpr
-
 # Matthews Correlation Coefficient
 # don't just use upper triangular matrix because you get na's with the AD matrix
 # note about casting: should be int/float friendly for pred/truth matrices
@@ -1072,32 +755,6 @@ def calculate2_mcc(pred, truth, full_matrix=True):
 
     return num / float(denom)
 
-# does the same thing as calculate2_mcc, but customized for overlapping matrix
-def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True):
-    if (not full_matrix):
-        tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
-        fn /= 2 
-        fp /= 2
-        tn /= 2
-
-    denom_terms = [(tp+fp), (tp+fn), (tn+fp), (tn+fn)]
-    # print tp, fp, tn, fn
-
-    for index, term in enumerate(denom_terms):
-        if term == 0:
-            denom_terms[index] = 1
-    denom = np.sqrt(reduce(np.multiply, denom_terms, 1))
-    # print "denom: ", denom
-
-    if tp == 0 and fn == 0:
-        num = (tn - fp)
-    elif tn == 0 and fp == 0:
-        num = (tp - fn)
-    else:
-        num = (tp*tn - fp*fn)
-    # print num / float(denom) 
-    return num / float(denom)
-
 
 #### SUBCHALLENGE 3 #########################################################################################
 
@@ -1155,196 +812,6 @@ def validate3A(data, cas, nssms, mask=None):
                 ad[i, j] = 1
     return ad
 
-def om_validate3A(data_3A, predK, mask=None):
-    """Constructs a matrix that describes the relationship between the clusters
-    :param data_3A: inputted data for subchallenge 3A
-    :param predK: number of clusters
-    :param mask: mask used
-    :return:
-    """
-    # read in the data
-    data_3A = data_3A.split('\n')
-    data_3A = filter(None, data_3A)
-    if len(data_3A) != predK:
-        raise ValidationError("Input file contains a different number of lines (%d) than expected (%d)")
-    data_3A = [x.split('\t') for x in data_3A]
-    for i in range(len(data_3A)):
-        if len(data_3A[i]) != 2:
-            raise ValidationError("Number of tab separated columns in line %d is not 2" % (i+1))
-        try:
-            data_3A[i][0] = int(data_3A[i][0])
-            data_3A[i][1] = int(data_3A[i][1])
-        except ValueError:
-            raise ValidationError("Entry in line %d could not be cast as integer" % (i+1))
-
-    if [x[0] for x in data_3A] != range(1, predK+1):
-        raise ValidationError("First column must have %d entries in acending order starting with 1" % predK)
-
-    for i in range(len(data_3A)):
-        if data_3A[i][1] not in set(range(predK+1)):
-            raise ValidationError("Parent node label in line %d is not valid." % (i+1))
-
-    # Since cluster zero is not included in file
-    ad_cluster = np.zeros((len(data_3A)+1, len(data_3A)+1), dtype=int)
-    # file starts at one
-    for i in range(len(data_3A)):
-        ad_cluster[data_3A[i][1]][data_3A[i][0]] = 1
-    # fill in a matrix which tells you whether or not one cluster is a descendant of another
-    for i in range(len(data_3A)+1):
-        for j in range(len(data_3A)+1):
-            if (ad_cluster[j][i] == 1):
-                for k in range(len(data_3A)+1):
-                    if(ad_cluster[k][j] == 1):
-                        ad_cluster[k][i] = 1
-                    if(ad_cluster[i][k] == 1):
-                        ad_cluster[j][k] = 1
-
-    # check if all nodes are connected. If there are not, we could possibly run the above code again 
-    if (not np.array_equal(np.nonzero(ad_cluster[0])[0], map(lambda x: x+1, range(len(data_3A))))):
-        for i in range(len(data_3A)+1):
-            for j in range(len(data_3A)+1):
-                if (ad_cluster[j][i] == 1):
-                    for k in range(len(data_3A)+1):
-                        if(ad_cluster[k][j] == 1):
-                            ad_cluster[k][i] = 1
-                        if(ad_cluster[i][k] == 1):
-                            ad_cluster[j][k] = 1
-
-    if (not np.array_equal(np.nonzero(ad_cluster[0])[0], map(lambda x: x+1, range(len(data_3A))))):
-        raise ValidationError("Root of phylogeny not ancestor of all clusters / Tree is not connected.")
-
-    # print ad_cluster
-    ad_cluster = np.delete(ad_cluster, 0, 0)
-    ad_cluster = np.delete(ad_cluster, 0, 1)
-
-    return ad_cluster
-
-
-def construct_relative_matrix(om, pred, truth, mode="ancestor"):
-    """Constructs the shared relative matrix
-    :param om: overlapping matrix
-    :param pred: matrix that specifies the relationship of the clusters of the predicted file
-    :param truth: matrix that specifies the relationship of the clusters of the truth file
-    :return: score for subchallenge 3
-    """
-    if (truth.shape[0] != om.shape[0]):
-        raise ValidationError("Row size of overlapping matrix does not match size of matrix of truth file. Size of ad: %d. Size of om: %d." % (truth.shape[0], om.shape[0]))
-
-    if (pred.shape[0] != om.shape[1]):
-        raise ValidationError("Column size of overlapping matrix does not match size of matrix of predicition file.  Size of ad: %d. Size of om: %d." % (pred.shape[0], om.shape[1]))    
-
-    srm = np.zeros((om.shape[0], om.shape[1]), dtype=int)
-    for i in range(truth.shape[1]):
-        for j in range(pred.shape[1]):
-            true_relative_list = []
-            pred_relative_list = []
-            # np.nonzero returns an array of arrays that contain a list of indices that are nonzero
-            if mode is "ancestor" or mode is "cousin":
-                for row in range(truth.shape[1]):
-                    if truth[row, i] == 1:
-                        true_relative_list.append(row)
-                for row in range(pred.shape[1]):
-                    if pred[row, j] == 1:
-                        pred_relative_list.append(row)
-            else:
-                for column in range(truth.shape[1]):
-                    if truth[i, column] == 1:
-                        true_relative_list.append(column)
-                for column in range(pred.shape[1]):
-                    if pred[j, column] == 1:
-                        pred_relative_list.append(column)
-            # print i, true_relative_list
-            # print j, pred_relative_list
-            for k in range(len(true_relative_list)):
-                for l in range(len(pred_relative_list)): 
-                    # add sam[i][j] by the shared mutations in their ancestor list
-                    srm[i, j] += om[true_relative_list[k], pred_relative_list[l]]
-    return srm  
-
-def construct_relative_matrix_opt(om, truth, modification=None):
-    srm = np.zeros((om.shape[0], om.shape[1]), dtype=int)
-    for i in range(truth.shape[1]):
-        for j in range(om.shape[1]):
-            true_relative_list = []
-            for column in range(truth.shape[1]):
-                if truth[i, column] == 1:
-                    true_relative_list.append(column)
-            if modification is "transpose":
-                pred_relative_list = np.arange(j)
-                # print "j: ", pred_relative_list
-            else:
-                pred_relative_list = np.arange(j+1, om.shape[1])
-            for k in range(len(true_relative_list)):
-                for l in range(len(pred_relative_list)): 
-                    # add sam[i][j] by the shared mutations in their ancestor list
-                    srm[i, j] += om[true_relative_list[k], pred_relative_list[l]]
-    return srm
-
-def construct_c_cluster(ad_cluster):
-    c_cluster = np.ones((ad_cluster.shape[0], ad_cluster.shape[1]))
-    old_cluster = np.copy(ad_cluster)
-    for row in range(old_cluster.shape[0]):
-        for column in range(old_cluster.shape[1]):
-            if old_cluster[row, column] == 1:
-                old_cluster[column, row] = 1
-
-    c_cluster = c_cluster - old_cluster - np.identity(old_cluster.shape[0])
-    return c_cluster
-
-def construct_related_mutations_matrix(om, pred, truth, mode="ancestor"):
-    # T is a matrix with length equal to the number of clusters in the truth file and width 1; each entry is equal 
-    # to the number of ancestor mutations each cluster have
-    T = np.zeros((truth.shape[0], 1))
-    # P is a matrix with length equal to the number of clusters in the pred file and width 1; each entry is equal 
-    # to the number of ancestor mutations each cluster have
-    P = np.zeros((pred.shape[0], 1))
-    for i in range(truth.shape[0]):
-        for j in range(truth.shape[0]):
-            # if om[j, i]
-            if mode is "ancestor" or mode is "cousin":
-                if (truth[j, i] == 1):
-                    T[i, 0] += np.sum(om[j])
-            else:
-                if (truth[i, j] == 1):
-                    T[i, 0] += np.sum(om[j])
-
-    for i in range(pred.shape[0]):
-        for j in range(pred.shape[0]):
-            # if om[j, i]
-            if mode is "ancestor" or mode is "cousin":
-                if (pred[j, i] == 1):
-                    P[i, 0] += np.sum(om[:, j])
-            else:
-                if (pred[i, j] == 1):
-                    P[i, 0] += np.sum(om[:, j])
-
-    return P, T
-
-def calculate_descendant_matrix(srm, om, P, T):
-    tp = 0
-    fp = 0
-    fn = 0
-    tn = 0
-    t = 0
-    for row in range(om.shape[0]):
-        for column in range(om.shape[1]):
-            tp += om[row, column]*srm[row, column]
-
-    for column in range(om.shape[1]):
-        fp += np.sum(om[:,column]) * P[column, 0]
-    fp -= tp
-
-    for row in range(om.shape[0]):
-        fn += np.sum(om[row]) * T[row, 0]
-    fn -= tp
-
-    for row in range(om.shape[0]):
-        for column in range(om.shape[1]):
-            t+=om[row, column]
-
-    tn = t**2-tp-fp-fn
-
-    return tp, fp, tn, fn
 
 def validate3B(filename, ccm, nssms, mask=None):
     size = ccm.shape[0]
@@ -1645,71 +1112,6 @@ def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, metho
               (method, str(ccm_res), str(ad_res), str(ad_res_t), str(cous_res), str(res)))
     return res
 
-def calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification=None):
-    if modification is None:
-        pred = ad_pred
-        truth = ad_truth
-    elif modification is "transpose":
-        pred = ad_pred.T
-        truth = ad_truth.T
-    elif modification is "cousin":
-        pred = construct_c_cluster(ad_pred)
-        truth = construct_c_cluster(ad_truth)
-    else:
-        raise ValidationError('Incorrect modficiation')
-    P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
-    srm = construct_relative_matrix(om, pred, truth, mode="descendant")
-
-    return calculate3_pseudoV(srm, om, P, T)
-
-def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification=None, truth_data=None):
-    if modification is None:
-        pred = ad_pred
-        truth = ad_truth
-        P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
-        worst_srm, worst_om, worst_P = get_bad_ad_and_om(om, truth, scenario=scenario, truth_data=truth_data)
-    elif modification is "transpose":
-        pred = ad_pred.T
-        truth = ad_truth.T
-        P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
-        worst_srm, worst_om, worst_P = get_bad_ad_and_om(om, truth, modification="transpose", scenario=scenario, truth_data=truth_data)
-    elif modification is "cousin":
-        pred = construct_c_cluster(ad_pred)
-        truth = construct_c_cluster(ad_truth)
-        P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
-        worst_srm, worst_om, worst_P = get_bad_c_and_om(om, scenario=scenario)
-    else:
-        raise ValidationError('Incorrect modficiation')
-
-    return calculate3_pseudoV(worst_srm, worst_om, worst_P, T)
-
-def calculate3A(om, truth_data, ad_pred, ad_truth):
-
-    n_scores = []
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data))
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data))
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="cousin"))
-
-    del truth_data
-    gc.collect()
-    # print n_scores
-    scores = []
-    scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth))
-    scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="transpose"))
-    scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="cousin"))
-    # print scores
-    one_scores = []
-    one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster"))
-    one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="transpose"))
-    one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="cousin"))
-    # print one_scores
-
-    score = sum(scores) / 3.0
-    one_score = sum(one_scores) / 3.0
-    n_score = sum(n_scores) / 3.0
-
-    return (1 - (score / max(one_score, n_score)))    
-
 
 def parseVCF1C(data, sample_mask=None):
     data = data.split('\n')
@@ -1840,39 +1242,6 @@ def add_pseudo_counts(ccm, ad=None, num=None):
 
     return ccm
 
-def add_pseudo_counts_om(om, ad=None, num=None):
-
-    if num is None:
-        N = 0
-        for row in range(om.shape[0]):
-            for column in range(om.shape[1]):
-                N += om[row, column]
-        num = np.floor(np.sqrt(N))
-
-    old_width = om.shape[0]
-    om_width = int(old_width + num)
-
-    old_length = om.shape[1]
-    om_length = int(old_length + num)
-
-    new_om = np.zeros((om_width, om_length), dtype = int)
-
-    for row in range(old_width):
-        for column in range(old_length):
-            new_om[row, column] = om[row, column]
-
-    for i in range(int(np.floor(np.sqrt(N)))):
-        new_om[old_width+i, old_length+i] = 1
-
-    return new_om
-
-def add_pseudo_counts_om_eff(tp, fp, tn, fn):
-    N = np.floor(np.sqrt(tp+fp+tn+fn))
-    K = np.floor(np.sqrt(N))
-    tp +=  K
-    tn += K**2 + 2*N*K - K
-    return tp, fp, tn, fn 
-
 
 def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
     """
@@ -1908,21 +1277,6 @@ def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge=
     else:
         raise ValueError('Subchallenge must be one of SC2 or SC3')
 
-def get_worst_score_om(om, scoring_func, larger_is_worse=True):
-    if larger_is_worse:
-        return max(get_bad_score_om(om, scoring_func, 'OneCluster'),
-                    get_bad_score_om(om, scoring_func, 'NCluster'))
-    else:
-        return min(get_bad_score_om(om, scoring_func, 'OneCluster'),
-                    get_bad_score_om(om, scoring_func, 'NCluster'))
-
-def get_bad_score_om(om, score_func, scenario='OneCluster', pseudo_counts=None):
-    if score_func is om_calculate2_pseudoV or score_func is om_calculate2_pseudoV_norm or score_func is om_calculate2_sym_pseudoV:
-        bad_om = get_bad_om(om, scenario)
-        return score_func(bad_om, modify=True, pseudo_counts=pseudo_counts)
-    else:
-        tp, fp, tn, fn = add_pseudo_counts_om_eff(*calculate_overlap_matrix(get_bad_om(om, scenario)))
-        return score_func(tp, fp, tn, fn)
 
 def get_bad_score(nssms, true_ccm, score_func, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None):
     if subchallenge is 'SC2':
@@ -1944,29 +1298,6 @@ def get_bad_ccm(nssms, scenario='OneCluster'):
     else:
         raise ValueError('Scenario must be one of OneCluster or NCluster')
 
-def get_bad_om(om, scenario='OneCluster'):
-    num_mutations = 0
-    for row in range(om.shape[0]):
-        num_mutations += np.sum(om[row])
-
-    if scenario is 'NCluster':
-        worst_matrix = np.zeros([om.shape[0], num_mutations], dtype=int)
-        start = 0
-        for row in range(om.shape[0]):
-            cluster_length = np.sum(om[row])
-            if cluster_length > num_mutations:
-                raise ValidationError('Number of mutations in cluster %i exceeds total number of mutations' % (row+1))
-            for column in range(start, start+cluster_length):
-                worst_matrix[row][column] = 1
-            start += cluster_length
-        return worst_matrix
-    elif scenario is 'OneCluster':
-        worst_matrix = np.zeros([om.shape[0], 1], dtype=int)
-        for row in range(om.shape[0]):
-            worst_matrix[row] = np.sum(om[row])
-        return worst_matrix
-    else:
-        raise ValueError('Scenario must be one of OneCluster or NCluster')
 
 def get_bad_ad(nssms, scenario='OneCluster'):
     if scenario is 'OneCluster':
@@ -1975,45 +1306,6 @@ def get_bad_ad(nssms, scenario='OneCluster'):
         return np.triu(np.ones([nssms, nssms]), k=1)
     else:
         raise ValueError('Scenario must be one of OneCluster or NCluster')
-
-def get_bad_c_and_om(om, scenario='OneCluster'):
-    if scenario is 'OneCluster':
-        worst_om = get_bad_om(om, scenario=scenario)
-        worst_c = np.zeros((om.shape[0], 1))
-        P = np.zeros((1, 1))
-    elif scenario is 'NCluster':
-        worst_om = get_bad_om(om, scenario=scenario)
-        worst_c = np.zeros((worst_om.shape[0], worst_om.shape[1]))
-        P = np.zeros((worst_om.shape[1], 1))
-    else:
-        raise ValueError('Scenario must be one of OneCluster or NCluster')
-
-    return worst_c, worst_om, P 
-       
-def get_bad_ad_and_om(om, ad_truth, modification=None, scenario='OneCluster', truth_data=None):
-    if scenario is 'OneCluster':
-        worst_om = get_bad_om(om, scenario=scenario)
-        worst_ad = np.zeros((om.shape[0], 1))
-        P = np.zeros((1, 1))
-    elif scenario is 'NCluster':
-        if truth_data is None:
-            raise ValidationError("Constructing the overlap matrix for NCluster requires the cluster information of every single mutation!")
-        worst_om = get_NCluster_om_3A(om, truth_data)
-        P = np.matrix(np.arange(worst_om.shape[1]))
-        P.resize(worst_om.shape[1], 1)
-        if modification is not "transpose":
-            P = P[::-1]
-        worst_ad = construct_relative_matrix_opt(worst_om, ad_truth, modification=modification)
-    else:
-        raise ValueError('Scenario must be one of OneCluster or NCluster')
-    return worst_ad, worst_om, P
-
-def get_NCluster_om_3A(om, truth_data):
-    worst_om = np.zeros((om.shape[0], len(truth_data)), dtype=int)
-    for i in range(len(truth_data)):
-        worst_om[truth_data[i]-1, i] = 1
-
-    return worst_om
 
 def verify(filename, role, func, *args, **kwargs):
     # printInfo('ARGS -> %s | %s | %s | %s | %s' % (filename, role, func, args, kwargs))
@@ -2348,15 +1640,6 @@ def mem_pretty(mem):
         unit ='mb'
     return str(mem / denom) + unit
 
-def adj_final(res):
-    if ((res-1) < 0.00001 and res > 1):
-        res = 1
-    return res
-
-def set_to_zero(res):
-    if(res < 0):
-        res = 0
-    return res
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -2473,3 +1756,4 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
+
