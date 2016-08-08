@@ -1,4 +1,5 @@
 import numpy as np
+import gc
 
 def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mask=None, subchallenge="2A"):
     '''
@@ -253,6 +254,54 @@ def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=Fals
                         res += sym1
 
         # no need to consider the other pseudo_count rows, since sym1 and sym2 evaluate to zero for these rows
+
+    return res
+
+def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
+    """Calculates the pseudoV score for subchallenge 3
+    :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
+    :param om: overlapping matrix
+    :param P: matrix that specifies number of ancestors/descendents each cluster has in the prediction file
+    :param T: matrix that specifies number of ancestors/descendents each cluster has in the truth file
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param sym: score will be the same if prediction and truth file were swapped
+    :return: score for subchallenge 3
+    """
+    res = 0
+    t = 0
+    for row in range(om.shape[0]):
+        t += np.sum(om[row])
+
+    for row in range(om.shape[0]):
+        for column in range(om.shape[1]):
+            if om[row, column] != 0:
+                for i in range(om[row, column]):
+                    tp = srm[row, column]
+                    fn = T[row, 0]-tp
+                    fp = P[column, 0]-tp
+                    tn = t-tp-fn-fp
+
+                    if tp < 0 or fn < 0 or fp < 0 or tn < 0:
+                        raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
+
+                    sum_of_truth_row = tp + fn + (fp + tn)*rnd
+                    sum_of_pred_row = tp + fp + (fn + tn)*rnd
+
+                    if tp != 0 or fp != 0 or tn != 0 or fn != 0:
+                        sym2 = (np.log(sum_of_pred_row/sum_of_truth_row)*tp + 
+                            np.log(sum_of_pred_row*rnd/sum_of_truth_row)*rnd*fp + 
+                            np.log(sum_of_pred_row/(sum_of_truth_row*rnd))*fn + 
+                            np.log(sum_of_pred_row/sum_of_truth_row)*rnd*tn)/sum_of_truth_row
+                        res += sym2
+
+                    if sym:
+                        if tp != 0 or fp != 0 or tn != 0 or fn != 0:
+                            sym1 = (np.log(sum_of_truth_row/sum_of_pred_row)*tp + 
+                                np.log(sum_of_truth_row/(sum_of_pred_row*rnd))*fp + 
+                                np.log(sum_of_truth_row*rnd/sum_of_pred_row)*rnd*fn + 
+                                np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
+
+                            res += sym1
 
     return res
 
@@ -633,29 +682,27 @@ def calculate3A(om, truth_data, ad_pred, ad_truth):
     :return: the score for subchallenge 3
     """
     n_scores = []
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data))
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data))
-    n_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="cousin"))
+    n_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data)))
+    n_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data)))
+    n_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="cousin")))
 
     del truth_data
     gc.collect()
-    # print n_scores
     scores = []
-    scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth))
-    scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="transpose"))
-    scores.append(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="cousin"))
-    # print scores
+    scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth)))
+    scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="transpose")))
+    scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="cousin")))
+
     one_scores = []
-    one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster"))
-    one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="transpose"))
-    one_scores.append(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="cousin"))
-    # print one_scores
+    one_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster")))
+    one_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="transpose")))
+    one_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification="cousin")))
 
     score = sum(scores) / 3.0
     one_score = sum(one_scores) / 3.0
     n_score = sum(n_scores) / 3.0
 
-    return (1 - (score / max(one_score, n_score)))    
+    return set_to_zero((1 - (score / max(one_score, n_score))))    
 
 # adds num pseudo counts to the om; default is square root of the number of mutations
 def add_pseudo_counts_om(om, num=None):
@@ -697,11 +744,12 @@ def add_pseudo_counts_om_eff(tp, fp, tn, fn, num=None):
     :return: new true positives, false postives, true negatives, false negatives after pseudo counts are added
     """
 
+
     N = np.floor(np.sqrt(tp+fp+tn+fn))
     K = np.floor(np.sqrt(N))
     if num is not None:
         K = num
-    tp +=  K
+    tp += K
     tn += K**2 + 2*N*K - K
     return tp, fp, tn, fn 
 
@@ -831,6 +879,13 @@ def create_om(ccm_pred, ccm_truth):
         om[mutations_truth[i,0]-1][mutations_pred[i,0]-1] += 1
 
     return om
+
+def pack(*args):
+    mylist = []
+    for element in args:
+        mylist.append(element)
+    return mylist
+
 
 def adj_final(res):
     if ((res-1) < 0.00001 and res > 1):

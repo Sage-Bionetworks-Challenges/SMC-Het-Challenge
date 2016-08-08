@@ -418,7 +418,7 @@ def calculate2_orig(pred, truth, full_matrix=True):
         truth_cp = truth[inds]
         count = (n**2 - n )/2.0
     res = np.sum(np.abs(pred_cp - truth_cp))
-    res = res / count
+    res = float(res) / count
     return 1 - res
 
 def calculate2_sqrt(pred, truth, full_matrix=True):
@@ -461,54 +461,6 @@ def calculate2_simpleKL(pred, truth, rnd=0.01):
             res += np.log(1-pred[indices[0][i], indices[1][i]])
     return abs(res)
 
-
-def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
-    """Calculates the pseudoV score for subchallenge 3
-    :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
-    :param om: overlapping matrix
-    :param P: matrix that specifies number of ancestors/descendents each cluster has in the prediction file
-    :param T: matrix that specifies number of ancestors/descendents each cluster has in the truth file
-    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
-    :param sym: score will be the same if prediction and truth file were swapped
-    :return: score for subchallenge 3
-    """
-    res = 0
-    t = 0
-    for row in range(om.shape[0]):
-        t += np.sum(om[row])
-
-    for row in range(om.shape[0]):
-        for column in range(om.shape[1]):
-            if om[row, column] != 0:
-                for i in range(om[row, column]):
-                    tp = srm[row, column]
-                    fn = T[row, 0]-tp
-                    fp = P[column, 0]-tp
-                    tn = t-tp-fn-fp
-
-                    if tp < 0 or fn < 0 or fp < 0 or tn < 0:
-                        raise ValidationError("True positive, false negative, false postive and true negative should not be negative values")
-
-                    sum_of_truth_row = tp + fn + (fp + tn)*rnd
-                    sum_of_pred_row = tp + fp + (fn + tn)*rnd
-
-                    if tp != 0 or fp != 0 or tn != 0 or fn != 0:
-                        sym2 = (np.log(sum_of_pred_row/sum_of_truth_row)*tp + 
-                            np.log(sum_of_pred_row*rnd/sum_of_truth_row)*rnd*fp + 
-                            np.log(sum_of_pred_row/(sum_of_truth_row*rnd))*fn + 
-                            np.log(sum_of_pred_row/sum_of_truth_row)*rnd*tn)/sum_of_truth_row
-                        res += sym2
-
-                    if sym:
-                        if tp != 0 or fp != 0 or tn != 0 or fn != 0:
-                            sym1 = (np.log(sum_of_truth_row/sum_of_pred_row)*tp + 
-                                np.log(sum_of_truth_row/(sum_of_pred_row*rnd))*fp + 
-                                np.log(sum_of_truth_row*rnd/sum_of_pred_row)*rnd*fn + 
-                                np.log(sum_of_truth_row/sum_of_pred_row)*rnd*tn)/sum_of_pred_row 
-
-                            res += sym1
-
-    return res
 
 
 def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=True):
@@ -1464,7 +1416,7 @@ def verifyChallenge(challenge, predfiles, vcf):
             return "Invalid"
     return "Valid"
 
-
+ 
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     #global err_msgs
     mem('START %s' % challenge)
@@ -1756,4 +1708,3 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
-
