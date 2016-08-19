@@ -633,12 +633,13 @@ def calculate2_aupr(pred, truth, full_matrix=True):
         pred_cp = pred[inds]
         truth_cp = truth[inds]
     import sklearn.metrics as mt
-    #print np.count_nonzero(truth_cp)
-    #print len(truth_cp)
+
     precision, recall, thresholds = mt.precision_recall_curve(truth_cp, pred_cp)
-    #print "recall before function ", recall
-    recall = np.nan_to_num(recall)
-    #print "recall after function ", recall
+
+    if (not full_matrix):
+        recall = np.nan_to_num(recall)
+        precision = np.nan_to_num(precision)
+
     aucpr = mt.auc(recall, precision)
     return aucpr
 
