@@ -623,6 +623,7 @@ def mystd(vec1, vec2, m1, m2):
     return s1, s2
 
 def calculate2_aupr(pred, truth, full_matrix=True):
+
     n = truth.shape[0]
     if full_matrix:
         pred_cp = pred.flatten()
@@ -632,7 +633,12 @@ def calculate2_aupr(pred, truth, full_matrix=True):
         pred_cp = pred[inds]
         truth_cp = truth[inds]
     import sklearn.metrics as mt
+    #print np.count_nonzero(truth_cp)
+    #print len(truth_cp)
     precision, recall, thresholds = mt.precision_recall_curve(truth_cp, pred_cp)
+    #print "recall before function ", recall
+    recall = np.nan_to_num(recall)
+    #print "recall after function ", recall
     aucpr = mt.auc(recall, precision)
     return aucpr
 
@@ -966,7 +972,7 @@ def calculate3(pred_ccm, pred_ad, truth_ccm, truth_ad, method="sym_pseudoV", wei
                                                 method=method, verbose=verbose, full_matrix=full_matrix, in_mat=in_mat)
         del onecluster_ccm, onecluster_ad
 
-        print score, ncluster_score, onecluster_score
+        #print score, ncluster_score, onecluster_score
         if method in larger_is_worse_methods:
             worst_score = max(ncluster_score, onecluster_score)
             score = 1 - (score / worst_score)
