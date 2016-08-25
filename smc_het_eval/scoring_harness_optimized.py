@@ -54,6 +54,8 @@ def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mas
         for i in range(len(pred_data)):     
             if i in filter_mut:
                 new_pred_data.append(pred_data[i])
+    else:
+        new_pred_data = pred_data
 
     for i in range(len(new_pred_data)):
         # print(new_pred_data[i]), 
@@ -635,7 +637,7 @@ def calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification=None):
         pred = construct_c_cluster(ad_pred)
         truth = construct_c_cluster(ad_truth)
     else:
-        raise ValidationError('Incorrect modficiation')
+        raise ValidationError('Incorrect modificiation')
     P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
     srm = construct_relative_matrix(om, pred, truth, mode="descendant")
 
@@ -799,7 +801,7 @@ def get_bad_om(om, scenario='OneCluster'):
             for column in range(start, start+cluster_length):
                 worst_matrix[row][column] = 1
             start += cluster_length
-        return worst_matrix
+        return worst_matrix 
     elif scenario is 'OneCluster':
         worst_matrix = np.zeros([om.shape[0], 1], dtype=int)
         for row in range(om.shape[0]):
