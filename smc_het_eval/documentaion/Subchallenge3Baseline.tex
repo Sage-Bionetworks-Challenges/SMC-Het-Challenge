@@ -1,0 +1,134 @@
+\documentclass[a4paper, 11pt]{article}
+\usepackage{comment} % enables the use of multi-line comments (\ifx \fi) 
+\usepackage{lipsum} %This package just generates Lorem Ipsum filler text. 
+\usepackage{fullpage} % changes the margin
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage[document]{ragged2e}
+\usepackage[export]{adjustbox}
+\begin{document}
+%Header-Make sure you update this information!!!!
+\noindent
+\large\textbf{Subchallenge 2A and 3A Optimization} \\
+\normalsize William Zou \\ 
+Informatics and Biocomputing Program \\
+Ontario Institute for Cancer Research \\
+Supervised by Dr. Quaid Moris, University of Toronto \\
+
+\justify
+\section*{Problem with the Subchallenge 3A Baseline}
+The worst of the following two possibilities is chosen and set as the zero score for subchallenge 3A:
+\begin{itemize}
+    \item All mutations go into a single lineage and are in different clusters
+    \item All mutations go into a single cluster
+\end{itemize} 
+
+The score for the first baseline depends on the ordering of the mutations in the truth file. To illustrate this, let us take a look at an example:
+
+\begin{center}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{||c c||}
+    \hline
+    Truth File 1 & Truth File 2\\ 
+    \hline\hline
+    3 & 1\\
+    \hline
+    3 & 1\\
+    \hline
+    2 & 2\\
+    \hline
+    2 & 2\\
+    \hline
+    2 & 2\\
+    \hline
+    1 & 3\\
+    \hline
+    1 & 3\\
+    \hline
+    \end{tabular}
+    \caption{Input Files}
+    \label{table:files}
+    \end{table}
+\end{center}
+
+We will describe these two files using the ADM.
+
+If the mutations were all in the same lineage:
+
+\begin{table}[H]
+    \parbox{.45\linewidth}{
+    \centering
+    \begin{tabular}{||c c c c c c c||}
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    1 & 1 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    1 & 1 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    1 & 1 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    1 & 1 & 1 & 1 & 1 & 0 & 0\\
+    \hline
+    1 & 1 & 1 & 1 & 1 & 0 & 0\\
+    \hline
+    \end{tabular}
+    \caption{ADM of Truth File 1}
+    }
+    \hfill
+    \parbox{.45\linewidth}{
+    \centering
+    \begin{tabular}{||c c c c c c c||}
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    \end{tabular}
+    \caption{ADM of Truth File 2}
+    }
+\end{table}
+
+The predicted file, for all mutations go into a single lineage and are in different clusters is:
+
+\begin{center}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{||c c c c c c c||}
+    \hline
+    0 & 1 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    \end{tabular}
+    \caption{Prediction Matrix for N Cluster N Lineages}
+    \label{table:files}
+    \end{table}
+\end{center}
+
+A quick check will show that Truth File 2 has far more true positives and true negatives than Truth File 1, leading to a higher score. We would rather the score for both files to be the same. To rectify this, we will calculate the score of every possible permutation of the ordering of the mutations in the input file, then average the final result.
+
+\end{document}
