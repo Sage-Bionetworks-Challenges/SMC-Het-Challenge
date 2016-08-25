@@ -1069,9 +1069,10 @@ if __name__ == '__main__':
         print 'Scoring 1C Behavior with method ' + m + '...'
         scoring1C_behavior(m)
     for m in methods['2']:
+        print 'Scoring 2A Behavior with method ' + m + '...'
+        scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=True, tst_rand_reassign=False)
         print 'Scoring 2B Behavior with method ' + m + '...'
-        scoring2B_behavior(method=m, verbose=True, tst_betas=True, tst_prob_mod_err=False, tst_prob_mod=False)
-        scoring2A_behavior(method=m, verbose=True, tst_closest_reassign=False, tst_big_mat=False)
+        scoring2B_behavior(method=m, verbose=True, tst_betas=True, tst_prob_mod_err=True, tst_prob_mod=True)
 
 
     print 'Scoring 3A Behavior...'
