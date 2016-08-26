@@ -310,6 +310,3 @@ if __name__ == "__main__":
     test_calculate1C()
     test_calculate2A()   
     test_calculate3A()
-
-    
-

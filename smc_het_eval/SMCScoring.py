@@ -188,13 +188,13 @@ def compute_scaled_sc(sc):
     out = np.zeros((1000))
     t_ssms = sum([float(x[0]) for x in sc])
     sc = [list(x)+[float(x[0])/t_ssms] for x in sc]
-    for i in range(1000):
-        try:
-            ind = sum(np.cumsum([x[2] for x in sc]) < i/1000.0)
-            out[i] = sc[ind][1]
-        except IndexError:
-            print i,ind,sc
-            raise
+    if len(sc) != 0:
+        for i in range(1000):
+            try:
+                ind = sum(np.cumsum([x[2] for x in sc]) < i/1000.0)
+                out[i] = sc[ind][1]
+            except IndexError:
+                raise
     return out
  
 def calculate1C(pred, truth, err='abs'):
@@ -1491,7 +1491,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
                 vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
             except SampleError as e:
                 raise e
-
+   
             printInfo('TRUTH DIMENSIONS -> ', vout.shape)
 
             if WRITE_2B_FILES:
@@ -1715,4 +1715,3 @@ if __name__ == '__main__':
         for msg in err_msgs:
             print msg
         raise ValidationError("Errors encountered. If running in Galaxy see stdout for more info. The results of any successful evaluations are in the Job data.")
-
