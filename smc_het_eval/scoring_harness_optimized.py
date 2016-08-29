@@ -1,4 +1,6 @@
 import numpy as np
+from permutations import*
+
 import gc
 
 def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mask=None, subchallenge="2A"):
@@ -687,9 +689,16 @@ def calculate3A(om, truth_data, ad_pred, ad_truth):
     n_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data)))
     n_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data)))
     n_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="cousin")))
-
     del truth_data
     gc.collect()
+    n_scores_permuted = []
+    
+    P, T = construct_related_mutations_matrix(om, ad_pred, ad_truth, mode="descendant")
+    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T)))
+    P, T = construct_related_mutations_matrix(om, ad_pred.T, ad_truth.T, mode="descendant")
+    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T)))
+    n_scores_permuted.append(n_scores[2])
+
     scores = []
     scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth)))
     scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="transpose")))
@@ -704,7 +713,9 @@ def calculate3A(om, truth_data, ad_pred, ad_truth):
     one_score = sum(one_scores) / 3.0
     n_score = sum(n_scores) / 3.0
 
-    return set_to_zero((1 - (score / max(one_score, n_score))))    
+    n_score_permuted = sum(n_scores_permuted)/3.0
+
+    return [set_to_zero((1 - (score / max(one_score, n_score)))), set_to_zero((1 - (score / max(one_score, n_score_permuted))))]   
 
 # adds num pseudo counts to the om; default is square root of the number of mutations
 def add_pseudo_counts_om(om, num=None):
