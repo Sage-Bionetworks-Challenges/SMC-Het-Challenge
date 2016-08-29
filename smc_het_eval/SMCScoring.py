@@ -8,6 +8,7 @@ import sys
 import metric_behavior as mb
 from functools import reduce
 from scoring_harness_optimized import *
+from permutations import *
 import gc
 import traceback
 
@@ -873,11 +874,17 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     del n_c, truth_c, n_ad, n_ccm
     gc.collect()
 
+    n_scores_permute = []
+    n_scores_permute.append(ccm_permute_N_cluster(truth_ad))
+    n_scores_permute.append(ccm_permute_N_cluster(truth_ad.T))
+    n_scores_permute.append(n_scores[2])
+
     score = sum(scores) / 3.0
     one_score = sum(one_scores) / 3.0
     n_score = sum(n_scores) / 3.0
+    n_score_permute = sum(n_scores_permute) / 3.0
 
-    return set_to_zero(1 - (score / max(one_score, n_score)))
+    return [set_to_zero(1 - (score / max(one_score, n_score))),set_to_zero(1 - (score / max(one_score, n_score_permute)))]
 
 def makeCMatrix(*matrices):
     # perform (1 - *matrices) without loading all the matrices into memory
@@ -1698,8 +1705,9 @@ if __name__ == '__main__':
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = adj_final(scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf))
-            print('SCORE -> %.16f' % res)
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            print res
+            #print('SCORE -> %.16f' % res)
 
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps( { args.challenge : res } )

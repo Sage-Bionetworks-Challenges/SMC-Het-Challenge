@@ -26,24 +26,30 @@ def calcDifferent(num_of_ones_in_pred, num_of_ones_in_truth, num_of_mutations, t
         ((1/sum_of_pred_row)*np.log(rnd/sum_of_truth_row) + (rnd/sum_of_truth_row)*np.log(1/sum_of_pred_row))*fp +
         ((rnd/sum_of_pred_row)*np.log(rnd/sum_of_truth_row) + (rnd/sum_of_truth_row)*np.log(rnd/sum_of_pred_row))*tn)
 
+def ccm_permute_N_cluster(ad_true, rnd=0.01):
+    num_of_mutations = ad_true.shape[0]
+    num_of_descendants_in_cluster_list = []
+    
 
-def calcIntegrated(om, num_of_descendants_in_cluster, rnd=0.01):
-    num_of_mutations = 0
-    for row in range(om.shape[0]):
-        for column in range(om.shape[1]):
-            num_of_mutations += om[row, column]
-    #print num_of_mutations
-    num_of_clusters = om.shape[0]
-    #print num_of_clusters
+    for i in range(num_of_mutations):
+        descendants = np.count_nonzero(ad_true[i])
+        if not (descendants in num_of_descendants_in_cluster_list):
+            num_of_descendants_in_cluster_list.append(descendants)
+    
+    num_of_clusters = len(num_of_descendants_in_cluster_list)
     num_of_mutations_in_cluster = np.zeros((num_of_clusters, 1))
-    # p*log(p)
-    for row in range(om.shape[0]):
-        num_of_mutations_in_cluster[row, 0] = np.sum(om[row])
+    num_of_descendants_in_cluster = np.zeros((num_of_clusters, 1))
+
+    for i in range(num_of_mutations):
+        descendants = np.count_nonzero(ad_true[i])
+        ind = num_of_descendants_in_cluster_list.index(descendants)
+        num_of_descendants_in_cluster[ind, 0] = descendants
+        num_of_mutations_in_cluster[ind, 0] = num_of_mutations_in_cluster[ind, 0]+1
 
     p = 0;
     for i in range(num_of_mutations):
         p += calcSame(i, num_of_mutations, rnd=rnd)
-    p /= num_of_mutations
+    #p /= num_of_mutations
     #print p
     # q*log(q)
     q = 0
@@ -61,8 +67,60 @@ def calcIntegrated(om, num_of_descendants_in_cluster, rnd=0.01):
             #print "maxTP", maxTP
             for TP in range(int(minTP), int(maxTP)+1):
                 r += (num_of_mutations_in_cluster[i, 0]*
-                    np.exp( np.log(comb(num_of_descendants_in_cluster[i, 0], TP)) +
-                        np.log(comb(num_of_mutations-1-num_of_descendants_in_cluster[i, 0], j-TP)) -
+                    np.exp( gammaln(num_of_descendants_in_cluster[i, 0] + 1) -
+                        gammaln(TP+1) - 
+                        gammaln(num_of_descendants_in_cluster[i, 0] - TP + 1) + 
+                        gammaln(num_of_mutations-1-num_of_descendants_in_cluster[i, 0]+1) -
+                        gammaln(j-TP+1) - 
+                        gammaln(num_of_mutations-1-num_of_descendants_in_cluster[i, 0]-j+TP+1) -
+                        gammaln(num_of_mutations+1) +
+                        gammaln(j+1) + 
+                        gammaln(num_of_mutations-j) ) *
+                    calcDifferent(j, num_of_descendants_in_cluster[i, 0], num_of_mutations, TP, rnd=rnd))
+    #print p, q, r
+    return p+q-r
+
+
+def om_permute_N_cluster(om, num_of_descendants_in_cluster, rnd=0.01):
+    num_of_mutations = 0
+    for row in range(om.shape[0]):
+        for column in range(om.shape[1]):
+            num_of_mutations += om[row, column]
+    #print num_of_mutations
+    num_of_clusters = om.shape[0]
+    #print num_of_clusters
+    num_of_mutations_in_cluster = np.zeros((num_of_clusters, 1))
+    # p*log(p)
+    for row in range(om.shape[0]):
+        num_of_mutations_in_cluster[row, 0] = np.sum(om[row])
+
+    p = 0;
+    for i in range(num_of_mutations):
+        p += calcSame(i, num_of_mutations, rnd=rnd)
+    #p /= num_of_mutations
+    #print p
+    # q*log(q)
+    q = 0
+    for i in range(num_of_clusters):
+        q += num_of_mutations_in_cluster[i, 0] * calcSame(num_of_descendants_in_cluster[i, 0], num_of_mutations, rnd=rnd)
+
+    #print q
+    r = 0
+    for i in range(num_of_clusters):
+        for j in range(num_of_mutations):
+            #print i, " ", j
+            minTP = max(0, num_of_descendants_in_cluster[i, 0]-num_of_mutations+j+1)
+            maxTP = min(num_of_descendants_in_cluster[i, 0], j)
+            #print "minTP", minTP
+            #print "maxTP", maxTP
+            for TP in range(int(minTP), int(maxTP)+1):
+                r += (num_of_mutations_in_cluster[i, 0]*
+                    np.exp( gammaln(num_of_descendants_in_cluster[i, 0] + 1) -
+                        gammaln(TP+1) - 
+                        gammaln(num_of_descendants_in_cluster[i, 0] - TP + 1) + 
+                        gammaln(num_of_mutations-1-num_of_descendants_in_cluster[i, 0]+1) -
+                        gammaln(j-TP+1) - 
+                        gammaln(num_of_mutations-1-num_of_descendants_in_cluster[i, 0]-j+TP+1) -
                         gammaln(num_of_mutations+1) +
                         gammaln(j+1) + 
                         gammaln(num_of_mutations-j) ) *
@@ -123,6 +181,8 @@ def calculate2_sym_pseudoV_average(arr, ad_truth):
     return total_score/math.factorial(n)
 
 
+
+
 if __name__ == "__main__":
     ad_truth = np.matrix([[0, 1, 1], [0, 0, 1], [0, 0, 0]])
     arr = [1, 2, 2, 3, 3, 3, 3, 3]
@@ -130,19 +190,20 @@ if __name__ == "__main__":
 
     om = np.matrix(([1, 0, 0], [1, 1, 0], [0, 1, 4]))
     t = np.matrix(([7], [5], [0]))
-    print calcIntegrated(om, t)
+    print om_permute_N_cluster(om, t)
 
 
-    #a1 = np.copy(np.matrix(([0, 1, 1, 1, 1, 1, 1, 1],
-    #            [0, 0, 0, 1, 1, 1, 1, 1],
-    #            [0, 0, 0, 1, 1, 1, 1, 1],
-    #            [0, 0, 0, 0, 0, 0, 0, 0],
-    #            [0, 0, 0, 0, 0, 0, 0, 0],
-    #            [0, 0, 0, 0, 0, 0, 0, 0],
-    #            [0, 0, 0, 0, 0, 0, 0, 0],
-    #            [0, 0, 0, 0, 0, 0, 0, 0])))
-    #b = np.triu(np.ones((8, 8)), k=1)
+    a1 = np.copy(np.matrix(([0, 1, 1, 1, 1, 1, 1, 1],
+                [0, 0, 0, 1, 1, 1, 1, 1],
+                [0, 0, 0, 1, 1, 1, 1, 1],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0])))
+    b = np.triu(np.ones((8, 8)), k=1)
     #print calculate2_sym_pseudoV(a1, b)
+    print ccm_permute_N_cluster(a1)
 
     ad_truth = np.matrix([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
     arr = [1, 1, 2, 2, 2, 3, 3]
@@ -150,5 +211,6 @@ if __name__ == "__main__":
 
     om = np.matrix(([2, 0, 0], [0, 2, 1], [0, 0, 2]))
     t = np.matrix(([5], [0], [0]))
-    print calcIntegrated(om, t)
+    
+    print om_permute_N_cluster(om, t)
 
