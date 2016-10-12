@@ -266,8 +266,8 @@ def test_score1A():
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    a = [['valid1A.txt'],['invalid1A.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF','/dev/null']
+    a = [['valid1A.txt'],['invalid1A.txt'],['/dev/null']]
     for p in itertools.product(a,a,s):
         params = list(p)
         res = scoreChallenge('1A',*params)
@@ -281,8 +281,8 @@ def test_score1B():
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    b = [['valid1B.txt'],['invalid1B.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF',]#'nosuchfile.txt']
+    b = [['valid1B.txt'],['invalid1B.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(b,b,s):
         params = list(p)
         res = scoreChallenge('1B',*params)
@@ -309,8 +309,8 @@ def test_verify1A():
     except OSError:
         pass
 
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    a = [['valid1A.txt'],['invalid1A.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF',]#'nosuchfile.txt']
+    a = [['valid1A.txt'],['invalid1A.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(a,s):
         params = list(p)
         res = verifyChallenge('1A',*params)
@@ -324,8 +324,8 @@ def test_verify1B():
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    b = [['valid1B.txt'],['invalid1B.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    b = [['valid1B.txt'],['invalid1B.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(b,s):
         params = list(p)
         res = verifyChallenge('1B',*params)
@@ -339,8 +339,8 @@ def test_verify1C():
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    c = [['valid1C.txt'],['invalid1C.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    c = [['valid1C.txt'],['invalid1C.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(c,s):
         params = list(p)
         res = verifyChallenge('1C',*params)
@@ -380,7 +380,7 @@ def test_calculate2():
 
     c2[np.diag_indices(4)] = 0
     assert round(calculate2(c,c2), 2) == -0.23
-
+'''
 def test_validate2A():
     entry = "1\n2\n1\n2\n"
     # Empty file
@@ -430,25 +430,26 @@ def test_validate2A():
     #Ensure cluster assignment version works:
     res = validate2A(entry,4,False)
     assert np.testing.assert_allclose(res,c) == None
-
+'''
 def test_validate2B():
     ssmlist = 4
     # Empty file
     with pytest.raises(ValidationError) as e:
         validate2B("",ssmlist)
-    assert 'Shape of' in str(e.value)
+    
+    assert 'shape' in str(e.value)
 
     # Wrong size: Vector
     vector_entry = '\t'.join(map(str,[0.5]*16))
     with pytest.raises(ValidationError) as e:
         validate2B(vector_entry,ssmlist)
-    assert 'Shape of' in str(e.value)
+    assert 'shape' in str(e.value)
 
     # Wrong size: 3x3
     three_by_three = "1\t.5\t.5\n.5\t1\t.5\n.5\t.5\t1\n"
     with pytest.raises(ValidationError) as e:
         validate2B(three_by_three,ssmlist)
-    assert 'Shape of' in str(e.value)
+    assert 'shape' in str(e.value)
 
     # Not symmetric
     non_sym = "1\t1\t1\t1\n0\t1\t1\t1\n1\t1\t1\t1\n1\t1\t1\t1\n"
@@ -500,14 +501,15 @@ def test_validate2B():
     assert np.testing.assert_allclose(ccm,res) == None
 
 # obsolete
+'''
 def test_score2A():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    a = [['valid2A.txt'],['invalid2A.txt'],['nosuchfile.txt']]
-    a_t = [['valid2A.truth.txt'],['invalid2A.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    a = [['valid2A.txt'],['invalid2A.txt']]#,['nosuchfile.txt']]
+    a_t = [['valid2A.truth.txt'],['invalid2A.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(a,a_t,s):
         params = list(p)
         res = scoreChallenge('2A',*params)
@@ -515,15 +517,15 @@ def test_score2A():
             assert res == 1.0
         else:
             assert res == "NA"
-
+'''
 def test_score2B():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    b = [['valid2B.txt'],['invalid2B.txt'],['nosuchfile.txt']]
-    b_t = [['valid2B.truth.txt'],['invalid2B.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    b = ['valid2B.txt','invalid2B.txt']#,['nosuchfile.txt']]
+    b_t = ['valid2B.truth.txt','invalid2B.txt']#,['nosuchfile.txt']]
     for p in itertools.product(b,b,s):
         params = list(p)
         res = scoreChallenge('2B',*params)
@@ -534,13 +536,14 @@ def test_score2B():
     print "here"
 
 # obsolete
+'''
 def test_verify2A():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    a = [['valid2A.txt'],['invalid2A.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    a = [['valid2A.txt'],['invalid2A.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(a,s):
         params = list(p)
         res = verifyChallenge('2A',*params)
@@ -552,14 +555,14 @@ def test_verify2A():
             assert res == "Valid"
         else:
             assert res == "Invalid"
-
+'''
 def test_verify2B():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    b = [['valid2B.txt'],['invalid2B.txt'],['nosuchfile.txt']]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    b = [['valid2B.txt'],['invalid2B.txt']]#,['nosuchfile.txt']]
     for p in itertools.product(b,s):
         params = list(p)
         res = verifyChallenge('2B',*params)
@@ -570,7 +573,7 @@ def test_verify2B():
             assert res == "Valid"
         if params[0] != b[0] and params[1] == s[0]:
             assert res == "Invalid"
-
+'''
 def test_validate3A():
     CAs4 = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
     valid_data = "1\t0\n2\t1\n3\t2\n4\t3\n"
@@ -668,7 +671,7 @@ def test_validate3A():
     test_ADM = np.loadtxt(StringIO.StringIO(d))
     res = validate3A(test_data,test_CAs,"")
     assert np.testing.assert_allclose(res,test_ADM) == None
-
+'''
 
 def test_validate3B():
 
@@ -757,16 +760,17 @@ def test_validate3B():
     assert 'the sum of' in str(e.value)
 
 # obsolete
+'''
 def test_score3A():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    two = [['valid2A.txt'],['invalid2A.txt'],['nosuchfile.txt'],[]]
-    two_t = [['valid2A.truth.txt'],['invalid2A.txt'],['nosuchfile.txt'],[]]
-    three = [['valid3A.txt'],['invalid3A.txt'],['nosuchfile.txt'],[]]
-    three_t = [['valid3A.truth.txt'],['invalid3A.txt'],['nosuchfile.txt'],[]]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    two = [['valid2A.txt'],['invalid2A.txt']]#,['nosuchfile.txt'],[]]
+    two_t = [['valid2A.truth.txt'],['invalid2A.txt']]#,['nosuchfile.txt'],[]]
+    three = [['valid3A.txt'],['invalid3A.txt']]#,['nosuchfile.txt'],[]]
+    three_t = [['valid3A.truth.txt'],['invalid3A.txt']]#,['nosuchfile.txt'],[]]
     for p in itertools.product(two,three,two_t,three_t,s):
         params = [p[0]+p[1],p[2]+p[3],p[4]]
         res = scoreChallenge('3A',*params)
@@ -777,33 +781,33 @@ def test_score3A():
             assert res == 1.0
         else:
             assert res == "NA"
-
+'''
 def test_score3B():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    two = [['valid2B.txt'],['invalid2B.txt'],['nosuchfile.txt'],[]]
-    two_t = [['valid2B.truth.txt'],['invalid2B.txt'],['nosuchfile.txt'],[]]
-    three = [['valid3B.txt'],['invalid3B.txt'],['nosuchfile.txt'],[]]
-    three_t = [['valid3B.truth.txt'],['invalid3B.txt'],['nosuchfile.txt'],[]]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    two = [['valid2B.txt'],['invalid2B.txt']]#,['nosuchfile.txt'],[]]
+    two_t = [['valid2B.truth.txt'],['invalid2B.txt']]#,['nosuchfile.txt'],[]]
+    three = [['valid3B.txt'],['invalid3B.txt']]#,['nosuchfile.txt'],[]]
+    three_t = [['valid3B.truth.txt'],['invalid3B.txt']]#,['nosuchfile.txt'],[]]
     for p in itertools.product(two,three,two_t,three_t,s):
         params = [p[0]+p[1],p[2]+p[3],p[4]]
         res = scoreChallenge('3B',*params)
         if params[0:2] == [two[0] + three[0], two_t[0] + three_t[0]] and params[-1]==s[0]:
-            assert res == 1.0
+            assert res[0] == 1.0
         else:
-            assert res == "NA"
-
+            assert res[0] == "NA"
+'''
 def test_verify3A():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    two = [['valid2A.txt'],['invalid2A.txt'],['nosuchfile.txt'],[]]
-    three = [['valid3A.txt'],['invalid3A.txt'],['nosuchfile.txt'],[]]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    two = [['valid2A.txt'],['invalid2A.txt']]#,['nosuchfile.txt'],[]]
+    three = [['valid3A.txt'],['invalid3A.txt']]#,['nosuchfile.txt'],[]]
     for p in itertools.product(two,three,s):
         params = [p[0]+p[1],p[2]]
         res = verifyChallenge('3A',*params)
@@ -813,42 +817,42 @@ def test_verify3A():
             assert res == "Valid"
         if params[0] != two[0] + three[0] and params[1] == s[0]:
             assert res == "Invalid"
-
+'''
 def test_verify3B():
     try:
         os.remove('nosuchfile.txt')
     except OSError:
         pass
-    s = ['valid.VCF','invalid.VCF','nosuchfile.txt']
-    two = [['valid2B.txt'],['invalid2B.txt'],['nosuchfile.txt'],[]]
-    three = [['valid3B.txt'],['invalid3B.txt'],['nosuchfile.txt'],[]]
+    s = ['valid.VCF','invalid.VCF']#,'nosuchfile.txt']
+    two = [['valid2B.txt'],['invalid2B.txt']]#,['nosuchfile.txt'],[]]
+    three = [['valid3B.txt'],['invalid3B.txt']]#,['nosuchfile.txt'],[]]
     for p in itertools.product(two,three,s):
         params = [p[0]+p[1],p[2]]
         res = verifyChallenge('3B',*params)
         if params[1] != s[0]:
-            assert res == "NA"
+            assert res[0] == "NA"
         if params[0] == two[0] + three[0] and params[1] == s[0]:
-            assert res == "Valid"
+            assert res[0] == "Valid"
         if params[0] != two[0] + three[0] and params[1] == s[0]:
-            assert res == "Invalid"
+            assert res[0] == "Invalid"
 
 def test_integration():
-    score_mapping = {    '1A': 'python SMCScoring.py -c 1A -o sc.json --predfiles valid1A.txt --truthfiles valid1A.txt --vcf valid.VCF',
-                        '1B': 'python SMCScoring.py -c 1B -o sc.json --predfiles valid1B.txt --truthfiles valid1B.txt --vcf valid.VCF',
-                        '1C': 'python SMCScoring.py -c 1C -o sc.json --predfiles valid1C.txt --truthfiles valid1C.txt --vcf valid.VCF',
-                        '2A': 'python SMCScoring.py -c 2A -o sc.json --predfiles valid2A.txt --truthfiles valid2A.truth.txt --vcf valid.VCF',
-                        '2B': 'python SMCScoring.py -c 2B -o sc.json --predfiles valid2B.txt --truthfiles valid2B.truth.txt --vcf valid.VCF',
-                        '3A': 'python SMCScoring.py -c 3A -o sc.json --predfiles valid2A.txt valid3A.txt --truthfiles valid2A.truth.txt valid3A.truth.txt --vcf valid.VCF',
-                        '3B': 'python SMCScoring.py -c 3B -o sc.json --predfiles valid2B.txt valid3B.txt --truthfiles valid2B.truth.txt valid3B.truth.txt  --vcf valid.VCF'
+    score_mapping = {    '1A': 'python ../SMCScoring.py -c 1A -o sc.json --predfiles valid1A.txt --truthfiles valid1A.txt --vcf valid.VCF',
+                        '1B': 'python ../SMCScoring.py -c 1B -o sc.json --predfiles valid1B.txt --truthfiles valid1B.txt --vcf valid.VCF',
+                        '1C': 'python ../SMCScoring.py -c 1C -o sc.json --predfiles valid1C.txt --truthfiles valid1C.txt --vcf valid.VCF',
+                        '2A': 'python ../SMCScoring.py -c 2A -o sc.json --predfiles valid2A.txt --truthfiles valid2A.truth.txt --vcf valid.VCF',
+                        '2B': 'python ../SMCScoring.py -c 2B -o sc.json --predfiles valid2B.txt --truthfiles valid2B.truth.txt --vcf valid.VCF',
+                        '3A': 'python ../SMCScoring.py -c 3A -o sc.json --predfiles valid2A.txt valid3A.txt --truthfiles valid2A.truth.txt valid3A.truth.txt --vcf valid.VCF',
+                        '3B': 'python ../SMCScoring.py -c 3B -o sc.json --predfiles valid2B.txt valid3B.txt --truthfiles valid2B.truth.txt valid3B.truth.txt  --vcf valid.VCF'
                     }
 
-    verify_mapping =  {    '1A': 'python SMCScoring.py -c 1A -o sc.json -v --predfiles valid1A.txt --vcf valid.VCF',
-                        '1B': 'python SMCScoring.py -c 1B -o sc.json -v --predfiles valid1B.txt --vcf valid.VCF',
-                        '1C': 'python SMCScoring.py -c 1C -o sc.json -v --predfiles valid1C.txt --vcf valid.VCF',
-                        '2A': 'python SMCScoring.py -c 2A -o sc.json -v --predfiles valid2A.txt --vcf valid.VCF',
-                        '2B': 'python SMCScoring.py -c 2B -o sc.json -v --predfiles valid2B.txt --vcf valid.VCF',
-                        '3A': 'python SMCScoring.py -c 3A -o sc.json -v --predfiles valid2A.txt valid3A.txt --vcf valid.VCF',
-                        '3B': 'python SMCScoring.py -c 3B -o sc.json -v --predfiles valid2B.txt valid3B.txt --vcf valid.VCF'
+    verify_mapping =  {    '1A': 'python ../SMCScoring.py -c 1A -o sc.json -v --predfiles valid1A.txt --vcf valid.VCF',
+                        '1B': 'python ../SMCScoring.py -c 1B -o sc.json -v --predfiles valid1B.txt --vcf valid.VCF',
+                        '1C': 'python ../SMCScoring.py -c 1C -o sc.json -v --predfiles valid1C.txt --vcf valid.VCF',
+                        '2A': 'python ../SMCScoring.py -c 2A -o sc.json -v --predfiles valid2A.txt --vcf valid.VCF',
+                        '2B': 'python ../SMCScoring.py -c 2B -o sc.json -v --predfiles valid2B.txt --vcf valid.VCF',
+                        '3A': 'python ../SMCScoring.py -c 3A -o sc.json -v --predfiles valid2A.txt valid3A.txt --vcf valid.VCF',
+                        '3B': 'python ../SMCScoring.py -c 3B -o sc.json -v --predfiles valid2B.txt valid3B.txt --vcf valid.VCF'
                     }
     for challenge,cmd_string in score_mapping.iteritems():
         try:
@@ -876,5 +880,5 @@ def test_integration():
 if __name__ == '__main__':
     #move to the directory with all the test data files    
     os.chdir('./test_data')
-    test_calculate1C()
+    test_validate2B()
     print "Ending without any problems"

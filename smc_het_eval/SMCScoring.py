@@ -135,6 +135,8 @@ def validate1C(data, nssms, mask=None):
         except ValueError:
             raise ValidationError("Number of mutations in line %d can not be cast as an integer: %s" % (i+1, data2[i][1]))
         try:
+            if data2[i][2] == 'NA':
+                data2[i][2] = 0
             cf = float(data2[i][2])
             if math.isinf(cf):
                 raise ValidationError("Cellular Frequency for cluster %d is non-finite" % (i+1))
