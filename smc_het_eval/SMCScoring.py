@@ -777,6 +777,7 @@ def validate3A(data, cas, nssms, mask=None):
 
 def validate3B(filename, ccm, nssms, mask=None):
     size = ccm.shape[0]
+    
     try:
         if os.path.exists(filename):
             ad = np.zeros((size, size))
@@ -844,7 +845,7 @@ def checkForBadTriuIndices(*matrices):
 
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     f = calculate2_sym_pseudoV
-
+    
     scores = []
     scores.append(f(pred_ad, truth_ad))
     scores.append(f(pred_ad.T, truth_ad.T))
@@ -886,8 +887,9 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     n_score = sum(n_scores) / 3.0
     n_score_permute = sum(n_scores_permute) / 3.0
 
-    return [set_to_zero(1 - (score / max(one_score, n_score))),set_to_zero(1 - (score / max(one_score, n_score_permute)))]
-
+#imaad: I commented out the return of two scorse because we will be going with n_score_permute
+#    return [set_to_zero(1 - (score / max(one_score, n_score))),set_to_zero(1 - (score / max(one_score, n_score_permute)))]
+    return set_to_zero(1 - (score / max(one_score, n_score_permute)))
 def makeCMatrix(*matrices):
     # perform (1 - *matrices) without loading all the matrices into memory
     shape = matrices[0].shape
@@ -1436,7 +1438,6 @@ def verifyChallenge(challenge, predfiles, vcf):
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     #global err_msgs
     mem('START %s' % challenge)
-
     masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
 
     if challengeMapping[challenge]['vcf_func']:
@@ -1665,7 +1666,8 @@ if __name__ == '__main__':
     else:
         # VERIFY
         if args.v:
-            res = adj_final(verifyChallenge(args.challenge, args.predfiles, args.vcf))
+            #res = adj_final(verifyChallenge(args.challenge, args.predfiles, args.vcf))
+            res = verifyChallenge(args.challenge, args.predfiles, args.vcf) 
         # APPROXIMATE
         elif args.approx and args.challenge in ['2A', '2B', '3A', '3B']:
             np.random.seed(args.approx_seed)

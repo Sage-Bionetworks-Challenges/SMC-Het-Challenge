@@ -715,7 +715,8 @@ def calculate3A(om, truth_data, ad_pred, ad_truth):
 
     n_score_permuted = sum(n_scores_permuted)/3.0
 
-    return [set_to_zero((1 - (score / max(one_score, n_score)))), set_to_zero((1 - (score / max(one_score, n_score_permuted))))]   
+#    return [set_to_zero((1 - (score / max(one_score, n_score)))), set_to_zero((1 - (score / max(one_score, n_score_permuted))))]  
+    return  set_to_zero((1 - (score / max(one_score, n_score))))
 
 # adds num pseudo counts to the om; default is square root of the number of mutations
 def add_pseudo_counts_om(om, num=None):
