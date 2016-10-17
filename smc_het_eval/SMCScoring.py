@@ -261,9 +261,11 @@ def validate2Afor3A(data, nssms, mask=None):
     return validate2A(data, nssms, return_ccm=False, mask=mask)
 
 def validate2B(filename, nssms, mask=None):
+  
     ccm = np.zeros((nssms, nssms))
     try:
         if os.path.exists(filename):
+            
             if is_gzip(filename):
                 gzipfile = gzip.open(str(filename), 'r')
             else:
@@ -272,11 +274,15 @@ def validate2B(filename, nssms, mask=None):
             for i, line in enumerate(gzipfile):
                 if mask == None:
                     ccm[i, ] = np.fromstring(line, sep='\t')
+                    #print str(i) + " T" #debug
                 elif i in mask:
+                    #print "mask" #debug
+                    #print str(ccm_i) + " S" #debug
                     matrix_line = line.split(' ')
                     ccm[ccm_i, ] = [x for i, x in enumerate(matrix_line) if i in mask]
                     ccm_i += 1
             gzipfile.close()
+            print "done load " + filename #debug
         else:
             # TODO - optimize with line by line
             data = StringIO.StringIO(filename)
@@ -1279,9 +1285,15 @@ def get_bad_ad(nssms, scenario='OneCluster'):
 
 def verify(filename, role, func, *args, **kwargs):
     # printInfo('ARGS -> %s | %s | %s | %s | %s' % (filename, role, func, args, kwargs))
+    t_start = time.time()
+    
     try:
-        if is_gzip(filename): #pass compressed files directly to 2B or 3B validate functions
+        if func.__name__ in ['validate2B']:
+            verified = func(filename,*args, **kwargs)
+        elif is_gzip(filename): #pass compressed files directly to 2B or 3B validate functions
             verified = func(filename, *args, **kwargs)
+        #if is_gzip(filename):
+        #    verified = func(filename, *args, **kwargs)
         else:
             # really shouldn't do read() here, stores the whole thing in memory when we could read it in chunks/lines
             f = open(filename)
@@ -1297,6 +1309,8 @@ def verify(filename, role, func, *args, **kwargs):
         return None
     except SampleError as e:
         raise e
+    t_end = time.time()
+    print (filename +  "  " + str(t_end - t_start))
     return verified
 
 def verify2A(filename_pred, filename_truth, role, pred_size, truth_size, filter_mut=None, mask=None, subchallenge="2A"):
@@ -1436,6 +1450,9 @@ def verifyChallenge(challenge, predfiles, vcf):
 
  
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
+    
+    
+    
     #global err_msgs
     mem('START %s' % challenge)
     masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
