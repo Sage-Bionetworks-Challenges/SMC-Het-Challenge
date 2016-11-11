@@ -369,19 +369,19 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
             worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
-                scores[i] = 1 - (scores[i] / worst_scores[i])
+                scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
             else:
-                scores[i] = (scores[i] - worst_scores[i]) / (1 - worst_scores[i])
+                scores[i] = set_to_zero((scores[i] - worst_scores[i]) / (1 - worst_scores[i]))
         return np.mean(scores)
 
     else:
         score = func(pred, truth, full_matrix=full_matrix)
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
             worst_score = get_worst_score(nssms, truth, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
-            score = 1 - (score / worst_score)                   # and the OneCluster matrix - similar to above
+            score = set_to_zero(1 - (score / worst_score))                   # and the OneCluster matrix - similar to above
         else:
             worst_score = get_worst_score(nssms, truth, func, larger_is_worse=False)
-            score = (score - worst_score) / (1 - worst_score)
+            score = set_to_zero((score - worst_score) / (1 - worst_score))
         return score
 
 #### METRICS ###############################################################################################
