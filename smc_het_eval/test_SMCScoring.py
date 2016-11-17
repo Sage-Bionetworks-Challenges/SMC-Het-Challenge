@@ -862,10 +862,13 @@ def test_integration():
         if challenge not in ['3A','2A']:
             os.system(cmd_string)
             f = open('sc.json')
-            out = json.load(f)
-            f.close()
+            #Output file format has changed to be used on SGE`
+            #out = json.load(f)
+            #f.close()
             #assert out == {challenge: 1.0}
-            assert out == 1.0
+            out = f.read()
+            f.close()
+            assert out == '1.0'
 
     for challenge,cmd_string in verify_mapping.iteritems():
         try:
@@ -875,9 +878,13 @@ def test_integration():
         if challenge not in ['3A','2A']:
             os.system(cmd_string)
             f = open('sc.json')
-            out = json.load(f)
+            #Output file format has chagned to be used on SGE
+            #out = json.load(f)
+            #f.close()
+            #assert out == {challenge: "Valid"}
+            out = f.read()
             f.close()
-            assert out == {challenge: "Valid"}
+            assert out == "Valid"
 
 if __name__ == '__main__':
     #move to the directory with all the test data files    
