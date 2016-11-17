@@ -357,7 +357,6 @@ def test_calculate2():
     c[0:2,0] = 1
     c[2:4,1] = 1
     c = np.dot(c,c.T)
-    import pudb; pudb.set_trace()
     # Identical
     assert round(calculate2(c,c), 2) == 1
 
