@@ -357,20 +357,21 @@ def test_calculate2():
     c[0:2,0] = 1
     c[2:4,1] = 1
     c = np.dot(c,c.T)
+
     # Identical
-    assert round(calculate2(c,c), 2) == 1
+    assert round(calculate2(c,c), 2) == 1.00
 
     #Inverted
     c2 = np.abs(c-1)
     c2[np.diag_indices(4)] = 1
-    assert round(calculate2(c,c2), 2) == 0
+    assert round(calculate2(c,c2), 2) == -0.68
 
     # Differences first 3 SSMs in first cluster, 4th ssm in second cluster
     c3 = np.zeros((4,2))
     c3[0:3,0] = 1
     c3[3:4,1] = 1
     c3 = np.dot(c3,c3.T)
-    assert round(calculate2(c,c3), 2) == 0.02
+    assert round(calculate2(c,c3), 2) == -0.20
 
     # Metric doesn't count the diagnonal
     c4 = c+0
@@ -378,7 +379,7 @@ def test_calculate2():
     assert round(calculate2(c,c4), 2) == 0.74
 
     c2[np.diag_indices(4)] = 0
-    assert round(calculate2(c,c2), 2) == 0
+    assert round(calculate2(c,c2), 2) == -0.23
 '''
 def test_validate2A():
     entry = "1\n2\n1\n2\n"
@@ -862,13 +863,9 @@ def test_integration():
         if challenge not in ['3A','2A']:
             os.system(cmd_string)
             f = open('sc.json')
-            #Output file format has changed to be used on SGE`
-            #out = json.load(f)
-            #f.close()
-            #assert out == {challenge: 1.0}
-            out = f.read()
+            out = json.load(f)
             f.close()
-            assert out == '1.0'
+            assert out == {challenge: 1.0}
 
     for challenge,cmd_string in verify_mapping.iteritems():
         try:
@@ -878,13 +875,9 @@ def test_integration():
         if challenge not in ['3A','2A']:
             os.system(cmd_string)
             f = open('sc.json')
-            #Output file format has chagned to be used on SGE
-            #out = json.load(f)
-            #f.close()
-            #assert out == {challenge: "Valid"}
-            out = f.read()
+            out = json.load(f)
             f.close()
-            assert out == "Valid"
+            assert out == {challenge: "Valid"}
 
 if __name__ == '__main__':
     #move to the directory with all the test data files    

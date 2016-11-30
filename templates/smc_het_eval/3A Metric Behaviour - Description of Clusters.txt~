@@ -1,0 +1,323 @@
+TRUTH
+    # six clusters, each with 100 mutations
+    # one at top level, two at 2nd level,three at 3rd level 
+    # one lineage with one cluster, the other with two
+    # Phylogeny Tree:
+    #       [1]
+    #      |   |
+    #     [2] [3]
+    #    |  |   |
+    #   [4][5] [6]
+
+SplitClusterBotSame
+    # Split third level (new cluster is on the third level)
+    # Incorrect Phylogeny Tree:
+    #        [1]
+    #      |     |
+    #     [2]   [3]
+    #    |  |  |   |
+    #   [4][5][6] [7]
+   
+SplitClusterBotDif   
+    # Split third level (new cluster is on new bottom level)
+    # Incorrect Phylogeny Tree:
+    #        [1]
+    #      |    |
+    #     [2]  [3]
+    #    |  |   |   
+    #   [4][5] [6]
+    #           |    
+    #          [7]
+    
+
+SplitClusterMidOneChild  
+    #Split middle level with one child (new cluster is on same level)
+    # Incorrect Phylogeny Tree:
+    #          [1]
+    #      |    |    |
+    #     [2]  [3]  [7]
+    #    |  |   |   
+    #   [4][5] [6]
+
+SplitClusterMidMultiChild  
+    #Split middle level with two children (new cluster is on same level)
+    # Incorrect Phylogeny Tree:
+    #          [1]
+    #      |    |    |
+    #     [7]  [2]  [3]
+    #         |  |   |   
+    #        [4][5] [6]
+
+    
+MERGES
+
+
+MergeClusterBot    
+    # Merge third level (new cluster is on the third level)
+    # Incorrect Phylogeny Tree (* = merged cluster):
+    #        [1]
+    #      |     |
+    #     [2]   [3]
+    #      |     |
+    #     [4*]   [5] 
+
+MergeClusterMid&BotOneChild    
+    # Merge second and third level with one child (new cluster is on the second level)
+    # Incorrect Phylogeny Tree (* = merged cluster):
+    #        [1]
+    #      |     |
+    #     [2]   [3*]
+    #    |   |
+    #   [4] [5] 
+
+MergeClusterMid&BotMultiChild 
+    # Merge second and third level with two children (new cluster is on the second level)
+    # Incorrect Phylogeny Tree (* = merged cluster):
+    #        [1]
+    #      |     |
+    #     [2*]  [3]
+    #      |     |
+    #     [4]   [5] 
+
+MergeClusterTop&Mid
+    # Merge first and second level with two children (new cluster is on the first level)
+    # Incorrect Phylogeny Tree (* = merged cluster):
+    #         [1*]
+    #      |   |    |
+    #     [3] [4]  [2]
+    #               |
+    #              [5] 
+
+    
+INCORRECT PARENT
+
+ParentIsSibling    
+    # Cluster's parent is really a sibling
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |     |
+    #     [2]   [3]
+    #      |     |
+    #     [4]   [6] 
+    #      |    
+    #     [5*]    
+
+ParentIsGrandparent
+    # Cluster's parent is really a grandparent
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #           [1]
+    #      |     |    |
+    #     [2]   [3]  [5]
+    #      |     |
+    #     [4]   [6]   
+
+ParentIsAunt
+    # Cluster's parent is really an aunt/uncle
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |      |
+    #     [2]    [3]
+    #      |   |    |
+    #     [4] [5*] [6]    
+
+ParentIsCousin   
+    # Cluster's parent is really a cousin
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |     |
+    #     [2]   [3]
+    #      |     |
+    #     [4]   [6] 
+    #            |    
+    #           [5*]     
+
+ParentIsSiblingWithChildren
+    # Cluster's parent is really a sibling, and incorrect cluster has children
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #         |
+    #        [3]
+    #      |      |
+    #     [2*]   [6] 
+    #    |    |    
+    #   [4]  [5]    
+
+ParentIsNieceWithChildren    
+    # Cluster's parent is really a niece, and incorrect cluster has children
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #         |
+    #        [3]
+    #         |
+    #        [6] 
+    #         |
+    #        [2*]
+    #       |    |    
+    #      [4]  [5] 
+
+OTHER
+OneCluster
+    # everything is in one big cluster
+    # Incorrect Phylogeny Tree:
+    #    [1]
+
+    
+NClustersOneLineage
+    # everything in it's own cluster, all in one long lineage
+    # Incorrect Phylogeny Tree:
+    #  [1]
+    #   |
+    #  [2]
+    #  ...
+    #   |
+    # [600]
+
+    
+NClustersTwoLineages
+    # everything in it's own cluster, split into two germlines
+    # Incorrect Phylogeny Tree:
+    #      [1]
+    #   |      |
+    #  [2]   [302]
+    #  ...    ...
+    #   |      |
+    # [300]  [600]
+    #   |
+    # [301]
+
+NClustersCorrectLineage
+    #everything in it's own cluster, but with
+    # the same structure as the true matrix
+    # Incorrect Phylogeny Tree:
+    #         [1]
+    #         ...
+    #          |
+    #        [100] 
+    #     |         |
+    #   [101]     [201]
+    #    ...       ...
+    #     |         |
+    #   [200]     [300]
+    #  |      |     |
+    #[301]  [401] [501]
+    # ...    ...   ...
+    #  |      |     |
+    #[400]  [500] [600]
+  
+SmallExtraNewBot
+    # small extra cluster with some mutations from each cluster
+    # new cluster is in a new bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |      |
+    #     [2]    [3]
+    #    |   |    |
+    #   [4] [5]  [6]
+    #    |
+    #  [7*]
+    
+SmallExtraCurBot
+    # small extra cluster with some mutations from each cluster
+    # new cluster is in the current bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |       |
+    #     [2]     [3]
+    #    |   |   |   |
+    #   [4] [5] [6] [7*]
+
+
+SmallExtraMid
+    # small extra cluster with some mutations from each cluster
+    # new cluster is in the middle level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #           [1]
+    #      |     |   |
+    #     [2]   [3] [7*]
+    #    |   |   |
+    #   [4] [5] [6]   
+    
+SmallExtraTop
+    # small extra cluster with some mutations from each cluster
+    # new cluster is in a new top level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [7*]
+    #         |
+    #        [1]
+    #      |     |
+    #     [2]   [3] 
+    #    |   |   |
+    #   [4] [5] [6]   
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i] = 0
+        ad[100*i,range(1,100)+range(101,200)+range(201,300)+range(301,400)+range(401,500)+range(501,600)] = 1
+    res_other.append(["SmallExtraTop", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraNewBot: big extra cluster with some mutations from each cluster
+    # new cluster is in a new bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |      |
+    #     [2]    [3]
+    #    |   |    |
+    #   [4] [5]  [6]
+    #    |
+    #  [7*]
+    clusters = np.zeros((600,7))
+    clusters[:,:-1] = np.copy(t_clusters)
+    for i in range(0,6):
+        clusters[100*i:100*i+15,i] = 0
+        clusters[100*i:100*i+15,6] = 1
+    ccm = np.dot(clusters,clusters.T)
+    
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[range(15,100)+range(115,200)+range(315,400),100*i:100*i+15] = 1
+        ad[100*i:100*i+15,:] = 0
+    res_other.append(["BigExtraNewBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraCurBot: small extra cluster with some mutations from each cluster
+    # new cluster is in the current bottom level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [1]
+    #      |       |
+    #     [2]     [3]
+    #    |   |   |   |
+    #   [4] [5] [6] [7*]
+
+    # NOTE: co-clustering matrix does not change for any of the different small
+    # extra cluster instances, just the AD matrix    
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[range(15,100)+range(215,300),100*i:100*i+15] = 1
+        ad[100*i:100*i+15,:] = 0
+    res_other.append(["BigExtraCurBot", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraMid: small extra cluster with some mutations from each cluster
+    # new cluster is in the middle level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #           [1]
+    #      |     |   |
+    #     [2]   [3] [7*]
+    #    |   |   |
+    #   [4] [5] [6]   
+    ad = np.copy(t_ad)
+    for i in range(0,6):
+        ad[:,100*i:100*i+15] = 0
+        ad[range(15,100),100*i:100*i+15] = 1
+        ad[100*i:100*i+15,:] = 0
+    res_other.append(["BigExtraMid", calculate3(ccm,ad,t_ccm,t_ad)])
+    
+    # BigExtraTop: small extra cluster with some mutations from each cluster
+    # new cluster is in a new top level of the lineage
+    # Incorrect Phylogeny Tree (* = incorrect cluster):
+    #        [7*]
+    #         |
+    #        [1]
+    #      |     |
+    #     [2]   [3] 
+    #    |   |   |
+    #   [4] [5] [6]  

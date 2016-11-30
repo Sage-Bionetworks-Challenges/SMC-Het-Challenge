@@ -1,0 +1,603 @@
+\documentclass[a4paper, 11pt]{article}
+\usepackage{comment} % enables the use of multi-line comments (\ifx \fi) 
+\usepackage{lipsum} %This package just generates Lorem Ipsum filler text. 
+\usepackage{fullpage} % changes the margin
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage[document]{ragged2e}
+\usepackage[export]{adjustbox}
+
+\begin{document}
+%Header-Make sure you update this information!!!!
+\noindent
+\large\textbf{Subchallenge 2A and 3A Optimization} \\
+\normalsize William Zou \\ 
+Informatics and Biocomputing Program \\
+Ontario Institute for Cancer Research \\
+Supervised by Dr. Quaid Moris, University of Toronto \\
+
+\justify
+\section*{Problem Description for Subchallenge 2A}
+The participant submits a list of mutations (which we will refer to as the prediciton file), each assigned a number corresponding to the subclone that it is predicted to be a part of. This information is then organized into a co-clustering matrix (CCM). The CCM for n mutations is an n-by-n matrix. The entry of the $i$-th row and $j$-th column, which we will denote by $c_{ij}$, is one if the $i$-th and $j$-th mutation belong in the same cluster and zero if they are not. In addition to the CCM contructed from the prediciton file, another CCM is constructed from a list containing information about the true subclone of each mutation (this list will referred to as the truth file). These two CCMs are then compared and a score is assigned to the participant based on their similarity.  
+
+The problem arises when there are a large number of mutations (There may be up to ~50000 mutations inputted). This would lead the scoring harness to create massive matrices which would take much memory and time to process and evaluate. The idea is to implement a new algorithm which would reduce the memory needed to evaluate this subchallenge.
+
+\section*{Alternative Solution}
+For the majority of the metrics developed to evaluate subchallenge 2A, if the data is binary data, it is only necessary to input the number of true positives, true negatives, false positives and false negatives to be able to calculate the final score. A good example is for binary data, the Pearson correlation coefficient is equivalent to Matthew's correlation coefficient, which can be directly calculated from true positives, true negatives, false positives and false negatives. 
+
+Since we only need the true positives, true negatives, false positives and false negatives, the CCM provides many extraneous information. Thus we introduce a new data container, which we will term the overlap matrix (OM).
+
+The OM will describe the number of mutations that each cluster in the prediction file will share with each cluster in the truth file. The entry of the $i$-th row and the $j$-th column, which we will denote as $o_{ij}$, will represents the number of mutations that is shared between the $i$-th cluster of the truth file, and the $j$-th cluster of the prediction file.
+
+Let us illustrate with an example:
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c||}
+    \hline
+    Prediction File & Truth File \\ 
+    \hline\hline
+    1 & 1 \\
+    \hline
+    1 & 1 \\
+    \hline
+    1 & 2 \\
+    \hline
+    2 & 3 \\
+    \hline
+    2 & 3 \\ 
+    \hline
+    \end{tabular}
+    \caption{Input Files}
+    \label{table:files}
+    \end{table}
+\end{center}
+
+The CCM of the predicted file will be as follows (Note that each mutation belongs to the same cluster as itself):
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c c c||}
+    \hline
+    1 & 1 & 1 & 0 & 0\\
+    \hline
+    1 & 1 & 1 & 0 & 0\\
+    \hline
+    1 & 1 & 1 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 1 & 1\\
+    \hline
+    \end{tabular}
+    \caption{Predicted Co-clustering Matrix}
+    \label{table:ccm_pred}
+    \end{table}
+\end{center}
+
+The CCM of the truth file will be as follows:
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c c c||}
+    \hline
+    1 & 1 & 0 & 0 & 0\\
+    \hline
+    1 & 1 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 1 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 1 & 1\\
+    \hline
+    \end{tabular}
+    \caption{True Co-clustering Matrix}
+    \label{table:ccm_true}    
+    \end{table}
+\end{center}
+
+And the OM will be as follows:
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c||}
+    \hline
+    2 & 1 & 0\\
+    \hline
+    0 & 0 & 2\\
+    \hline
+    \end{tabular}
+    \caption{Overlap Matrix}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+\section*{Calculating Number of True Positives, True Negatives, False Positives and False Negatives for Subchallenge 2A}
+
+Let us assume that $O$ is a $n \times m$ table, such that $O = \{o_{ij}\}$ where $o_{ij}$ is the number of mutations that are members of subclone $i$ in the truth file and members of subclone $j$ in the predicted file.
+
+$$|TP| = \sum_{i=1}^{n} \sum_{j=1}^{m} {o_{ij}}^2$$ 
+$$|condition\, positive| = \sum_{i=1}^{n} (\sum_{j=1}^{m} {o_{ij}} )^2$$ 
+$$|predicted\, condition\, positive| = \sum_{j=1}^{m} (\sum_{i=1}^{n} {o_{ij}} )^2$$ 
+$$|FN| = |condition\,positive| - |TP|$$
+$$|FP| = |predicted\,condition\,positive| - |TP|$$
+$$|Total\, population| = (\sum_{i=1}^{n} \sum_{j=1}^{m} o_{ij})^2$$ 
+$$|TN| = |Total\, population| - |TP| - |FN| - |FP|$$
+
+Note that we are double counting: $o_{ij}$ and $o_{ji}$ have the same representation. Though this will not have a large impact on the final score, we can easily adjust the values with the following methods:
+
+$$|adjusted\, TP| = \frac{|TP| - \sqrt{|Total\, population|}}{2} $$
+$$|adjusted\, FP| = \frac{|FP|}{2}$$
+$$|adjusted\, FN| = \frac{|FN|}{2}$$
+$$|adjusted\, TN| = \frac{|TN|}{2}$$
+
+% to comment sections out, use the command \ifx and \fi. Use this technique when writing your pre lab. For example, to comment something out I would do:
+%  \ifx
+%   \begin{itemize}
+%       \item item1
+%       \item item2
+%   \end{itemize}   
+%  \fi
+
+\section*{Metrics}
+The following metrics were considered for evaluating subchallenge 2A: Pearson correlation coefficient, Matthew's correlation coefficient, area under the precision recall curve, pseudo V measure, symmetric pseudo V measure, sum of squared error and sum of absolute error.
+
+With the exception of pseudo V measure and symmetric pseudo V measure, all other methods can be executed with knowledge of the TP, FP, FN and TN. 
+
+Here is a well-known example
+
+\begin{equation} \label{eq1}
+PCC = \frac{Cov(X, Y)}{\sqrt{Var(X) \cdot Var(Y)}} 
+\end{equation}
+\vspace{5mm}
+\begin{equation} \label{eq2}
+\begin{split}
+Cov(X, Y) &= E[XY] - \mu_{y} \cdot \mu_{x} \\
+    &= \frac{1}{N^2}\sum_{i} x_{i}y_{i} - \Bigl[\frac{1}{N}\sum_{i}x_{i}\Bigr]\Bigl[\frac{1}{N}\sum_{i}y_{i}\Bigr]\\
+    &= \frac{|TP|}{N^2} - \Bigl[\frac{TP+FN}{N}\Bigr]\Bigl[\frac{TP+FP}{N}\Bigr]
+\end{split}
+\end{equation}
+\vspace{5mm}
+\begin{equation} \label{eq3}
+\begin{split}
+Var(X) &= E[X^2] - (E[X])^2 \\
+    &= \frac{|TP|+|FN|}{N} - \Bigl[\frac{|TP|+|FN|}{N}\Bigr]^2
+\end{split}
+\end{equation}
+\vspace{5mm}
+\begin{equation} \label{eq4}
+\begin{split}
+Var(X) &= E[Y^2] - (E[Y])^2 \\
+    &= \frac{|TP|+|FP|}{N} - \Bigl[\frac{|TP|+|FP|}{N}\Bigr]^2
+\end{split}
+\end{equation}
+\vspace{10mm}
+Substituting \ref{eq2}, \ref{eq3} and \ref{eq4} back into \ref{eq1} we get an expression for the PCC using $|TP|$, $|FP|$, $|FN|$ and $|TN|$. Simiplifying the equation will get us the MCC. 
+
+We now take a look at the pseudo V measure. Given a $n \times n$ co-clustering matrix $C = \{c_{ij}\}$ and a $n \times n$ co-clustering matrix $K= \{k_{ij}\}$, the pseudo V measure is defined as:
+
+$$ \sum_{i} \sum_{j} p_j^i\log \frac{p_j^i}{q_j^{i*}} $$
+
+where $p_j^i = \frac{c_{ij}}{\sum_{a \neq i} c_{ia}}$ for $i \neq j$ and $p_i^i = 0$, $q_j^i = \frac{k_{ij}}{\sum_{a \neq i} k_{ia}}$ for $i \neq j$ and $0$ otherwise, $q_j^{i*} = (1-\alpha)q_i^j+\alpha/(N-1)$ where alpha is a pre-defined small number.
+
+To find the pseudo V measure from information given in a $n \times m$ OM, $O=\{o_{ij}\}$, assume that a random mutation attributed to row $r$ of the CCM belonged in true cluster $k$ and hypothesized cluster $l$. The number of true positives, false negatives, false positives and true negatives we would find if row $r$ of the predicted CCM and the row $r$ of the true CCM we would find is 
+
+$$|TP_r| = o_{kl}$$
+$$|FN_r| = \sum_{j=1}^{m} o_{rj} - |TP_r|$$
+$$|FP_r| = \sum_{i=1}^{n} o_{ir} - |TP_r|$$
+$$|TN_r| = |Total\, population| - |TP_r| - |FN_r| - |FP_r|$$
+
+Note that for a non-zero entry $o_{ij}$ in the OM, there are $o_{ij}$ rows with $o_{ij}$ true positives. Thus we have shown that we are able to calculate the pseudo V measure of every row $r$ of the CCM from information given by the OM.
+
+\section*{Scaling Function}
+Let us assume for the sake of discussion that there are $N$ different mutations, $n$ true clusters and $m$ hypothesized clusters.
+
+To scale the final score, we first compare the score calculated by grouping all mutations into one hypothesized cluster and the score calculated by grouping the mutations into $N$ different hypothesized clusters. We then take the ``worse'' score of the two and use it to scale the final score.
+
+The overlap matrix when grouping all mutations into one hypothesized cluster is a $ n \times 1 $ matrix. The $i$th entry in the matrix contains the number of mutations in the $i$th cluster. The overlap matrix when grouping all mutations into $N$ different hypothesized clusters is a $ n \times N $ matrix as shown below. 
+
+If the overlap matrix is:
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c||}
+    \hline
+    2 & 1 & 0\\
+    \hline
+    0 & 0 & 2\\
+    \hline
+    \end{tabular}
+    \caption{Overlap Matrix}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+Then the overlap matrix when grouping all mutations into one hypothesized cluster is:
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c||}
+    \hline
+    3\\
+    \hline
+    2\\
+    \hline
+    \end{tabular}
+    \caption{Overlap Matrix One Cluster}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+And the overlap matrix when grouping all mutations into different hypothesized cluster is:
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c c c||}
+    \hline
+    1 & 1 & 1 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 1 & 1\\
+    \hline
+    \end{tabular}
+    \caption{Overlap Matrix N Cluster}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+\section*{Fake Mutations}
+Assume that we would like to add $x$ fake mutations, we could:
+\begin{itemize}
+\item Directly modify the $|TP|$, $|FP|$, $|FN|$ and $|TN|$
+\item Modify the OM (This is necesssary when using the pseudo-V-measure)
+\end{itemize}
+When modifying the $|TP|$, $|FP|$, $|FN|$ and $|TN|$, simply:
+
+$$|TP_{new}| = |TP| + x $$
+$$|FP_{new}| = |FP|$$
+$$|FN_{new}| = |FN|$$
+$$|TN_{new}| = |FN| + x^2 + (2N-1)\cdot x,\,N = \sqrt {TP + FP + FN +TN}$$
+
+When modifying the OM, simply extend the matrix columns and matrix rows by $k$, and fill the lower diagonal by ones.
+
+If the OM is:
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c||}
+    \hline
+    2 & 1 & 0\\
+    \hline
+    0 & 0 & 2\\
+    \hline
+    \end{tabular}
+    \caption{Overlap Matrix}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+Then the OM with $2$ pseudo counts added is 
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c c c||}
+    \hline
+    2 & 1 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 2 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 1 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 1\\
+    \hline
+    \end{tabular}
+    \caption{Overlap Matrix With Pseudo Counts}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+\section*{Timing Analysis for Subchallenge 2A}
+
+\begin{center}
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{c c c c}
+    \hline
+    Tumour & Number of Mutations & Old CPU Time & New CPU Time\\  
+    \hline\hline
+    P4 & 3244 & 8.3s & 1.2s\\
+    \hline
+    P5 & 1025 & 1.6s & 0.7s\\
+    \hline
+    P6 & 26125 & 7m30s & 13s\\ 
+    \hline
+    T2 & 3633 & 11s & 1.5s\\
+    \hline
+    T4 & 1675 & 3.0s & 1.0s\\
+    \hline
+    \end{tabular}
+    \caption{Timing Analysis}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+The new algorithm for subchallenge 2A executes many times faster than the previous algorithm. The memory efficiency for the new algorithm is $O(n)$, $n$ being the number of mutations (Maximum memory used when we are calculating the baseline with $n$ clusters). Note that the memory efficiency for the previous algorithm is $O(n^2)$.  
+
+\section*{Problem Description For Subchallenge 3A}
+For subchallenge 3A, the contestants submit two files, one file containing the predicted clustering of the mutations and the other containing the one file containing the phylogenetic relationship between the clusters. These information is then assembled into an ancestor-descendant matrix matrix (ADM) and a cousin matrix (CM). The ADM and CM for n mutations is an n-by-n matrix. The entry of the $i$-th row and $j$-th column of the ADM, which we will denote by $a_{ij}$, is one if the $i$-th mutation is an ancestor of the $j$-th mutation and zero if they are not. The entry of the $i$-th row and $j$-th column of the CM, which we will denote by $b_{ij}$, is one if the $i$-th mutation is a cousin of the $j$-th mutation and zero if they are not. 
+
+An ADM and CM is constructed from the truth files as well, and a score is given based on the similarity of the true and predicted ADM, the true and predicted CM, and the transpose of true and predicted ADM (which we will refer to as ADMT). Again, problems with memory occurs when there is a large number of mutations. Thus we propose the following solution.
+
+\section*{Alternative Solution}
+We introduce the some new data containers. These data containers can reflect information in a similar manner for ancestor-descendant relationships, descedant-ancestor relationships and cousin relationships. Thus we will only focus on the ancestor-descendant relationship in the following explanation: 
+
+We introduce the Shared Descendant Matrix (SDM), the Predicted Descendant Matrix (PDM) and the True Descendant Matrix (TDM). The SDM would be $n \times m$ matrix, where $SDM_{ij} = number\,of\,descendants\,shared\,between\,mutations\,of\,class\,i\,and\,cluster\,j$. The PDM would be a size $m$ array, where $P_{l} = number\,of\,descendants\,a\,mutation\,of\,cluster\,l\,has$. And the TDM would be a size $n$ array, where $T_{k} = number\,of\,descendants\,a\,mutation\,of\,class\,k\,has$. We also use the OM in the process of optimization.
+
+Let us give an example:
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c||}
+    \hline
+    Truth File & Predition File \\ 
+    \hline\hline
+    1 & 1\\
+    \hline
+    1 & 1\\
+    \hline
+    2 & 2\\
+    \hline
+    2 & 2\\
+    \hline
+    2 & 3\\
+    \hline
+    3 & 3\\
+    \hline
+    3 & 3\\
+    \hline
+    \end{tabular}
+    \caption{Input Files}
+    \label{table:files}
+    \end{table}
+\end{center}
+
+\begin{table}[ht]
+    \parbox{.45\linewidth}{
+    \centering
+    \begin{tabular}{||c c||}
+    \hline
+    1 & 0\\
+    \hline
+    2 & 1\\
+    \hline
+    3 & 1\\
+    \hline
+    \end{tabular}
+    \caption{True Phylogenetic Tree}
+    }
+    \hfill
+    \parbox{.45\linewidth}{
+    \centering
+    \begin{tabular}{||c c||}
+    \hline
+    1 & 0\\
+    \hline
+    2 & 1\\
+    \hline
+    3 & 2\\
+    \hline
+    \end{tabular}
+    \caption{Predicted Phylogenetic Tree}
+    }
+\end{table}
+
+
+The true and predicted ADM would be:
+\begin{table}[ht]
+    \parbox{.45\linewidth}{
+    \centering
+    \begin{tabular}{||c c c c c c c||}
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    \end{tabular}
+    \caption{True ADM}
+    }
+    \hfill
+    \parbox{.45\linewidth}{
+    \centering
+    \begin{tabular}{||c c c c c c c||}
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 1 & 1 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 1 & 1 & 1\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    0 & 0 & 0 & 0 & 0 & 0 & 0\\
+    \hline
+    \end{tabular}
+    \caption{Predicted ADM}
+    }
+\end{table}
+
+The SDM would be:
+
+\begin{center}
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{||c c c||}
+    \hline
+    5 & 3 & 0\\
+    \hline
+    0 & 0 & 0\\
+    \hline
+    0 & 0 & 0\\
+    \hline
+    \end{tabular}
+    \caption{SDM}
+\end{table}
+\end{center}
+
+The OM would be:
+
+\begin{center}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{||c c c||}
+    \hline
+    2 & 0 & 0\\
+    \hline
+    0 & 2 & 1\\
+    \hline
+    0 & 0 & 2\\
+    \hline
+    \end{tabular}
+    \caption{OM}
+\end{table}
+\end{center}
+
+The PDM would be:
+
+\begin{center}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{||c||}
+    \hline
+    5\\
+    \hline
+    3\\
+    \hline
+    0\\
+    \hline
+    \end{tabular}
+    \caption{PDM}
+\end{table}
+\end{center}
+
+The TDM would be:
+
+\begin{center}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{||c||}
+    \hline
+    5\\
+    \hline
+    0\\
+    \hline
+    0\\
+    \hline
+    \end{tabular}
+    \caption{TDM}
+\end{table}
+\end{center}
+
+\section*{Calculating True Positives, True Negatives, False Positives and False Negatives for Subchallenge 3}
+
+Given an overlap matrix OM, shared descendant matrix SDM, true descendant matrix TDM and predicted descendant matrix PDM, we have:
+$$|TP| = \sum_{k,l} OM_{kl} \cdot SDM_{kl} $$ 
+$$|FP| = \sum_{k,l} OM_{kl} \cdot (PDM_{l} - SDM_{kl}) = \sum_{k, l} OM_{kl} \cdot PDM_{l} - |TP|$$
+$$|FN| = \sum_{k,l} OM_{kl} \cdot TDM_{k} - |TP|$$
+$$|TN| = |Total\, population| - |TP| - |FN| - |FP|$$
+
+To calculate the pseudo-V-measure for subchallenge 3A note that there are $OM_{kl}$ rows with $SDM_{kl}$ true positives, $TDM_{k} - |TP|$ false negatives, $PDM_{l} - |TP|$ false positives and $number\,of\,mutations - |TP| - |FP| -|FN|$ true negatives. The calculation of the pseudo-V-measure follows.
+
+Similar data containers and calculation process can be used for ADMT and CM.
+
+\section*{Baseline for Subchallenge 3A}
+The worst of the following two possibilities is chosen and set as the zero score for subchallenge 3A:
+\begin{itemize}
+    \item All mutations go into a single lineage and are in different clusters
+    \item All mutations go into a single cluster
+\end{itemize} 
+
+We can describe the SDM, OM, PDM and TDM for both baselines (See scoring harness for detailed implementation). Note that the construction of the OM when the predicted file specifies that all mutations go into a single lineage and are in different clusters depends on the ordering of the mutations in the input file (This is not a problem for subchallenge 2A).
+
+\section*{Timing Analysis for Subchallenge 3A}
+
+\begin{center}
+    \begin{table}[H]
+    \centering
+    \resizebox{\textwidth}{!}{\begin{tabular}{c c c c c}
+    \hline
+    Tumour & Number of Mutations & Number of Clusters & Old CPU Time & New CPU Time\\  
+    \hline\hline
+    P2 & 49724 & 5 & 200m & 314m\\
+    \hline
+    P3 & 520 & 3 & 3.0s & 2.9s\\
+    \hline
+    P4 & 3244 & 4 & 33s & 42s\\
+    \hline
+    P5 & 1025 & 4 & 5.7s & 5.4s\\
+    \hline
+    P6 & 26125 & 4 & 74m & 50m\\ 
+    \hline
+    T2 & 3633 & 3 & 36s & 20s\\
+    \hline
+    T4 & 1675 & 3 & 12s & 6s\\
+    \hline
+    \end{tabular}}
+    \caption{Timing Analysis}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+\begin{center}
+    \begin{table}[ht]
+    \centering
+    \resizebox{\textwidth}{!}{\begin{tabular}{c c c c c}
+    \hline
+    Tumour & Number of Mutations & Number of Clusters & Change in Memory & Change in Time\\  
+    \hline\hline
+    P2 & 49724 & 5 & -48G & 110m\\
+    \hline
+    P3 & 520 & 3 & -0.030G & -0.10s\\
+    \hline
+    P4 & 3244 & 4 & -0.30G & 9.9s\\
+    \hline
+    P5 & 1025 & 4 & -0.050G & -0.30s\\
+    \hline
+    P6 & 26125 & 4 & -14G & -24m\\ 
+    \hline
+    T2 & 3633 & 3 & -0.3G & -17s\\
+    \hline
+    T4 & 1675 & 3 & -0.1G & -6.0s\\
+    \hline
+    \end{tabular}}
+    \caption{Timing vs Memory}
+    \label{table:om}
+    \end{table}
+\end{center}
+
+The new algorithm, though sometimes slower than the previous algorithm (this seems to happen when the number of clusters exceeds 5), uses much less memory than the previous one, especially for tumours with a large number of mutations. This is expected, as a quick analysis will show that the memory efficiency of the new algorithm is $O(n)$ while the space efficiency of the old algorithm is $O(n^2)$ ($n$ is the number of mutations). This is ideal if we are running the scoring harness on multiple input files in parallel. Since our tumours have less than $50000$ mutations, we recommend running subchallenge 3A on a 8 GB node.  
+
+\section*{Acknowledgements}
+Thanks to Paul Boutros and BoutrosLab for their ongoing feedback and assistance regarding this project!
+
+\end{document}
