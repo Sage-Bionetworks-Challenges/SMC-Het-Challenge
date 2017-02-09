@@ -11,7 +11,7 @@ from scoring_harness_optimized import *
 from permutations import *
 import gc
 import traceback
-import numba
+import c_extensions
 
 # blo
 import time
@@ -1138,10 +1138,11 @@ def filterFPs(x, mask):
     #       that's why we don't do it anymore
     if x.shape[0] == x.shape[1]:
         # 1 assemble masked matrix within the original matrix
-        for i, m1 in enumerate(mask):
-            for j, m2 in enumerate(mask):
-                x[i, j] = x[m1, m2]
-
+        
+        #for i, m1 in enumerate(mask):
+        #    for j, m2 in enumerate(mask):
+        #        x[i, j] = x[m1, m2]
+        c_extensions.filterFPs_remove_fps(x,mask)
 
         old_n = x.shape[0]
         new_n = len(mask)
