@@ -12,6 +12,7 @@ from permutations import *
 import gc
 import traceback
 import c_extensions
+import multiprocessing as mproc
 
 # blo
 import time
@@ -1452,6 +1453,49 @@ def verifyChallenge(challenge, predfiles, vcf):
             return "Invalid"
     return "Valid"
 
+
+def loadTruthFiles(truthq,truthfile,valfunc,targs,masks,challenge):
+    tout = []
+    vout = []
+    tpout = []
+
+    if challenge in ['2B']:
+        try:
+            vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
+        except SampleError as e:
+            raise e
+
+        printInfo('TRUTH DIMENSIONS -> ', vout.shape)
+
+        if WRITE_2B_FILES:
+            np.savetxt('truth2B.txt.gz', vout)
+
+        mem('VERIFY TRUTH %s' % truthfile)
+        vout_with_pseudo_counts = add_pseudo_counts(vout)
+        tout.append(vout_with_pseudo_counts)
+        mem('APC TRUTH %s' % truthfile)
+    else:
+        tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
+        mem('VERIFY TRUTH %s' % truthfile)
+        
+    if challenge in ['2B', '3B']:
+        printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+    truthq.put(tout[0])
+
+def loadPredFiles(predq,predfile,valfunc,pargs,masks,challenge):
+    pout = []
+    
+    pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
+    if pout[-1] is None:
+        err_msgs.append("Unable to open prediction file")
+        return "NA"
+    mem('VERIFY PRED %s' % predfile)
+
+    if challenge in ['2B', '3B']:
+        printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+
+    predq.put(pout[0])
+
  
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     
@@ -1492,7 +1536,11 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
         vcfargs = tpout + nssms[0] + nssms[1]
         # an overlapping matrix is created for challenge 2A
-
+        
+        #queue to store results from multiprocessing
+        #multiprocessing objects
+        truthq = mproc.Queue()
+        predq = mproc.Queue()
         ######### Truth file ####################################################### 
         ####### Seperate for 2A and 3A beacuse of optimization. This should be fixed. 
         if challenge in ['2A', '3A']:
@@ -1520,49 +1568,34 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
                 tpout.append(vpout)
                 tpout.append(vtout)
         
-        elif challenge in ['2B']:
-            try:
-                vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
-            except SampleError as e:
-                raise e
-   
-            printInfo('TRUTH DIMENSIONS -> ', vout.shape)
-
-            if WRITE_2B_FILES:
-                np.savetxt('truth2B.txt.gz', vout)
-
-            mem('VERIFY TRUTH %s' % truthfile)
-            vout_with_pseudo_counts = add_pseudo_counts(vout)
-            tout.append(vout_with_pseudo_counts)
-            mem('APC TRUTH %s' % truthfile)
-        else:
-            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
-            mem('VERIFY TRUTH %s' % truthfile)
         
-        if challenge in ['2B', '3B']:
-            printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+
+        else:
+            #loadTruthFiles(truthq,truthfile,valfunc,targs,masks,challenge)
+            proc_truth = mproc.Process(target=loadTruthFiles,args=(truthq,truthfile,valfunc,targs,masks,challenge))
+            proc_truth.start()
 
         ############## predfile #####################################################
-        if is_gzip(predfile) and challenge not in ['2B', '3B']:
-            err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
-            return "NA"
-
-        # read in from pred file
-        if challenge not in ['2A', '3A']:
-            pargs = pout + nssms[0]
-
-            pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
-            if pout[-1] is None:
-                err_msgs.append("Unable to open prediction file")
+            if is_gzip(predfile) and challenge not in ['2B', '3B']:
+                err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
                 return "NA"
-            mem('VERIFY PRED %s' % predfile)
+        
 
-        if challenge in ['2B', '3B']:
-            printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+            #read in from pred file
+            if challenge not in ['2A', '3A']:
+                pargs = pout + nssms[0]
+            
+            #loadPredFiles(predq,predfile,valfunc,pargs,masks,challenge)
+            proc_pred = mproc.Process(target=loadPredFiles,args=(predq,predfile,valfunc,pargs,masks,challenge))
+            proc_pred.start()
 
-        if challenge not in ['2A', '3A']:
-            if tout[-1] is None or pout[-1] is None:
-                return "NA"
+            pout.append(predq.get())
+            tout.append(truthq.get())
+
+            proc_truth.join()
+            proc_pred.join()
+
+
 
     # if challenge in ['3A'] and WRITE_3B_FILES:
         # np.savetxt('pred3B.txt.gz', pout[-1])
