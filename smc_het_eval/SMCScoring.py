@@ -11,6 +11,8 @@ from scoring_harness_optimized import *
 from permutations import *
 import gc
 import traceback
+import c_extensions
+import multiprocessing as mproc
 
 # blo
 import time
@@ -1122,6 +1124,7 @@ def parseVCF2and3(data, sample_mask=None):
     # ]
     return [[vcf_lines], [true_lines], mask]
 
+#@numba.jit(numba.float64[::](numba.float64[::],numba.float64[::]))
 def filterFPs(x, mask):
     # EVERYTHING is done in memory
     #   1 - the elements at the indicies specified by mask are "picked" and assembled into a matrix
@@ -1136,9 +1139,11 @@ def filterFPs(x, mask):
     #       that's why we don't do it anymore
     if x.shape[0] == x.shape[1]:
         # 1 assemble masked matrix within the original matrix
-        for i, m1 in enumerate(mask):
-            for j, m2 in enumerate(mask):
-                x[i, j] = x[m1, m2]
+        
+        #for i, m1 in enumerate(mask):
+        #    for j, m2 in enumerate(mask):
+        #        x[i, j] = x[m1, m2]
+        c_extensions.filterFPs_remove_fps(x,mask)
 
         old_n = x.shape[0]
         new_n = len(mask)
@@ -1288,7 +1293,7 @@ def verify(filename, role, func, *args, **kwargs):
     t_start = time.time()
     
     try:
-        if func.__name__ in ['validate2B']:
+        if func.__name__ in ['validate2B','validate3B']:
             verified = func(filename,*args, **kwargs)
         elif is_gzip(filename): #pass compressed files directly to 2B or 3B validate functions
             verified = func(filename, *args, **kwargs)
@@ -1448,11 +1453,54 @@ def verifyChallenge(challenge, predfiles, vcf):
             return "Invalid"
     return "Valid"
 
+
+def loadTruthFiles(truthq,truthfile,valfunc,targs,masks,challenge):
+    tout = []
+    vout = []
+    tpout = []
+
+    if challenge in ['2B']:
+        try:
+            vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
+        except SampleError as e:
+            raise e
+
+        printInfo('TRUTH DIMENSIONS -> ', vout.shape)
+
+        if WRITE_2B_FILES:
+            np.savetxt('truth2B.txt.gz', vout)
+
+        mem('VERIFY TRUTH %s' % truthfile)
+        vout_with_pseudo_counts = add_pseudo_counts(vout)
+        tout.append(vout_with_pseudo_counts)
+        mem('APC TRUTH %s' % truthfile)
+    else:
+        tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
+        mem('VERIFY TRUTH %s' % truthfile)
+        
+    if challenge in ['2B', '3B']:
+        printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+    truthq.put(tout[0])
+
+def loadPredFiles(predq,predfile,valfunc,pargs,masks,challenge):
+    pout = []
+    
+    pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
+    if pout[-1] is None:
+        err_msgs.append("Unable to open prediction file")
+        return "NA"
+    mem('VERIFY PRED %s' % predfile)
+
+    if challenge in ['2B', '3B']:
+        printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+
+    predq.put(pout[0])
+
  
 def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     
     
-    
+    ################## Verify VCF ################################################################################
     #global err_msgs
     mem('START %s' % challenge)
     masks = makeMasks(vcf, sample_fraction) if sample_fraction != 1.0 else { 'samples' : None, 'truths' : None}
@@ -1479,7 +1527,7 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     tout = []
     pout = []
     tpout = []
-
+    ############### Verify pred and truth files #############################################################################
     for predfile, truthfile, valfunc in zip(predfiles, truthfiles, challengeMapping[challenge]['val_funcs']):
         if is_gzip(truthfile) and challenge not in ['2B', '3B']:
             err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
@@ -1488,6 +1536,13 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
 
         vcfargs = tpout + nssms[0] + nssms[1]
         # an overlapping matrix is created for challenge 2A
+        
+        #queue to store results from multiprocessing
+        #multiprocessing objects
+        truthq = mproc.Queue()
+        predq = mproc.Queue()
+        ######### Truth file ####################################################### 
+        ####### Seperate for 2A and 3A beacuse of optimization. This should be fixed. 
         if challenge in ['2A', '3A']:
             if valfunc is om_validate2A:
                 try:
@@ -1512,50 +1567,35 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
                     return "NA"                    
                 tpout.append(vpout)
                 tpout.append(vtout)
-
-        elif challenge in ['2B']:
-            try:
-                vout = verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths'])
-            except SampleError as e:
-                raise e
-   
-            printInfo('TRUTH DIMENSIONS -> ', vout.shape)
-
-            if WRITE_2B_FILES:
-                np.savetxt('truth2B.txt.gz', vout)
-
-            mem('VERIFY TRUTH %s' % truthfile)
-            vout_with_pseudo_counts = add_pseudo_counts(vout)
-            tout.append(vout_with_pseudo_counts)
-            mem('APC TRUTH %s' % truthfile)
-        else:
-            tout.append(verify(truthfile, "truth file for Challenge %s" % (challenge), valfunc, *targs, mask=masks['truths']))
-            mem('VERIFY TRUTH %s' % truthfile)
         
-        if challenge in ['2B', '3B']:
-            printInfo('FINAL TRUTH DIMENSIONS -> ', tout[-1].shape)
+        
 
-        # starts reading in predfile here
-        if is_gzip(predfile) and challenge not in ['2B', '3B']:
-            err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
-            return "NA"
+        else:
+            #loadTruthFiles(truthq,truthfile,valfunc,targs,masks,challenge)
+            proc_truth = mproc.Process(target=loadTruthFiles,args=(truthq,truthfile,valfunc,targs,masks,challenge))
+            proc_truth.start()
 
-        # read in from pred file
-        if challenge not in ['2A', '3A']:
-            pargs = pout + nssms[0]
-
-            pout.append(verify(predfile, "prediction file for Challenge %s" % (challenge), valfunc, *pargs, mask=masks['samples']))
-            if pout[-1] is None:
-                err_msgs.append("Unable to open prediction file")
+        ############## predfile #####################################################
+            if is_gzip(predfile) and challenge not in ['2B', '3B']:
+                err_msgs.append('Incorrect format, must input a text file for challenge %s' % challenge)
                 return "NA"
-            mem('VERIFY PRED %s' % predfile)
+        
 
-        if challenge in ['2B', '3B']:
-            printInfo('PRED DIMENSIONS -> ', pout[-1].shape)
+            #read in from pred file
+            if challenge not in ['2A', '3A']:
+                pargs = pout + nssms[0]
+            
+            #loadPredFiles(predq,predfile,valfunc,pargs,masks,challenge)
+            proc_pred = mproc.Process(target=loadPredFiles,args=(predq,predfile,valfunc,pargs,masks,challenge))
+            proc_pred.start()
 
-        if challenge not in ['2A', '3A']:
-            if tout[-1] is None or pout[-1] is None:
-                return "NA"
+            pout.append(predq.get())
+            tout.append(truthq.get())
+
+            proc_truth.join()
+            proc_pred.join()
+
+
 
     # if challenge in ['3A'] and WRITE_3B_FILES:
         # np.savetxt('pred3B.txt.gz', pout[-1])
@@ -1564,6 +1604,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
         printInfo('tout sum -> ', np.sum(tout[0]))
         printInfo('pout sum -> ', np.sum(pout[0]))
 
+
+    ################# filter FPs ###########################################################
     if challengeMapping[challenge]['filter_func']:
         pout = [challengeMapping[challenge]['filter_func'](x, nssms[2]) for x in pout]
         printInfo('PRED DIMENSION(S) -> ', [p.shape for p in pout])
@@ -1582,7 +1624,8 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
             # tout[0] = np.dot(tout[0], tout[0].T)
             # pout[0] = np.dot(pout[0], pout[0].T)
             # mem('3A DOT')
-
+    
+    ############# Score ##########################################################################
     if challenge in ['2A']:
         return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None)
     if challenge in ['3A']:
