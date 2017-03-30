@@ -5,7 +5,7 @@
 // that grows out of the upper-left corner of the original matrix (the original matrix will
 // always be bigger than the eventual masked matrix)
 void filterFPs_remove_fps(double *x,int dimx1, int dimx2, double  *mask, int lenmask){
-    #pragma omp parallel for simd
+    #pragma omp simd
     for (int i = 0; i < lenmask; i++){
         for (int j = 0; j < lenmask; j++){
             int mi = mask[i];
