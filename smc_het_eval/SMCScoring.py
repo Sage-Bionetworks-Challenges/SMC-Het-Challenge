@@ -374,7 +374,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
                 scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
             else:
                 scores[i] = set_to_zero((scores[i] - worst_scores[i]) / (1 - worst_scores[i]))
-        return np.mean(scores)
+        return [scores, np.mean(scores)]
 
     else:
         score = func(pred, truth, full_matrix=full_matrix)
@@ -1497,7 +1497,7 @@ def loadPredFiles(predq,predfile,valfunc,pargs,masks,challenge):
     predq.put(pout[0])
 
  
-def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
+def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0, rnd=0.01):
     
     
     ################## Verify VCF ################################################################################
@@ -1627,11 +1627,11 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
     
     ############# Score ##########################################################################
     if challenge in ['2A']:
-        return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None)
+        return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None, rnd=rnd)
     if challenge in ['3A']:
-        return challengeMapping[challenge]['score_func'](*tpout)
+        return challengeMapping[challenge]['score_func'](*tpout, rnd=rnd)
 
-    return challengeMapping[challenge]['score_func'](*(pout + tout))
+    return challengeMapping[challenge]['score_func'](*(pout + tout), rnd=rnd)
 
 def printInfo(*string):
     if (INFO):
@@ -1686,6 +1686,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='store_true', default=False)
     parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
     parser.add_argument('--approx_seed', nargs=1, type=int, default=[75])
+    parser.add_argument('--rnd', nargs=1, type=float, default=[0.01])
     args = parser.parse_args()
 
     if args.pred_config is not None and args.truth_config is not None:
@@ -1718,7 +1719,7 @@ if __name__ == '__main__':
                 if args.v:
                     res = verifyChallenge(challenge, predfile, vcf)
                 else:
-                    res = scoreChallenge(challenge, predfile, truthfiles, vcf)
+                    res = scoreChallenge(challenge, predfile, truthfiles, vcf, rnd=args.rnd[0])
                 out[challenge] = res
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps(out)
@@ -1742,7 +1743,7 @@ if __name__ == '__main__':
                 resample = True
                 while (resample):
                     try:
-                        res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, sample_fraction)
+                        res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, sample_fraction, rnd=args.rnd[0])
                         print('Score[%d] -> %.5f' % (i + 1, res))
                         results.append(res)
                         resample = False
@@ -1769,7 +1770,7 @@ if __name__ == '__main__':
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, rnd=args.rnd[0])
             print res
             #print('SCORE -> %.16f' % res)
 
