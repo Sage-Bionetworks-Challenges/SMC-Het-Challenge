@@ -226,11 +226,15 @@ def validate2A(data, nssms, return_ccm=True, mask=None, filter_mut=None):
 
     if len(data) != nssms:
         raise ValidationError("Input file contains a different number of lines than the specification file. Input: %s lines Specification: %s lines" % (len(data), nssms))
+
+    # cast cluster numbers
+    data_clusters = np.unique(data)
+
     cluster_entries = set()
     # make a set of all entries in truth file
     for i in xrange(len(data)):
         try:
-            data[i] = int(data[i])
+            data[i] = int(np.where(data_clusters == data[i])[0])+1
             cluster_entries.add(data[i])
         except ValueError:
             raise ValidationError("Cluster ID in line %d (ssm %s) can not be cast as an integer" % (i + 1, data[i][0]))
@@ -342,7 +346,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
 
-    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV', 'js_divergence'] # methods where a larger score is worse
     y = np.array(pred.shape)[1]
     nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
     import gc
@@ -352,6 +356,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         "sqrt"           : calculate2_sqrt,
         "pseudoV"        : calculate2_pseudoV,
         "sym_pseudoV"    : calculate2_sym_pseudoV,
+        "js_divergence"  : calculate2_js_divergence,
         "spearman"       : calculate2_spearman,
         "pearson"        : calculate2_pearson,
         "aupr"           : calculate2_aupr,
@@ -362,7 +367,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        functions = ['pseudoV', 'pearson', 'mcc']
+        functions = ['js_divergence', 'pearson', 'mcc']
         # functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
@@ -480,22 +485,7 @@ def calculate2_simpleKL(pred, truth, rnd=0.01):
     return abs(res)
 
 
-
-def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=True):
-    """Normalized version of the pseudo V measure where the return values are between 0 and 1
-    with 0 being the worst score and 1 being the best
-
-    :param pred:
-    :param truth:
-    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
-    :param max_val: maximum pseudoV value for this scenario - any prediction that has a pseudoV score >= max_val
-        will be given a score of 0
-    :return:
-    """
-    pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
-    return max(1 -  pv_val/ max_val, 0)
-
-def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=True):
+def calculate2_js_divergence(pred, truth, rnd=0.01, full_matrix=True, sym=True):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -550,6 +540,51 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=True):
             res += val1 + val2
         else:
             res += val1
+    return res
+
+
+
+def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=True):
+    """Normalized version of the pseudo V measure where the return values are between 0 and 1
+    with 0 being the worst score and 1 being the best
+
+    :param pred:
+    :param truth:
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param max_val: maximum pseudoV value for this scenario - any prediction that has a pseudoV score >= max_val
+        will be given a score of 0
+    :return:
+    """
+    pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
+    return max(1 -  pv_val/ max_val, 0)
+
+def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
+    if full_matrix:
+        pred_cp = pred
+        truth_cp = truth
+    else: # make matrix upper triangular
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
+    # Avoid dividing by zero by rounding everything less than rnd up to rnd
+    # Note: it is ok to do this after making the matrix upper triangular
+    # since the bottom triangle of the matrix will not affect the score
+
+    size = np.array(pred_cp.shape)[1]
+    res = 0 # result to be returned
+    
+    # do one row at a time to reduce memory usage
+    for x in xrange(size):
+        # (1 - rnd) will cast the pred_cp/truth_cp matrices automatically if they are int8
+        pred_row = (1 - rnd) * pred_cp[x, ] + rnd
+        truth_row = (1 - rnd) * truth_cp[x, ] + rnd
+
+        pred_row /= np.sum(pred_row)
+        truth_row /= np.sum(truth_row)
+        if sym:
+            res += np.sum(truth_row * np.log(truth_row/pred_row)) + np.sum(pred_row * np.log(pred_row/truth_row))
+        else:
+            res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
 
@@ -1445,7 +1480,6 @@ challengeMapping = {
     # According to Quaid, there is no need to filter false positves with the new method developed for scoring subchallenge 2A
     '2A' : {
         'val_funcs' : [om_validate2A],
-#        'score_func' : om_calculate2A,
         'score_func' : calculate2,
         'vcf_func' : parseVCF2and3,
         'filter_func' : None
@@ -1672,10 +1706,12 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0, r
     if challenge in ['2A']:
 #        return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None)
         return challengeMapping[challenge]['score_func'](*tpout, pseudo_counts=None, rnd=rnd)
+    if challenge in ['2B']:
+        return challengeMapping[challenge]['score_func'](*(pout + tout), rnd=rnd)
     if challenge in ['3A']:
         return challengeMapping[challenge]['score_func'](*tpout, rnd=rnd)
 
-    return challengeMapping[challenge]['score_func'](*(pout + tout), rnd=rnd)
+    return challengeMapping[challenge]['score_func'](*(pout + tout))
 
 def printInfo(*string):
     if (INFO):
@@ -1730,7 +1766,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='store_true', default=False)
     parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
     parser.add_argument('--approx_seed', nargs=1, type=int, default=[75])
-    parser.add_argument('--rnd', nargs=1, type=float, default=[0.01])
+    parser.add_argument('--rnd', nargs=1, type=float, default=[0.00])
     args = parser.parse_args()
 
     if args.pred_config is not None and args.truth_config is not None:

@@ -78,7 +78,7 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
 
-    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV', 'js_divergence'] # methods where a larger score is worse
     import gc
     func_dict = {
         "orig"           : om_calculate2_orig,
@@ -87,6 +87,7 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         "aupr"           : om_calculate2_aupr,
         "pseudoV"        : om_calculate2_pseudoV,
         "sym_pseudoV"    : om_calculate2_sym_pseudoV,
+        "js_divergence"  : om_calculate2_js_divergence,
         "mcc"            : om_calculate2_mcc
     }
     func = func_dict.get(method, None)
@@ -98,11 +99,11 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         worst_scores = []
 
         # pearson and mcc give the same score for 2A
-        functions = ['pseudoV','mcc','mcc']
+        functions = ['js_divergence','mcc','mcc']
 
         for m in functions:
             gc.collect()
-            if m is 'pseudoV' or m is 'sym_pseudoV':
+            if m is 'pseudoV' or m is 'sym_pseudoV' or m is 'js_divergence':
                 scores.append(func_dict[m](om, full_matrix=full_matrix, modify=add_pseudo, pseudo_counts=pseudo_counts, rnd=rnd))
             else:
                 scores.append(func_dict[m](tp, fp, tn, fn, full_matrix=full_matrix, rnd=rnd))
@@ -111,6 +112,8 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         for m in functions:
             gc.collect()
             worst_scores.append(get_worst_score_om(om, func_dict[m], larger_is_worse=(m in larger_is_worse_methods), rnd=rnd))
+#        print "DEBUG raw scores", scores
+#        print "DEBUG worst scores", worst_scores
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
@@ -120,7 +123,7 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
 
     else:
         # if it is pseudo_count, immediately modify true
-        if func is func_dict['pseudoV'] or func is func_dict['sym_pseudoV']:
+        if func is func_dict['pseudoV'] or func is func_dict['sym_pseudoV'] or func is func_dict['js_divergence']:
             if add_pseudo:
                 score = func(om, full_matrix=full_matrix, modify=True, pseudo_counts=pseudo_counts, rnd=rnd)
             else:
@@ -203,7 +206,93 @@ def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True):
 
     return np.sqrt(1-float(res)/count)
 
-def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=True, modify=False, pseudo_counts=None):
+def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_counts=None, rnd=0.01, P=None, T=None, challenge='2A'):
+
+    """Helper function for JS-divergence score
+    :param om: shared overlap matrix
+    :param t: total number of entries
+    :param row: row to use
+    :param column: column to use
+    :param modify: used to determine if pseudo_counts should be added
+    :param pseudo_counts: number of pseudo_counts that will be added to overlapping matrix
+    :return: one-sided score for subchallenge 2
+    """
+
+    if challenge is '2A':
+        total_truth = np.sum(om[row,:]) * 1.0
+        total_pred = np.sum(om[:,column]) * 1.0
+    elif challenge is '3A':
+        total_truth = T[row, 0] * 1.0
+        total_pred = P[column, 0] * 1.0
+
+    tp = om[row,column] * 1.0
+    fn = total_truth - tp
+    fp = total_pred - tp
+    tn = t + tp - total_truth - total_pred
+
+    if modify:
+        tn += pseudo_counts
+
+    if tp < 0 or fn < 0:
+        raise ValidationError("True positive or false negative should not be negative values")
+
+    total_truth_pseudo = tp + fn + (fp + tn)*rnd
+    total_pred_pseudo = tp + fp + (fn + tn)*rnd
+
+    mid_tp_cases = 0.5 * (1/total_truth_pseudo + 1/total_pred)
+    mid_fn_cases = 0.5 * (1/total_truth_pseudo + rnd/total_pred)
+    mid_fp_cases = 0.5 * (rnd/total_truth_pseudo + 1/total_pred)
+    mid_tn_cases = 0.5 * (rnd/total_truth_pseudo + rnd/total_pred)
+    # mid_fp_cases is not 0, but is multiplied by a 0 term since truth file doesn't have it; so can ignore
+    # mid_tn_cases is 0
+
+    # get smallest possible float -- for 0 values
+    small = np.nextafter(0.,1.)
+    res = (
+        total_truth_pseudo * np.log(1/total_truth_pseudo) -
+        tp * np.log(mid_tp_cases) -
+        fn * np.log(mid_fn_cases) -
+        fp * (rnd+small) * np.log(mid_fp_cases+small) -
+        tn * (rnd+small) * np.log(mid_tn_cases+small)
+        )
+
+    res /= total_truth
+    return res
+ 
+def om_calculate2_js_divergence(om, rnd=0.01, full_matrix=True, sym=True, modify=False, pseudo_counts=None):
+
+    """Calculates the Jensen-Shannon divergence score for subchallenge 2
+    :param om: shared overlap matrix
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param full_matrix: used to determine if full matrix should be used
+    :param sym: score will be the same if prediction and truth file were swapped
+    :param modify: used to determine if pseudo_counts should be added
+    :param pseudo_counts: number of pseudo_counts that will be added to overlapping matrix
+    :return: score for subchallenge 2
+    """
+    res = 0
+    t = 0
+
+    for row in range(om.shape[0]):
+        t += np.sum(om[row])
+
+    if modify:
+        if pseudo_counts is None:
+            pseudo_counts = int(np.floor(np.sqrt(t)))
+
+    for row in range(om.shape[0]):
+        for column in range(om.shape[1]):
+            for count in range(om[row, column]):
+                sym1 = om_calculate2_js_divergence_helper(om, t, row, column, modify, pseudo_counts, rnd=rnd, challenge='2A')
+                res += sym1
+
+                if sym:
+                    sym2 = om_calculate2_js_divergence_helper(np.transpose(om), t, column, row, modify, pseudo_counts, rnd=rnd, challenge='2A')
+                    res += sym2
+
+    return res
+
+def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
 
     """Calculates the pseudoV score for subchallenge 2
     :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
@@ -240,38 +329,62 @@ def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=True, modify=False
 
                 sum_of_truth_row = tp + fn + (fp + tn)*rnd
                 sum_of_pred_row = tp + fp + (fn + tn)*rnd
-                sum_of_sum_row = 0.5 * (sum_of_truth_row + sum_of_pred_row)
 
+                # get smallest possible float -- for 0 values
+                small = np.nextafter(0.,1.)
                 if tp != 0 or fp != 0 or tn != 0 or fn != 0:
                     sym2 = (
                         np.log(sum_of_pred_row) * (tp + rnd*fp + fn + rnd*tn) -
-                        np.log(sum_of_sum_row) * (tp + rnd*fp + fn + rnd*tn)
+                        np.log(sum_of_truth_row) * (tp + rnd*fp + fn + rnd*tn) +
+                        np.log(rnd+small) * ((rnd+small)*fp - fn)
                         )
-                    if rnd != 0:
-                        sym2 += np.log(rnd) * (rnd*fp - fn)
-                    else:
-                        sym2 += np.log(1e-50) * (1e-50*fp - fn)
 
-                    sym2 /= sum_of_sum_row
+                    sym2 /= sum_of_truth_row
                     res += sym2
 
                 if sym:
                     if tp != 0 or fp != 0 or tn != 0 or fn != 0:
                         sym1 = (
                             np.log(sum_of_truth_row) * (tp + rnd*fn + fp + rnd*tn) -
-                            np.log(sum_of_sum_row) * (tp + rnd*fn + fp + rnd*tn)
+                            np.log(sum_of_pred_row) * (tp + rnd*fn + fp + rnd*tn) +
+                            np.log(rnd+small) * ((rnd+small)*fn - fp)
                             )
-                        if rnd != 0:
-                            sym1 += np.log(rnd) * (rnd*fn - fp)
-                        else:
-                            sym1 += np.log(1e-50) * (1e-50*fn - fp)
 
-                        sym1 /= sum_of_sum_row
+                        sym1 /= sum_of_pred_row
                         res += sym1
 
         # no need to consider the other pseudo_count rows, since sym1 and sym2 evaluate to zero for these rows
 
     return res
+
+def calculate3_js_divergence(srm, om, P, T, rnd=0.01, sym=True):
+    """Calculates the JS divergence score for subchallenge 3
+    :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
+    :param om: overlapping matrix
+    :param P: matrix that specifies number of ancestors/descendents each cluster has in the prediction file
+    :param T: matrix that specifies number of ancestors/descendents each cluster has in the truth file
+    :param rnd: small value to replace 0 entries in both matrices with. Used to avoid dividing by zero
+    :param sym: score will be the same if prediction and truth file were swapped
+    :return: score for subchallenge 3
+    """
+    res = 0
+    t = 0
+    for row in range(om.shape[0]):
+        t += np.sum(om[row])
+
+    for row in range(om.shape[0]):
+        for column in range(om.shape[1]):
+            if om[row, column] != 0:
+                for count in range(om[row, column]):
+                    sym1 = om_calculate2_js_divergence_helper(srm, t, row, column, modify=False, rnd=rnd, P=P, T=T, challenge='3A')
+                    res += sym1
+
+                    if sym:
+                        sym2 = om_calculate2_js_divergence_helper(np.transpose(srm), t, column, row, modify=False, rnd=rnd, P=P, T=T, challenge='3A')
+                        res += sym2
+
+    return res
+
 
 def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
     """Calculates the pseudoV score for subchallenge 3
@@ -302,33 +415,31 @@ def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
 
                     sum_of_truth_row = tp + fn + (fp + tn)*rnd
                     sum_of_pred_row = tp + fp + (fn + tn)*rnd
-                    sum_of_sum_row = 0.5 * (sum_of_truth_row + sum_of_pred_row)
+
+                    # get smallest possible float -- for 0 values
+                    small = np.nextafter(0.,1.)
+                    sum_of_truth_row += small
+                    sum_of_pred_row += small
 
                     if tp != 0 or fp != 0 or tn != 0 or fn != 0:
                         sym2 = (
                             np.log(sum_of_pred_row) * (tp + rnd*fp + fn + rnd*tn) -
-                            np.log(sum_of_sum_row) * (tp + rnd*fp + fn + rnd*tn)
+                            np.log(sum_of_truth_row) * (tp + rnd*fp + fn + rnd*tn) +
+                            np.log(rnd+small) * ((rnd+small)*fp - fn)
                             )
-                        if rnd != 0:
-                            sym2 += np.log(rnd) * (rnd*fp - fn)
-                        else:
-                            sym2 += np.log(1e-50) * (1e-50*fp - fn)
 
-                        sym2 /= sum_of_sum_row
+                        sym2 /= sum_of_truth_row
                         res += sym2
 
                     if sym:
                         if tp != 0 or fp != 0 or tn != 0 or fn != 0:
                             sym1 = (
                                 np.log(sum_of_truth_row) * (tp + rnd*fn + fp + rnd*tn) -
-                                np.log(sum_of_sum_row) * (tp + rnd*fn + fp + rnd*tn)
+                                np.log(sum_of_pred_row) * (tp + rnd*fn + fp + rnd*tn) +
+                                np.log(rnd+small) * ((rnd+small)*fn - fp)
                                 )
-                            if rnd != 0:
-                                sym1 += np.log(rnd) * (rnd*fn - fp)
-                            else:
-                                sym1 += np.log(1e-50) * (1e-50*fn - fp)
     
-                            sym1 /= sum_of_sum_row
+                            sym1 /= sum_of_pred_row
                             res += sym1
 
     return res
@@ -669,7 +780,7 @@ def calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification=None, rnd=0.01
     return calculate3_pseudoV(srm, om, P, T, rnd=rnd)
 
 def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification=None, truth_data=None, rnd=0.01):
-    """Calculates the worst pseudoV score given an overlap matrix and matrices which describes the relationship of clusters in both
+    """Calculates the worst score given an overlap matrix and matrices which describes the relationship of clusters in both
     pred and truth files
     :param om: overlap matrix
     :param ad_pred: matrix which describes the relationshop between clusters has in the prediction file
@@ -808,7 +919,7 @@ def get_worst_score_om(om, scoring_func, larger_is_worse=True, rnd=0.01):
 
 # Equivalent to get_bad_score in original function
 def get_bad_score_om(om, score_func, scenario='OneCluster', pseudo_counts=None, rnd=0.01):
-    if score_func is om_calculate2_pseudoV or score_func is om_calculate2_pseudoV_norm or score_func is om_calculate2_sym_pseudoV:
+    if score_func is om_calculate2_pseudoV or score_func is om_calculate2_pseudoV_norm or score_func is om_calculate2_sym_pseudoV or score_func is om_calculate2_js_divergence:
         bad_om = get_bad_om(om, scenario)
         return score_func(bad_om, modify=True, pseudo_counts=pseudo_counts, rnd=rnd)
     else:
