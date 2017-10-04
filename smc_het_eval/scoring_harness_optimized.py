@@ -68,7 +68,7 @@ def om_validate2A (pred_data, truth_data, nssms_x, nssms_y, filter_mut=None, mas
 
     return om
 
-def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseudo_counts=None, rnd=0.01):
+def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseudo_counts=None, rnd=1e-50):
     '''
     Calculate the score for SubChallenge 2
     :param om: overlapping matrix
@@ -206,7 +206,7 @@ def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True):
 
     return np.sqrt(1-float(res)/count)
 
-def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_counts=None, rnd=0.01, P=None, T=None, challenge='2A'):
+def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_counts=None, rnd=1e-50, P=None, T=None, challenge='2A'):
 
     """Helper function for JS-divergence score
     :param om: shared overlap matrix
@@ -217,6 +217,8 @@ def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_
     :param pseudo_counts: number of pseudo_counts that will be added to overlapping matrix
     :return: one-sided score for subchallenge 2
     """
+    # get smallest possible float -- for 0 values
+    small = np.nextafter(0.,1.)
 
     if challenge is '2A':
         total_truth = np.sum(om[row,:]) * 1.0
@@ -224,6 +226,9 @@ def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_
     elif challenge is '3A':
         total_truth = T[row, 0] * 1.0
         total_pred = P[column, 0] * 1.0
+        
+        if total_truth == 0 or total_pred == 0:
+            return 0
 
     tp = om[row,column] * 1.0
     fn = total_truth - tp
@@ -233,21 +238,19 @@ def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_
     if modify:
         tn += pseudo_counts
 
-    if tp < 0 or fn < 0:
+    if tp < 0 or fn < 0 or fp < 0 or tn < 0:
         raise ValidationError("True positive or false negative should not be negative values")
 
     total_truth_pseudo = tp + fn + (fp + tn)*rnd
     total_pred_pseudo = tp + fp + (fn + tn)*rnd
 
-    mid_tp_cases = 0.5 * (1/total_truth_pseudo + 1/total_pred)
-    mid_fn_cases = 0.5 * (1/total_truth_pseudo + rnd/total_pred)
-    mid_fp_cases = 0.5 * (rnd/total_truth_pseudo + 1/total_pred)
-    mid_tn_cases = 0.5 * (rnd/total_truth_pseudo + rnd/total_pred)
+    mid_tp_cases = 0.5 * (1/total_truth_pseudo + 1/total_pred_pseudo)
+    mid_fn_cases = 0.5 * (1/total_truth_pseudo + rnd/total_pred_pseudo)
+    mid_fp_cases = 0.5 * (rnd/total_truth_pseudo + 1/total_pred_pseudo)
+    mid_tn_cases = 0.5 * (rnd/total_truth_pseudo + rnd/total_pred_pseudo)
     # mid_fp_cases is not 0, but is multiplied by a 0 term since truth file doesn't have it; so can ignore
     # mid_tn_cases is 0
 
-    # get smallest possible float -- for 0 values
-    small = np.nextafter(0.,1.)
     res = (
         total_truth_pseudo * np.log(1/total_truth_pseudo) -
         tp * np.log(mid_tp_cases) -
@@ -259,7 +262,7 @@ def om_calculate2_js_divergence_helper(om, t, row, column, modify=False, pseudo_
     res /= total_truth
     return res
  
-def om_calculate2_js_divergence(om, rnd=0.01, full_matrix=True, sym=True, modify=False, pseudo_counts=None):
+def om_calculate2_js_divergence(om, rnd=1e-50, full_matrix=True, sym=True, modify=False, pseudo_counts=None):
 
     """Calculates the Jensen-Shannon divergence score for subchallenge 2
     :param om: shared overlap matrix
@@ -292,7 +295,7 @@ def om_calculate2_js_divergence(om, rnd=0.01, full_matrix=True, sym=True, modify
 
     return res
 
-def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
+def om_calculate2_pseudoV(om, rnd=1e-50, full_matrix=True, sym=False, modify=False, pseudo_counts=None):
 
     """Calculates the pseudoV score for subchallenge 2
     :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
@@ -357,7 +360,7 @@ def om_calculate2_pseudoV(om, rnd=0.01, full_matrix=True, sym=False, modify=Fals
 
     return res
 
-def calculate3_js_divergence(srm, om, P, T, rnd=0.01, sym=True):
+def calculate3_js_divergence(srm, om, P, T, rnd=1e-50, sym=True):
     """Calculates the JS divergence score for subchallenge 3
     :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
     :param om: overlapping matrix
@@ -380,13 +383,13 @@ def calculate3_js_divergence(srm, om, P, T, rnd=0.01, sym=True):
                     res += sym1
 
                     if sym:
-                        sym2 = om_calculate2_js_divergence_helper(np.transpose(srm), t, column, row, modify=False, rnd=rnd, P=P, T=T, challenge='3A')
+                        sym2 = om_calculate2_js_divergence_helper(np.transpose(srm), t, column, row, modify=False, rnd=rnd, P=T, T=P, challenge='3A')
                         res += sym2
 
     return res
 
 
-def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
+def calculate3_pseudoV(srm, om, P, T, rnd=1e-50, sym=False):
     """Calculates the pseudoV score for subchallenge 3
     :param srm: shared relative matrix (this could be shared ancestor matrix, shared cousin matrix, or shared descendent matrix)
     :param om: overlapping matrix
@@ -444,15 +447,15 @@ def calculate3_pseudoV(srm, om, P, T, rnd=0.01, sym=True):
 
     return res
 
-def om_calculate2_pseudoV_norm(om, rnd=0.01, max_val=4000, full_matrix=True, modify=False, pseudo_counts=None):
+def om_calculate2_pseudoV_norm(om, rnd=1e-50, max_val=4000, full_matrix=True, modify=False, pseudo_counts=None):
     pv_val = calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
     return max(1 -  pv_val/ max_val, 0) 
 
-def om_calculate2_sym_pseudoV_norm(om, rnd=0.01, max_val=8000, full_matrix=True, modify=False, pseudo_counts=None):
+def om_calculate2_sym_pseudoV_norm(om, rnd=1e-50, max_val=8000, full_matrix=True, modify=False, pseudo_counts=None):
     spv_val = om_calculate2_sym_pseudoV(om, rnd=rnd, full_matrix=full_matrix, modify=False, pseudo_counts=pseudo_counts)
     return max(1 - spv_val / max_val, 0)
 
-def om_calculate2_sym_pseudoV(om, rnd=0.01, full_matrix=True, modify=False, pseudo_counts=None):
+def om_calculate2_sym_pseudoV(om, rnd=1e-50, full_matrix=True, modify=False, pseudo_counts=None):
     return om_calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, sym=True, modify=modify, pseudo_counts=pseudo_counts)
 
 # outputs the same result as calculate2_spearman, but customized for overlapping matrix
@@ -511,7 +514,7 @@ def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True):
     return aucpr
 
 # does the same thing as calculate2_mcc, but customized for overlapping matrix
-def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True, rnd=0.01):
+def om_calculate2_mcc(tp, fp, tn, fn, full_matrix=True, rnd=1e-50):
     if (not full_matrix):
         tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
         fn /= 2 
@@ -754,7 +757,7 @@ def calculate_descendant_matrix(srm, om, P, T):
     return tp, fp, tn, fn
 
 # This method is a wrapper class for calculate3_pseudoV; ad_pred and ad_truth are adjusted according to the modification
-def calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification=None, rnd=0.01):
+def calculate3A_final(om, ad_pred, ad_truth, modification=None, rnd=1e-50):
     """Calculates the pseudoV score given an overlap matrix, and matrices which describes the relationship of clusters in both
     pred and truth files
     :param om: overlap matrix
@@ -777,9 +780,10 @@ def calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification=None, rnd=0.01
     P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
     srm = construct_relative_matrix(om, pred, truth, mode="descendant")
 
-    return calculate3_pseudoV(srm, om, P, T, rnd=rnd)
+    return calculate3_js_divergence(srm, om, P, T, rnd=rnd)
+#    return calculate3_pseudoV(srm, om, P, T, rnd=rnd)
 
-def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification=None, truth_data=None, rnd=0.01):
+def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification=None, truth_data=None, rnd=1e-50):
     """Calculates the worst score given an overlap matrix and matrices which describes the relationship of clusters in both
     pred and truth files
     :param om: overlap matrix
@@ -807,10 +811,11 @@ def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification
     else:
         raise ValidationError('Incorrect modficiation')
 
-    return calculate3_pseudoV(worst_srm, worst_om, worst_P, T, rnd=rnd)
+    return calculate3_js_divergence(worst_srm, worst_om, worst_P, T, rnd=rnd)
+#    return calculate3_pseudoV(worst_srm, worst_om, worst_P, T, rnd=rnd)
 
 # This method is equivalent to the calculate3Final in the orignal script
-def calculate3A(om, truth_data, ad_pred, ad_truth, rnd=0.01):
+def calculate3A(om, truth_data, ad_pred, ad_truth, rnd=1e-50):
     """Calculates the score given an overlap matrix and matrices which describes the relationship of clusters in both
     pred and truth files
     :param om: overlap matrix
@@ -834,9 +839,9 @@ def calculate3A(om, truth_data, ad_pred, ad_truth, rnd=0.01):
     n_scores_permuted.append(n_scores[2])
 
     scores = []
-    scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth, rnd=rnd)))
-    scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="transpose", rnd=rnd)))
-    scores.append(set_to_zero(calculate3A_pseudoV_final(om, ad_pred, ad_truth, modification="cousin", rnd=rnd)))
+    scores.append(set_to_zero(calculate3A_final(om, ad_pred, ad_truth, rnd=rnd)))
+    scores.append(set_to_zero(calculate3A_final(om, ad_pred, ad_truth, modification="transpose", rnd=rnd)))
+    scores.append(set_to_zero(calculate3A_final(om, ad_pred, ad_truth, modification="cousin", rnd=rnd)))
 
     one_scores = []
     one_scores.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", rnd=rnd)))
@@ -902,7 +907,7 @@ def add_pseudo_counts_om_eff(tp, fp, tn, fn, num=None):
     return tp, fp, tn, fn 
 
 # The equivalent to get_worst_score, but for overlap matrices
-def get_worst_score_om(om, scoring_func, larger_is_worse=True, rnd=0.01):
+def get_worst_score_om(om, scoring_func, larger_is_worse=True, rnd=1e-50):
     """calculates worst score for subchallenge 2A given a function
     :param overlap matrix
     :param scoring_func: the method to be used
@@ -918,7 +923,7 @@ def get_worst_score_om(om, scoring_func, larger_is_worse=True, rnd=0.01):
 
 
 # Equivalent to get_bad_score in original function
-def get_bad_score_om(om, score_func, scenario='OneCluster', pseudo_counts=None, rnd=0.01):
+def get_bad_score_om(om, score_func, scenario='OneCluster', pseudo_counts=None, rnd=1e-50):
     if score_func is om_calculate2_pseudoV or score_func is om_calculate2_pseudoV_norm or score_func is om_calculate2_sym_pseudoV or score_func is om_calculate2_js_divergence:
         bad_om = get_bad_om(om, scenario)
         return score_func(bad_om, modify=True, pseudo_counts=pseudo_counts, rnd=rnd)

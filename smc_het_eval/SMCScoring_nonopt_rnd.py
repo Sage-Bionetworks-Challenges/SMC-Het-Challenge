@@ -335,7 +335,7 @@ def isSymmetric(x):
     return symmetricity
 
 #@profile
-def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None, rnd=0.01):
+def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None, rnd=1e-50):
     '''
     Calculate the score for SubChallenge 2
     :param pred: predicted co-clustering matrix
@@ -459,7 +459,7 @@ def calculate2_sqrt(pred, truth, full_matrix=True):
     return np.sqrt(1 - res)
 
 
-def calculate2_simpleKL_norm(pred, truth, rnd=0.01):
+def calculate2_simpleKL_norm(pred, truth, rnd=1e-50):
     """Normalized version of the pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -471,7 +471,7 @@ def calculate2_simpleKL_norm(pred, truth, rnd=0.01):
     return 1 - calculate2_simpleKL(pred, truth, rnd=rnd) / 4000
 
 # Out of date!!
-def calculate2_simpleKL(pred, truth, rnd=0.01):
+def calculate2_simpleKL(pred, truth, rnd=1e-50):
     pred = np.abs(pred - rnd)
     n = truth.shape[0]
     indices = np.triu_indices(n, k=1)
@@ -485,7 +485,7 @@ def calculate2_simpleKL(pred, truth, rnd=0.01):
     return abs(res)
 
 
-def calculate2_js_divergence(pred, truth, rnd=0.01, full_matrix=True, sym=True):
+def calculate2_js_divergence(pred, truth, rnd=1e-50, full_matrix=True, sym=True):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -544,7 +544,7 @@ def calculate2_js_divergence(pred, truth, rnd=0.01, full_matrix=True, sym=True):
 
 
 
-def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=True):
+def calculate2_pseudoV_norm(pred, truth, rnd=1e-50, max_val=4000, full_matrix=True):
     """Normalized version of the pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -558,7 +558,7 @@ def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=Tru
     pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
+def calculate2_pseudoV(pred, truth, rnd=1e-50, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -588,7 +588,7 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     return res
 
 
-def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix=True):
+def calculate2_sym_pseudoV_norm(pred, truth, rnd=1e-50, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -603,7 +603,7 @@ def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix
     return max(1 - spv_val / max_val, 0)
 
 
-def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
+def calculate2_sym_pseudoV(pred, truth, rnd=1e-50, full_matrix=True):
     return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
 
 def calculate2_spearman(pred, truth, full_matrix=True):
@@ -633,7 +633,7 @@ def calculate2_spearman(pred, truth, full_matrix=True):
 
     return row
 
-def calculate2_pearson(pred, truth, full_matrix=True, rnd=0.01):
+def calculate2_pearson(pred, truth, full_matrix=True, rnd=1e-50):
     if full_matrix:
         pass
     else:
@@ -728,7 +728,7 @@ def calculate2_aupr(pred, truth, full_matrix=True):
 # don't just use upper triangular matrix because you get na's with the AD matrix
 # note about casting: should be int/float friendly for pred/truth matrices
 
-def calculate2_mcc(pred, truth, full_matrix=True, rnd=0.01):
+def calculate2_mcc(pred, truth, full_matrix=True, rnd=1e-50):
     n = truth.shape[0]
     ptype = str(pred.dtype)
     ttype = str(truth.dtype)
@@ -1083,7 +1083,7 @@ method_funcs = {"pseudoV": calculate2_pseudoV,
                 "orig": calculate2_orig
     }
 
-def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, method="orig", verbose=False, full_matrix=True, in_mat=2):
+def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=1e-50, method="orig", verbose=False, full_matrix=True, in_mat=2):
     """Calculate the score for subchallenge 3 using the given metric
 
     :param pred_ccm: predicted co-clustering matrix
@@ -1294,7 +1294,7 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     return ccm
 
 
-def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True, rnd=0.01):
+def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True, rnd=1e-50):
     """
     Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
 
@@ -1329,7 +1329,7 @@ def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge=
         raise ValueError('Subchallenge must be one of SC2 or SC3')
 
 
-def get_bad_score(nssms, true_ccm, score_func, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None, rnd=0.01):
+def get_bad_score(nssms, true_ccm, score_func, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None, rnd=1e-50):
     if subchallenge is 'SC2':
         bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario), num=pseudo_counts)
         return score_func(bad_ccm, true_ccm, rnd=rnd)
@@ -1570,7 +1570,7 @@ def loadPredFiles(predq,predfile,valfunc,pargs,masks,challenge):
     predq.put(pout[0])
 
  
-def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0, rnd=0.01):
+def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0, rnd=1e-50):
     
     
     ################## Verify VCF ################################################################################
@@ -1766,7 +1766,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='store_true', default=False)
     parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
     parser.add_argument('--approx_seed', nargs=1, type=int, default=[75])
-    parser.add_argument('--rnd', nargs=1, type=float, default=[0.00])
+    parser.add_argument('--rnd', nargs=1, type=float, default=[1e-50])
     args = parser.parse_args()
 
     if args.pred_config is not None and args.truth_config is not None:
