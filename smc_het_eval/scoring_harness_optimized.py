@@ -833,9 +833,9 @@ def calculate3A(om, truth_data, ad_pred, ad_truth, rnd=1e-50):
     n_scores_permuted = []
     
     P, T = construct_related_mutations_matrix(om, ad_pred, ad_truth, mode="descendant")
-    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T)))
+    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T, rnd=rnd)))
     P, T = construct_related_mutations_matrix(om, ad_pred.T, ad_truth.T, mode="descendant")
-    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T)))
+    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T, rnd=rnd)))
     n_scores_permuted.append(n_scores[2])
 
     scores = []

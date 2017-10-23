@@ -914,7 +914,8 @@ def checkForBadTriuIndices(*matrices):
     if (equalShapes):
         for i in xrange(shape[0]):
             for j in xrange(i + offset, shape[0]):
-                fail &= reduce(lambda x, y: x + y, [z[i, j] for z in matrices]) <= 1
+                val = reduce(lambda x, y: x + y, [z[i, j] for z in matrices])
+                fail &= (val <= 1 or np.isclose(val, 1, 1e-3))
                 if (not fail):
                     break
     else:
@@ -922,7 +923,7 @@ def checkForBadTriuIndices(*matrices):
     return not fail
 
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
-    f = calculate2_sym_pseudoV
+    f = calculate2_js_divergence
     
     scores = []
     scores.append(f(pred_ad, truth_ad))

@@ -500,9 +500,9 @@ def calculate2_js_divergence(pred, truth, rnd=1e-50, full_matrix=True, sym=True)
         sum_row = 0.5 * (pred_row + truth_row)
 
         # find which values are 0
-        pred_zeros = np.where(np.array(pred_row) ==0)[0]
-        truth_zeros = np.where(np.array(truth_row) ==0)[0]
-        sum_zeros = np.where(np.array(sum_row) ==0)[0]
+        pred_zeros = np.where(np.array(pred_row) <=0)[0]
+        truth_zeros = np.where(np.array(truth_row) <=0)[0]
+        sum_zeros = np.where(np.array(sum_row) <=0)[0]
         
         # temporary replacement to pass the log and division errors
         for x in pred_zeros:
@@ -901,7 +901,8 @@ def checkForBadTriuIndices(*matrices):
     if (equalShapes):
         for i in xrange(shape[0]):
             for j in xrange(i + offset, shape[0]):
-                fail &= reduce(lambda x, y: x + y, [z[i, j] for z in matrices]) <= 1
+                val = reduce(lambda x, y: x + y, [z[i, j] for z in matrices])
+                fail &= (val <= 1 or np.isclose(val, 1, 1e-3))
                 if (not fail):
                     break
     else:
@@ -909,7 +910,7 @@ def checkForBadTriuIndices(*matrices):
     return not fail
 
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
-    f = calculate2_sym_pseudoV
+    f = calculate2_js_divergence
     
     scores = []
     scores.append(f(pred_ad, truth_ad))

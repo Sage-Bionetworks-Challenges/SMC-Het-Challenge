@@ -3,14 +3,14 @@ import math
 import itertools
 from scipy.special import comb, gammaln
 
-def calcSame(num_of_ones, num_of_mutations, rnd=0.01):
+def calcSame(num_of_ones, num_of_mutations, rnd=1e-50):
     num_of_zeros = num_of_mutations - num_of_ones
     sum_of_row = num_of_zeros * rnd + num_of_ones
 
     return num_of_zeros * (rnd/sum_of_row) * np.log(rnd/sum_of_row) + num_of_ones * (1/sum_of_row) * np.log(1/sum_of_row)
 
 
-def calcDifferent(num_of_ones_in_pred, num_of_ones_in_truth, num_of_mutations, tp, rnd=0.01):
+def calcDifferent(num_of_ones_in_pred, num_of_ones_in_truth, num_of_mutations, tp, rnd=1e-50):
     fp = num_of_ones_in_pred - tp
     fn = num_of_ones_in_truth - tp
     tn = num_of_mutations - tp - fp - fn
@@ -26,7 +26,7 @@ def calcDifferent(num_of_ones_in_pred, num_of_ones_in_truth, num_of_mutations, t
         ((1/sum_of_pred_row)*np.log(rnd/sum_of_truth_row) + (rnd/sum_of_truth_row)*np.log(1/sum_of_pred_row))*fp +
         ((rnd/sum_of_pred_row)*np.log(rnd/sum_of_truth_row) + (rnd/sum_of_truth_row)*np.log(rnd/sum_of_pred_row))*tn)
 
-def ccm_permute_N_cluster(ad_true, rnd=0.01):
+def ccm_permute_N_cluster(ad_true, rnd=1e-50):
     num_of_mutations = ad_true.shape[0]
     num_of_descendants_in_cluster_list = []
     
@@ -81,7 +81,7 @@ def ccm_permute_N_cluster(ad_true, rnd=0.01):
     return p+q-r
 
 
-def om_permute_N_cluster(om, num_of_descendants_in_cluster, rnd=0.01):
+def om_permute_N_cluster(om, num_of_descendants_in_cluster, rnd=1e-50):
     num_of_mutations = 0
     for row in range(om.shape[0]):
         for column in range(om.shape[1]):
@@ -129,7 +129,7 @@ def om_permute_N_cluster(om, num_of_descendants_in_cluster, rnd=0.01):
     return p+q-r
 
 
-def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
+def calculate2_pseudoV(pred, truth, rnd=1e-50, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -158,7 +158,7 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
             res += np.sum(truth_row * np.log(truth_row/pred_row))
     return res
 
-def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
+def calculate2_sym_pseudoV(pred, truth, rnd=1e-50, full_matrix=True):
     return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
 
 def calculate2_sym_pseudoV_average(arr, ad_truth):
