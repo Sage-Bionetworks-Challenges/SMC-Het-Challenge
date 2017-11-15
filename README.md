@@ -2,24 +2,6 @@
 
 Development of the automated scoring system for the SMC-Het Challenge
 
-## Buiding
-
-Dependancies:
-- swig 2.0.12 or greater
-- gcc 4.9.2-12 or greater
-- OpenMP 4.5 or greater
-- python headers
-- numpy with headers
-
-Compiling c extensions and wrapping for python:
-
-```bash
-cd smc_het_eval
-swig -python c_extensions.i
-gcc -fopenmp -std=c99 -fpic -c c_extensions.c c_extensions_wrap.c -I /path/to/numpy/core/include -I /path/to/python/include/python2.7
-ld -shared c_extensions.o c_extensions_wrap.o -o _c_extensions.so
-```
-
 ## Evaluator
 
 The evaluator for the SMC-Het Challenges is the python script **SMCScoring.py**.
