@@ -112,8 +112,6 @@ def om_calculate2A(om, full_matrix=True, method='default', add_pseudo=True, pseu
         for m in functions:
             gc.collect()
             worst_scores.append(get_worst_score_om(om, func_dict[m], larger_is_worse=(m in larger_is_worse_methods), rnd=rnd))
-#        print "DEBUG raw scores", scores
-#        print "DEBUG worst scores", worst_scores
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
@@ -178,7 +176,7 @@ def calculate_overlap_matrix(om):
 #### METRICS DEVELOPED FOR OPTIMIZATION ####################################################################
 
 # this function is the same as calculate2_orig but is customized for overlapping matrix
-def om_calculate2_orig(tp, fp, tn, fn, full_matrix=True):
+def om_calculate2_orig(tp, fp, tn, fn, full_matrix=True, rnd=1e-50):
     if full_matrix:
         tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
     else:
@@ -192,7 +190,7 @@ def om_calculate2_orig(tp, fp, tn, fn, full_matrix=True):
     return 1-float(res)/count
 
 # this function is the same as calculate2_sqrt but is customized for overlapping matrix
-def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True):
+def om_calculate2_sqrt(tp, fp, tn, fn, full_matrix=True, rnd=1e-50):
     if full_matrix:
         tp -= int(np.around(np.sqrt(tp+fn+fp+tn)))
     else:
@@ -459,7 +457,7 @@ def om_calculate2_sym_pseudoV(om, rnd=1e-50, full_matrix=True, modify=False, pse
     return om_calculate2_pseudoV(om, rnd=rnd, full_matrix=full_matrix, sym=True, modify=modify, pseudo_counts=pseudo_counts)
 
 # outputs the same result as calculate2_spearman, but customized for overlapping matrix
-def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True):
+def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True, rnd=1e-50):
     if (not full_matrix):
         tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
         fn /= 2 
@@ -494,7 +492,7 @@ def om_calculate2_spearman(tp, fp, tn, fn, full_matrix = True):
     return row
 
 # does the same thing as calculate2_aupr, but for overlapping matrix
-def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True):
+def om_calculate2_aupr(tp, fp, tn, fn, full_matrix = True, rnd=1e-50):
     if (not full_matrix):
         tp = int((tp - np.around(np.sqrt(tp+fn+fp+tn)))/2)
         fn /= 2 

@@ -77,7 +77,7 @@ def ccm_permute_N_cluster(ad_true, rnd=1e-50):
                         gammaln(j+1) + 
                         gammaln(num_of_mutations-j) ) *
                     calcDifferent(j, num_of_descendants_in_cluster[i, 0], num_of_mutations, TP, rnd=rnd))
-    #print p, q, r
+    print "DEBUG p, q, r: ", p, q, r
     return p+q-r
 
 
