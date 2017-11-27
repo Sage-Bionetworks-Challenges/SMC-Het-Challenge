@@ -916,6 +916,7 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     truth_c = makeCMatrix(truth_ccm, truth_ad, truth_ad.T)
     pred_c = makeCMatrix(pred_ccm, pred_ad, pred_ad.T)
     scores.append(f(pred_c, truth_c))
+    print "DEBUG: scores: ", scores
     del pred_c, truth_c
     gc.collect()
 
@@ -927,6 +928,7 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     one_ccm = mb.get_ccm('OneCluster', nssms=truth_ccm.shape[0])
     one_c = makeCMatrix(one_ccm, one_ad, one_ad.T)
     one_scores.append(f(one_c, truth_c))
+    print "DEBUG: one_scores: ", one_scores
     del one_c, truth_c, one_ad, one_ccm
     gc.collect()
 
@@ -938,13 +940,34 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     n_ccm = mb.get_ccm('NClusterOneLineage', nssms=truth_ccm.shape[0])
     n_c = makeCMatrix(n_ccm, n_ad, n_ad.T)
     n_scores.append(f(n_c, truth_c))
-    del n_c, truth_c, n_ad, n_ccm
-    gc.collect()
+    print "DEBUG: n_scores: ", n_scores
 
     n_scores_permute = []
-    n_scores_permute.append(ccm_permute_N_cluster(truth_ad))
-    n_scores_permute.append(ccm_permute_N_cluster(truth_ad.T))
+#    n_scores_permute.append(ccm_permute_N_cluster(truth_ad))
+#    n_scores_permute.append(ccm_permute_N_cluster(truth_ad.T))
+    # beginning of temporary code for mutation permutations of NCluster
+    # at this point, n_ad is an upper-right triangular full of 1s, and rest are 0s
+    # n_ad has 0s along diagonal
+    # each iteration of i sets row i to all 0s
+    #   i.e. "flattening" NClusterOneLineage into NClusterNLineage
+    n_scores_permute_1 = []
+    n_scores_permute_2 = []     # transpose permutations
+    for i in list(reversed(range(1, truth_ad.shape[0]))):
+        for j in range(i, truth_ad.shape[0]):
+            n_ad[i,j] = 0
+        n_scores_permute_1.append(f(n_ad, truth_ad))
+        n_scores_permute_2.append(f(n_ad.T, truth_ad.T))
+
+    n_scores_permute.append(np.mean(n_scores_permute_1))
+    n_scores_permute.append(np.mean(n_scores_permute_2))
+    print "DEBUG: n_scores_permute_1: ", n_scores_permute_1
+    print "DEBUG: n_scores_permute_2: ", n_scores_permute_2
+    # end of temporary code for mutation permutations of NCluster
     n_scores_permute.append(n_scores[2])
+    print "DEBUG: n_scores_permute: ", n_scores_permute
+
+    del n_c, truth_c, n_ad, n_ccm, n_scores_permute_1, n_scores_permute_2
+    gc.collect()
 
     score = sum(scores) / 3.0
     one_score = sum(one_scores) / 3.0
