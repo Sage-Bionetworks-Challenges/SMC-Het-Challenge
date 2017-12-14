@@ -793,12 +793,12 @@ def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification
         pred = ad_pred
         truth = ad_truth
         P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
-        worst_srm, worst_om, worst_P = get_bad_ad_and_om(om, truth, scenario=scenario, truth_data=truth_data)
+        worst_srm, worst_om, worst_P = get_bad_ad_and_om(om, truth, scenario=scenario, truth_data=truth_data, permute=permute)
     elif modification is "transpose":
         pred = ad_pred.T
         truth = ad_truth.T
         P, T = construct_related_mutations_matrix(om, pred, truth, mode="descendant")
-        worst_srm, worst_om, worst_P = get_bad_ad_and_om(om, truth, modification="transpose", scenario=scenario, truth_data=truth_data)
+        worst_srm, worst_om, worst_P = get_bad_ad_and_om(om, truth, modification="transpose", scenario=scenario, truth_data=truth_data, permute=permute)
     elif modification is "cousin":
         pred = construct_c_cluster(ad_pred)
         truth = construct_c_cluster(ad_truth)
@@ -807,20 +807,20 @@ def calculate3A_worst(om, ad_pred, ad_truth, scenario="OneCluster", modification
     else:
         raise ValidationError('Incorrect modficiation')
 
-    # beginning of temporary code for mutation permutations of NCluster
-    if permute is True:
-        print "DEBUG: permute"
-        permutations = np.sum(worst_om)
-        n_permute_score = []
-        for i in range(1, permutations):
-#            random.seed(rnd * i)
-#            worst_om_permute, worst_P_permute = get_bad_ad_and_om_Npermute(om, truth, scenario=scenario, truth_data=truth_data)
-#            n_permute_score.append(calculate3_js_divergence(worst_srm, worst_om_permute, worst_P_permute, T, rnd=rnd))
-            # permuting overlap matrix by shifting one column at a time
-            pos = np.append(np.array(range(i, permutations)), np.array(range(0, i)))
-            n_permute_score.append(calculate3_js_divergence(worst_srm, worst_om[:, pos], worst_P, T, rnd=rnd))
-        return np.mean(n_permute_score)
-    # end of temporary code for mutation permutations of NCluster
+#    # beginning of temporary code for mutation permutations of NCluster
+#    if permute is True:
+#        print "DEBUG: permute"
+#        permutations = np.sum(worst_om)
+#        n_permute_score = []
+#        for i in range(1, permutations):
+##            random.seed(rnd * i)
+##            worst_om_permute, worst_P_permute = get_bad_ad_and_om_Npermute(om, truth, scenario=scenario, truth_data=truth_data)
+##            n_permute_score.append(calculate3_js_divergence(worst_srm, worst_om_permute, worst_P_permute, T, rnd=rnd))
+#            # permuting overlap matrix by shifting one column at a time
+#            pos = np.append(np.array(range(i, permutations)), np.array(range(0, i)))
+#            n_permute_score.append(calculate3_js_divergence(worst_srm, worst_om[:, pos], worst_P, T, rnd=rnd))
+#        return np.mean(n_permute_score)
+#    # end of temporary code for mutation permutations of NCluster
 
     return calculate3_js_divergence(worst_srm, worst_om, worst_P, T, rnd=rnd)
 #    return calculate3_pseudoV(worst_srm, worst_om, worst_P, T, rnd=rnd)
@@ -850,10 +850,20 @@ def calculate3A(om, truth_data, ad_pred, ad_truth, rnd=1e-50):
 #    P, T = construct_related_mutations_matrix(om, ad_pred.T, ad_truth.T, mode="descendant")
 #    n_scores_permuted.append(set_to_zero(om_permute_N_cluster(om, T, rnd=rnd)))
 
+    # ----------------------------------------------------------
     # beginning of temporary code for mutation permutations of NCluster
-    n_scores_permuted.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data, rnd=rnd, permute=True)))
-    n_scores_permuted.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data, rnd=rnd, permute=True)))
+    n_scores_permute_1 = []
+    n_scores_permute_2 = []
+    for i in range(20):
+        n_scores_permute_1.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", truth_data=truth_data, rnd=rnd, permute=True)))
+        n_scores_permute_2.append(set_to_zero(calculate3A_worst(om, ad_pred, ad_truth, scenario="NCluster", modification="transpose", truth_data=truth_data, rnd=rnd, permute=True)))
+    print "DEBUG: n_scores_permute_1: ", n_scores_permute_1
+    print "DEBUG: n_scores_permute_2: ", n_scores_permute_2
+
+    n_scores_permuted.append(np.mean(n_scores_permute_1))
+    n_scores_permuted.append(np.mean(n_scores_permute_2))
     # end of temporary code for mutation permutations of NCluster
+    # ----------------------------------------------------------
     n_scores_permuted.append(n_scores[2])
     print "DEBUG: n_scores_permuted: ", n_scores_permuted
 
@@ -1000,7 +1010,7 @@ def get_bad_c_and_om(om, scenario='OneCluster'):
     return worst_c, worst_om, P 
 
 # returns a series a matrices that is needed to calculate the worst score for subchallenge 3A
-def get_bad_ad_and_om(om, ad_truth, modification=None, scenario='OneCluster', truth_data=None):
+def get_bad_ad_and_om(om, ad_truth, modification=None, scenario='OneCluster', truth_data=None, permute=False):
     if scenario is 'OneCluster':
         worst_om = get_bad_om(om, scenario=scenario)
         worst_ad = np.zeros((om.shape[0], 1))
@@ -1008,7 +1018,7 @@ def get_bad_ad_and_om(om, ad_truth, modification=None, scenario='OneCluster', tr
     elif scenario is 'NCluster':
         if truth_data is None:
             raise ValidationError("Constructing the overlap matrix for NCluster requires the cluster information of every single mutation!")
-        worst_om = get_NCluster_om_3A(om, truth_data)
+        worst_om = get_NCluster_om_3A(om, truth_data, permute=permute)
         P = np.matrix(np.arange(worst_om.shape[1]))
         P.resize(worst_om.shape[1], 1)
         if modification is not "transpose":
@@ -1018,40 +1028,17 @@ def get_bad_ad_and_om(om, ad_truth, modification=None, scenario='OneCluster', tr
         raise ValueError('Scenario must be one of OneCluster or NCluster')
     return worst_ad, worst_om, P
 
-# returns a series a matrices that is needed for NCluster subsample of the all permutations for subchallenge 3A
-#def get_bad_ad_and_om_Npermute(om, ad_truth, modification=None, scenario='NCluster', truth_data=None):
-#    if scenario is not 'NCluster':
-#        raise ValueError("Scenario must be NCluster for the Npermute function!")
-#
-#    if truth_data is None:
-#        raise ValidationError("Constructing the overlap matrix for NCluster requires the cluster information of every single mutation!")
-#    worst_om = get_NCluster_om_3A_new(om, truth_data)
-#    P = np.matrix(np.arange(worst_om.shape[1]))
-#    P.resize(worst_om.shape[1], 1)
-#    if modification is not "transpose":
-#        P = P[::-1]
-#
-#    return worst_om, P
-
-# returns the overlap matrix of subchallenge 3A, N Cluster N lineages
-def get_NCluster_om_3A(om, truth_data):
+# returns the overlap matrix of subchallenge 3A, N Cluster One lineage
+def get_NCluster_om_3A(om, truth_data, permute=False):
     worst_om = np.zeros((om.shape[0], len(truth_data)), dtype=int)
     for i in range(len(truth_data)):
         worst_om[truth_data[i]-1, i] = 1
 
-    return worst_om
+    if permute:
+        pos = np.random.permutation(range(0, len(truth_data)))
+        worst_om = worst_om[:, pos]
 
-#def get_NCluster_om_3A_new(om, truth_data):
-#    worst_om = np.zeros((om.shape[0], len(truth_data)), dtype=int)
-#    # find how many intervals
-#    seed_intervals = np.linspace(0, 1, om.shape[0]+1)[1:om.shape[0]+1]
-#
-#    for i in range(len(truth_data)):
-#        seed = random.random()
-#        pos = sum(seed <= seed_intervals) - 1
-#        worst_om[pos, i] = 1
-#
-#    return worst_om
+    return worst_om
 
 # creates an overlapping matrix from predicted and truth co-clustering matrices; useful for debugging
 def create_om(ccm_pred, ccm_truth):

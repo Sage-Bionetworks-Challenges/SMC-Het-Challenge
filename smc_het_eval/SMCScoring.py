@@ -943,36 +943,61 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     print "DEBUG: n_scores: ", n_scores
 
     n_scores_permute = []
+    # this is commented until we fix the "all permutations" case for 3B using JS divergence implementations
+    # in the meantime, use the next temporary code below to calculate mutation permutations to get n_scores_permutated
 #    n_scores_permute.append(ccm_permute_N_cluster(truth_ad))
 #    n_scores_permute.append(ccm_permute_N_cluster(truth_ad.T))
+
+    # ----------------------------------------------------------
     # beginning of temporary code for mutation permutations of NCluster
     # at this point, n_ad is an upper-right triangular full of 1s, and rest are 0s
     # n_ad has 0s along diagonal
-    # each iteration of i sets row i to all 0s
-    #   i.e. "flattening" NClusterOneLineage into NClusterNLineage
     n_scores_permute_1 = []
     n_scores_permute_2 = []     # transpose permutations
-    for i in list(reversed(range(1, truth_ad.shape[0]))):
-        for j in range(i, truth_ad.shape[0]):
-            n_ad[i,j] = 0
-        n_scores_permute_1.append(f(n_ad, truth_ad))
-        n_scores_permute_2.append(f(n_ad.T, truth_ad.T))
+
+#    # each iteration of i sets row i to all 0s
+#    #   i.e. "flattening" NClusterOneLineage into NClusterNLineage
+#    for i in list(reversed(range(1, truth_ad.shape[0]))):
+#        for j in range(i, truth_ad.shape[0]):
+#            n_ad[i,j] = 0
+#        n_scores_permute_1.append(f(n_ad, truth_ad))
+#        n_scores_permute_2.append(f(n_ad.T, truth_ad.T))
+
+    for i in range(20):
+        pos = np.random.permutation(range(0, truth_ad.shape[0]))
+        n_ad_random = n_ad[:, pos]
+        n_scores_permute_1.append(f(n_ad_random, truth_ad))
+        n_scores_permute_2.append(f(n_ad_random.T, truth_ad.T))
+    print "DEBUG: n_scores_permute_1: ", n_scores_permute_1
+    print "DEBUG: n_scores_permute_2: ", n_scores_permute_2
 
     n_scores_permute.append(np.mean(n_scores_permute_1))
     n_scores_permute.append(np.mean(n_scores_permute_2))
-    print "DEBUG: n_scores_permute_1: ", n_scores_permute_1
-    print "DEBUG: n_scores_permute_2: ", n_scores_permute_2
     # end of temporary code for mutation permutations of NCluster
+    # ----------------------------------------------------------
+
     n_scores_permute.append(n_scores[2])
     print "DEBUG: n_scores_permute: ", n_scores_permute
 
     del n_c, truth_c, n_ad, n_ccm, n_scores_permute_1, n_scores_permute_2
     gc.collect()
 
-    score = sum(scores) / 3.0
-    one_score = sum(one_scores) / 3.0
-    n_score = sum(n_scores) / 3.0
-    n_score_permute = sum(n_scores_permute) / 3.0
+    score = np.mean(scores)
+    one_score = np.mean(one_scores)
+    n_score = np.mean(n_scores)
+    n_score_permute = np.mean(n_scores_permute)
+
+    # TESTING: This is ignoring the cousin coclustering matrix when calculating scores
+#    score = np.mean(scores[0:2])
+#    one_score = np.mean(one_scores[0:2])
+#    n_score = np.mean(n_scores[0:2])
+#    n_score_permute = np.mean(n_scores_permute[0:2])
+    # TESTING: Using median instead of mean
+#    score = np.median(scores)
+#    one_score = np.median(one_scores)
+#    n_score = np.median(n_scores)
+#    n_score_permute = np.median(n_scores_permute)
+
 
 #imaad: I commented out the return of two scorse because we will be going with n_score_permute
 #    return [set_to_zero(1 - (score / max(one_score, n_score))),set_to_zero(1 - (score / max(one_score, n_score_permute)))]
