@@ -6,6 +6,8 @@ import os
 import json
 import sys
 
+rnd = 1e-50
+
 def test_metrics():
     print "Testing metrics"
     entry1 = np.matrix([[2, 1, 0], [0, 0, 2]])
@@ -20,8 +22,8 @@ def test_metrics():
     mcc1 = {"Full" : 0.72, "Half" : 0.61}
     spearman1 = {"Full" : 0.80, "Half" : 0.76}
     aupr1 = {"Full" : 0.93, "Half" : 0.85}
-    pseudoV1 = {"Full" : 4.24, "Half" : None}
-
+    pseudoV1 = {"Full" : 151.6, "Half" : None}
+    js_divergence1 = {"Full" : 1.17, "Half" : None}
 
     for p, q in zip(a, b):
         assert round(om_calculate2_orig(*ans1, full_matrix=p), 2) == orig1[q]
@@ -31,6 +33,7 @@ def test_metrics():
         assert round(om_calculate2_aupr(*ans1, full_matrix=p), 2) == aupr1[q]
     
     assert round(om_calculate2_pseudoV(entry1), 2) == pseudoV1["Full"]
+    assert round(om_calculate2_js_divergence(entry1), 2) == js_divergence1["Full"]
     print "     2. Metrics working correctly"
     print "Finished testing metrics"
 
@@ -46,14 +49,17 @@ def test_scaling():
     mcc1 = {"OneCluster" : 0.60, "NCluster" : 0.61}
     spearman1 = {"OneCluster" : 0.72, "NCluster" : 0.80}
     aupr1 = {"OneCluster" : 0.78, "NCluster" : 0.81}
-    pseudoV1 = {"OneCluster" : 4.24, "NCluster" : None}
-
+    pseudoV1 = {"OneCluster" : 3.37, "NCluster" : 340.71}
+    js_divergence1 = {"OneCluster" : 2.08, "NCluster" : 2.77}
+    
     for p in scenario:
         assert round(get_bad_score_om(entry1, om_calculate2_orig, scenario=p), 2) == orig1[p]
         assert round(get_bad_score_om(entry1, om_calculate2_sqrt, scenario=p), 2) == sqrt1[p]
         assert round(get_bad_score_om(entry1, om_calculate2_mcc, scenario=p), 2) == mcc1[p]
         assert round(get_bad_score_om(entry1, om_calculate2_spearman, scenario=p), 2) == spearman1[p]
         assert round(get_bad_score_om(entry1, om_calculate2_aupr, scenario=p), 2) == aupr1[p]
+        assert round(get_bad_score_om(entry1, om_calculate2_pseudoV, scenario=p), 2) == pseudoV1[p]
+        assert round(get_bad_score_om(entry1, om_calculate2_js_divergence, scenario=p), 2) == js_divergence1[p]
     print "     1. Score outputed by each scenario for each function are correct"
 
     assert round(get_worst_score_om(entry1, om_calculate2_orig, larger_is_worse=False), 2) == orig1["OneCluster"]
@@ -158,19 +164,16 @@ def test_calculate1C():
 
 def test_calculate2A():
     entry1 = np.matrix([[2, 1, 0], [0, 0, 2]])
-    assert round(om_calculate2A(entry1), 2) == 0.53
-
     entry2 = np.matrix([[2, 0, 0],[0, 2, 1],[0, 0, 2]])
-    assert round(om_calculate2A(entry2), 2) == 0.52
-
     entry3 = np.matrix([[1, 0, 0],[1, 1, 0],[0, 1, 4]])
-    assert round(om_calculate2A(entry3), 2) == 0.31
-
     entry4 = np.matrix([[5, 3, 0], [0, 0, 0], [0, 0, 0]])
-    assert round(om_calculate2A(entry4), 2) == 0.35
-
     entry5 = np.matrix([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-    assert round(om_calculate2A(entry5), 2) == 0
+
+    assert round(om_calculate2A(entry1)[1], 2) == 0.54
+    assert round(om_calculate2A(entry2)[1], 2) == 0.53
+    assert round(om_calculate2A(entry3)[1], 2) == 0.35
+    assert round(om_calculate2A(entry4)[1], 2) == 0.46
+    assert round(om_calculate2A(entry5)[1], 2) == 0
 
     print "Subchallenge 2A scoring functionalities seem to be working correctly"
 
@@ -190,9 +193,9 @@ def test_calculate3A():
     entry3_ad_truth = np.matrix([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
     entry3_truth_data = [2, 1, 2, 1, 3, 3, 3, 3]
 
-    assert calculate3A(entry1_om, entry1_truth_data, entry1_ad_pred, entry1_ad_truth) == 0
-    assert round(calculate3A(entry2_om, entry2_truth_data, entry2_ad_pred, entry2_ad_truth), 2) == 0.33
-    assert round(calculate3A(entry3_om, entry3_truth_data, entry3_ad_pred, entry3_ad_truth), 2) == 0.06
+    assert round(calculate3A(entry1_om, entry1_truth_data, entry1_ad_pred, entry1_ad_truth), 2) == 1
+    assert round(calculate3A(entry2_om, entry2_truth_data, entry2_ad_pred, entry2_ad_truth), 2) == 1
+    assert round(calculate3A(entry3_om, entry3_truth_data, entry3_ad_pred, entry3_ad_truth), 2) == 0.99
 
     print "Subchallenge 3A scoring functionality seems to be working correctly"
 
@@ -265,7 +268,7 @@ def test_construct_srm():
 
     print "Shared relative matrix seems to be constructed properly"
 
-def test_calculate3_pseudoV():
+def test_calculate3_js_divergence():
     om1 = np.matrix([[2, 0, 0], [0, 2, 1], [0, 0, 2]])
     srm1 = np.matrix([[0, 0, 0], [0, 2, 2], [0, 2, 2]])
     ad_pred1 = np.matrix([[0, 1, 1], [0, 0, 1], [0, 0, 0]])
@@ -276,10 +279,10 @@ def test_calculate3_pseudoV():
     np.testing.assert_array_equal(construct_related_mutations_matrix(om1, ad_pred1, ad_truth1)[0], pdm1)
     np.testing.assert_array_equal(construct_related_mutations_matrix(om1, ad_pred1, ad_truth1)[1], tdm1)
 
-    assert round(calculate3_pseudoV(srm1, om1, pdm1, tdm1), 2) == 6.72
-    assert round(calculate3A_pseudoV_final(om1, ad_pred1, ad_truth1), 2) == 5.14
-    assert round(calculate3A_pseudoV_final(om1, ad_pred1, ad_truth1, modification="transpose"), 2) == 6.72
-    assert round(calculate3A_pseudoV_final(om1, ad_pred1, ad_truth1, modification="cousin"), 2) == 14.67
+    assert round(calculate3_js_divergence(srm1, om1, pdm1, tdm1), 2) == 1.29
+    assert round(calculate3A_final(om1, ad_pred1, ad_truth1), 2) == 0
+    assert round(calculate3A_final(om1, ad_pred1, ad_truth1, modification="transpose"), 2) == 1.29
+    assert round(calculate3A_final(om1, ad_pred1, ad_truth1, modification="cousin"), 2) == 0
 
     om2 = np.matrix([[2, 0, 0], [0, 2, 1], [0, 0, 2]])
     ad_pred2 = np.zeros((3, 3))
@@ -300,13 +303,24 @@ def readFile(txt):
 
 if __name__ == "__main__":
     os.chdir('./test_data')
+    print "------------------------"
     test_metrics()
+    print "------------------------"
     test_scaling()
+    print "------------------------"
     test_add_pseudo()
+    print "------------------------"
     test_construct_srm()
-    test_calculate3_pseudoV()
+    print "------------------------"
+    test_calculate3_js_divergence()
+    print "------------------------"
     test_validate2A()
+    print "------------------------"
     test_validate3A()
-    #test_calculate1C()
+    print "------------------------"
+    test_calculate1C()
+    print "------------------------"
     test_calculate2A()   
+    print "------------------------"
     test_calculate3A()
+    print "------------------------"

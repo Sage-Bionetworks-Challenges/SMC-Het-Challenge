@@ -324,7 +324,7 @@ def isSymmetric(x):
     return symmetricity
 
 #@profile
-def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None):
+def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=None, rnd=1e-50):
     '''
     Calculate the score for SubChallenge 2
     :param pred: predicted co-clustering matrix
@@ -335,7 +335,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
     :return: subchallenge 2 score for the predicted co-clustering matrix
     '''
 
-    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV'] # methods where a larger score is worse
+    larger_is_worse_methods = ['pseudoV', 'sym_pseudoV', 'js_divergence'] # methods where a larger score is worse
     y = np.array(pred.shape)[1]
     nssms = np.ceil(0.5 * (2*y + 1) - 0.5 * np.sqrt(4*y + 1))
     import gc
@@ -345,6 +345,7 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         "sqrt"           : calculate2_sqrt,
         "pseudoV"        : calculate2_pseudoV,
         "sym_pseudoV"    : calculate2_sym_pseudoV,
+        "js_divergence"  : calculate2_js_divergence,
         "spearman"       : calculate2_spearman,
         "pearson"        : calculate2_pearson,
         "aupr"           : calculate2_aupr,
@@ -355,29 +356,29 @@ def calculate2(pred, truth, full_matrix=True, method='default', pseudo_counts=No
         scores = []
         worst_scores = []
 
-        functions = ['pseudoV', 'pearson', 'mcc']
+        functions = ['js_divergence', 'pearson', 'mcc']
         # functions = ['pseudoV']
         # functions = ['pearson']
         # functions = ['mcc']
 
         for m in functions:
             gc.collect()
-            scores.append(func_dict[m](pred, truth, full_matrix=full_matrix))
+            scores.append(func_dict[m](pred, truth, full_matrix=full_matrix, rnd=rnd))
             # normalize the scores to be between (worst of OneCluster and NCluster scores) and (Truth score)
         for m in functions:
             gc.collect()
-            worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods)))
+            worst_scores.append(get_worst_score(nssms, truth, func_dict[m], larger_is_worse=(m in larger_is_worse_methods), rnd=rnd))
         for i, m in enumerate(functions):
             if m in larger_is_worse_methods:
                 scores[i] = set_to_zero(1 - (scores[i] / worst_scores[i]))
             else:
                 scores[i] = set_to_zero((scores[i] - worst_scores[i]) / (1 - worst_scores[i]))
-        return np.mean(scores)
+        return [scores, np.mean(scores)]
 
     else:
         score = func(pred, truth, full_matrix=full_matrix)
         if method in larger_is_worse_methods: # normalize the scores to be between 0 and 1 where 1 is the true matrix
-            worst_score = get_worst_score(nssms, truth, func, larger_is_worse=True) # and zero is the worse score of the NCluster matrix
+            worst_score = get_worst_score(nssms, truth, func, larger_is_worse=True, rnd=rnd) # and zero is the worse score of the NCluster matrix
             score = set_to_zero(1 - (score / worst_score))                   # and the OneCluster matrix - similar to above
         else:
             worst_score = get_worst_score(nssms, truth, func, larger_is_worse=False)
@@ -445,7 +446,7 @@ def calculate2_sqrt(pred, truth, full_matrix=True):
     return np.sqrt(1 - res)
 
 
-def calculate2_simpleKL_norm(pred, truth, rnd=0.01):
+def calculate2_simpleKL_norm(pred, truth, rnd=1e-50):
     """Normalized version of the pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -457,7 +458,7 @@ def calculate2_simpleKL_norm(pred, truth, rnd=0.01):
     return 1 - calculate2_simpleKL(pred, truth, rnd=rnd) / 4000
 
 # Out of date!!
-def calculate2_simpleKL(pred, truth, rnd=0.01):
+def calculate2_simpleKL(pred, truth, rnd=1e-50):
     pred = np.abs(pred - rnd)
     n = truth.shape[0]
     indices = np.triu_indices(n, k=1)
@@ -470,9 +471,65 @@ def calculate2_simpleKL(pred, truth, rnd=0.01):
             res += np.log(1-pred[indices[0][i], indices[1][i]])
     return abs(res)
 
+def calculate2_js_divergence(pred, truth, rnd=1e-50, full_matrix=True, sym=True):
+    if full_matrix:
+        pred_cp = pred
+        truth_cp = truth
+    else: # make matrix upper triangular
+        pred_cp = np.triu(pred)
+        truth_cp = np.triu(truth)
+
+    # Avoid dividing by zero by rounding everything less than rnd up to rnd
+    # Note: it is ok to do this after making the matrix upper triangular
+    # since the bottom triangle of the matrix will not affect the score
+
+    size = np.array(pred_cp.shape)[1]
+    res = 0 # result to be returned
+
+    # do one row at a time to reduce memory usage
+    for x in xrange(size):
+        # (1 - rnd) will cast the pred_cp/truth_cp matrices automatically if they are int8
+        pred_row = (1 - rnd) * pred_cp[x, ] + rnd
+        truth_row = (1 - rnd) * truth_cp[x, ] + rnd
+
+        pred_row /= np.sum(pred_row)
+        truth_row /= np.sum(truth_row)
+        # sum_row = 0 IFF pred_row == 0 and truth_row == 0
+        sum_row = 0.5 * (pred_row + truth_row)
+
+        # find which values are 0
+        pred_zeros = np.where(np.array(pred_row) <=0)[0]
+        truth_zeros = np.where(np.array(truth_row) <=0)[0]
+        sum_zeros = np.where(np.array(sum_row) <=0)[0]
+        
+        # temporary replacement to pass the log and division errors
+        for x in pred_zeros:
+            pred_row[x] = 1
+        for x in truth_zeros:
+            truth_row[x] = 1
+        for x in sum_zeros:
+            sum_row[x] = 1
+
+        val1 = truth_row * np.log(truth_row/sum_row)
+        val2 = pred_row * np.log(pred_row/sum_row)
+
+        # replacing failed values with 0s
+        for x in truth_zeros:
+            val1[x] = 0
+        for x in pred_zeros:
+            val2[x] = 0
+
+        val1 = np.sum(val1)
+        val2 = np.sum(val2)
+
+        if sym:
+            res += val1 + val2
+        else:
+            res += val1
+    return res
 
 
-def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=True):
+def calculate2_pseudoV_norm(pred, truth, rnd=1e-50, max_val=4000, full_matrix=True):
     """Normalized version of the pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -486,7 +543,7 @@ def calculate2_pseudoV_norm(pred, truth, rnd=0.01, max_val=4000, full_matrix=Tru
     pv_val = calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix)
     return max(1 -  pv_val/ max_val, 0)
 
-def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
+def calculate2_pseudoV(pred, truth, rnd=1e-50, full_matrix=True, sym=False):
     if full_matrix:
         pred_cp = pred
         truth_cp = truth
@@ -516,7 +573,7 @@ def calculate2_pseudoV(pred, truth, rnd=0.01, full_matrix=True, sym=False):
     return res
 
 
-def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix=True):
+def calculate2_sym_pseudoV_norm(pred, truth, rnd=1e-50, max_val=8000, full_matrix=True):
     """Normalized version of the symmetric pseudo V measure where the return values are between 0 and 1
     with 0 being the worst score and 1 being the best
 
@@ -531,7 +588,7 @@ def calculate2_sym_pseudoV_norm(pred, truth, rnd=0.01, max_val=8000, full_matrix
     return max(1 - spv_val / max_val, 0)
 
 
-def calculate2_sym_pseudoV(pred, truth, rnd=0.01, full_matrix=True):
+def calculate2_sym_pseudoV(pred, truth, rnd=1e-50, full_matrix=True):
     return calculate2_pseudoV(pred, truth, rnd=rnd, full_matrix=full_matrix, sym=True)
 
 def calculate2_spearman(pred, truth, full_matrix=True):
@@ -561,7 +618,7 @@ def calculate2_spearman(pred, truth, full_matrix=True):
 
     return row
 
-def calculate2_pearson(pred, truth, full_matrix=True):
+def calculate2_pearson(pred, truth, full_matrix=True, rnd=1e-50):
     if full_matrix:
         pass
     else:
@@ -656,7 +713,7 @@ def calculate2_aupr(pred, truth, full_matrix=True):
 # don't just use upper triangular matrix because you get na's with the AD matrix
 # note about casting: should be int/float friendly for pred/truth matrices
 
-def calculate2_mcc(pred, truth, full_matrix=True):
+def calculate2_mcc(pred, truth, full_matrix=True, rnd=1e-50):
     n = truth.shape[0]
     ptype = str(pred.dtype)
     ttype = str(truth.dtype)
@@ -842,7 +899,8 @@ def checkForBadTriuIndices(*matrices):
     if (equalShapes):
         for i in xrange(shape[0]):
             for j in xrange(i + offset, shape[0]):
-                fail &= reduce(lambda x, y: x + y, [z[i, j] for z in matrices]) <= 1
+                val = reduce(lambda x, y: x + y, [z[i, j] for z in matrices])
+                fail &= (val <= 1 or np.isclose(val, 1, 1e-3))
                 if (not fail):
                     break
     else:
@@ -850,7 +908,7 @@ def checkForBadTriuIndices(*matrices):
     return not fail
 
 def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
-    f = calculate2_sym_pseudoV
+    f = calculate2_js_divergence
     
     scores = []
     scores.append(f(pred_ad, truth_ad))
@@ -858,6 +916,7 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     truth_c = makeCMatrix(truth_ccm, truth_ad, truth_ad.T)
     pred_c = makeCMatrix(pred_ccm, pred_ad, pred_ad.T)
     scores.append(f(pred_c, truth_c))
+    print "DEBUG: scores: ", scores
     del pred_c, truth_c
     gc.collect()
 
@@ -869,6 +928,7 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     one_ccm = mb.get_ccm('OneCluster', nssms=truth_ccm.shape[0])
     one_c = makeCMatrix(one_ccm, one_ad, one_ad.T)
     one_scores.append(f(one_c, truth_c))
+    print "DEBUG: one_scores: ", one_scores
     del one_c, truth_c, one_ad, one_ccm
     gc.collect()
 
@@ -880,18 +940,64 @@ def calculate3Final(pred_ccm, pred_ad, truth_ccm, truth_ad, method="default"):
     n_ccm = mb.get_ccm('NClusterOneLineage', nssms=truth_ccm.shape[0])
     n_c = makeCMatrix(n_ccm, n_ad, n_ad.T)
     n_scores.append(f(n_c, truth_c))
-    del n_c, truth_c, n_ad, n_ccm
-    gc.collect()
+    print "DEBUG: n_scores: ", n_scores
 
     n_scores_permute = []
-    n_scores_permute.append(ccm_permute_N_cluster(truth_ad))
-    n_scores_permute.append(ccm_permute_N_cluster(truth_ad.T))
-    n_scores_permute.append(n_scores[2])
+    # this is commented until we fix the "all permutations" case for 3B using JS divergence implementations
+    # in the meantime, use the next temporary code below to calculate mutation permutations to get n_scores_permutated
+#    n_scores_permute.append(ccm_permute_N_cluster(truth_ad))
+#    n_scores_permute.append(ccm_permute_N_cluster(truth_ad.T))
 
-    score = sum(scores) / 3.0
-    one_score = sum(one_scores) / 3.0
-    n_score = sum(n_scores) / 3.0
-    n_score_permute = sum(n_scores_permute) / 3.0
+    # ----------------------------------------------------------
+    # beginning of temporary code for mutation permutations of NCluster
+    # at this point, n_ad is an upper-right triangular full of 1s, and rest are 0s
+    # n_ad has 0s along diagonal
+    n_scores_permute_1 = []
+    n_scores_permute_2 = []     # transpose permutations
+
+#    # each iteration of i sets row i to all 0s
+#    #   i.e. "flattening" NClusterOneLineage into NClusterNLineage
+#    for i in list(reversed(range(1, truth_ad.shape[0]))):
+#        for j in range(i, truth_ad.shape[0]):
+#            n_ad[i,j] = 0
+#        n_scores_permute_1.append(f(n_ad, truth_ad))
+#        n_scores_permute_2.append(f(n_ad.T, truth_ad.T))
+
+    for i in range(20):
+        pos = np.random.permutation(range(0, truth_ad.shape[0]))
+        n_ad_random = n_ad[:, pos]
+        n_scores_permute_1.append(f(n_ad_random, truth_ad))
+        n_scores_permute_2.append(f(n_ad_random.T, truth_ad.T))
+    print "DEBUG: n_scores_permute_1: ", n_scores_permute_1
+    print "DEBUG: n_scores_permute_2: ", n_scores_permute_2
+
+    n_scores_permute.append(np.mean(n_scores_permute_1))
+    n_scores_permute.append(np.mean(n_scores_permute_2))
+    # end of temporary code for mutation permutations of NCluster
+    # ----------------------------------------------------------
+
+    n_scores_permute.append(n_scores[2])
+    print "DEBUG: n_scores_permute: ", n_scores_permute
+
+    del n_c, truth_c, n_ad, n_ccm, n_scores_permute_1, n_scores_permute_2
+    gc.collect()
+
+    score = np.mean(scores)
+    one_score = np.mean(one_scores)
+    n_score = np.mean(n_scores)
+    n_score_permute = np.mean(n_scores_permute)
+
+    # TESTING: This is ignoring the cousin coclustering matrix when calculating scores
+#    score = np.mean(scores[0:2])
+#    one_score = np.mean(one_scores[0:2])
+#    n_score = np.mean(n_scores[0:2])
+#    n_score_permute = np.mean(n_scores_permute[0:2])
+    # TESTING: Using median instead of mean
+#    score = np.median(scores)
+#    one_score = np.median(one_scores)
+#    n_score = np.median(n_scores)
+#    n_score_permute = np.median(n_scores_permute)
+
 
 #imaad: I commented out the return of two scorse because we will be going with n_score_permute
 #    return [set_to_zero(1 - (score / max(one_score, n_score))),set_to_zero(1 - (score / max(one_score, n_score_permute)))]
@@ -1011,7 +1117,7 @@ method_funcs = {"pseudoV": calculate2_pseudoV,
                 "orig": calculate2_orig
     }
 
-def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=0.01, method="orig", verbose=False, full_matrix=True, in_mat=2):
+def calculate3_onemetric(pred_ccm, pred_ad, truth_ccm, truth_ad, rnd=1e-50, method="orig", verbose=False, full_matrix=True, in_mat=2):
     """Calculate the score for subchallenge 3 using the given metric
 
     :param pred_ccm: predicted co-clustering matrix
@@ -1219,7 +1325,7 @@ def add_pseudo_counts(ccm, ad=None, num=None):
     return ccm
 
 
-def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True):
+def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge="SC2", larger_is_worse=True, rnd=1e-50):
     """
     Calculate the worst score for SC2 or SC3, to be used as 0 when normalizing the scores
 
@@ -1236,31 +1342,31 @@ def get_worst_score(nssms, truth_ccm, scoring_func, truth_ad=None, subchallenge=
             raise ValueError('truth_ad must not be None when scoring SC3')
         else:
             if larger_is_worse:
-                return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
-                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+                return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge, rnd=rnd),
+                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge, rnd=rnd))
             else:
-                return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
-                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+                return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge, rnd=rnd),
+                           get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge, rnd=rnd))
 
     elif subchallenge is 'SC2': 
         if larger_is_worse:
-            return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
-                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+            return max(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge, rnd=rnd),
+                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge, rnd=rnd))
         else:
-            return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge),
-                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge))
+            return min(get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'OneCluster', subchallenge, rnd=rnd),
+                       get_bad_score(nssms, truth_ccm, scoring_func, truth_ad, 'NCluster', subchallenge, rnd=rnd))
 
     else:
         raise ValueError('Subchallenge must be one of SC2 or SC3')
 
 
-def get_bad_score(nssms, true_ccm, score_func, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None):
+def get_bad_score(nssms, true_ccm, score_func, true_ad=None, scenario='OneCluster', subchallenge='SC2', pseudo_counts=None, rnd=1e-50):
     if subchallenge is 'SC2':
         bad_ccm = add_pseudo_counts(get_bad_ccm(nssms, scenario), num=pseudo_counts)
-        return score_func(bad_ccm, true_ccm)
+        return score_func(bad_ccm, true_ccm, rnd=rnd)
     elif subchallenge is 'SC3':
         bad_ccm, bad_ad = add_pseudo_counts(get_bad_ccm(nssms, scenario), get_bad_ad(nssms, scenario), num=pseudo_counts)
-        return score_func(bad_ccm, bad_ad, true_ccm, true_ad)
+        return score_func(bad_ccm, bad_ad, true_ccm, true_ad, rnd=rnd)
     else:
         raise ValueError('Scenario must be one of SC2 or SC3')
 
@@ -1288,7 +1394,7 @@ def verify(filename, role, func, *args, **kwargs):
     t_start = time.time()
     
     try:
-        if func.__name__ in ['validate2B']:
+        if func.__name__ in ['validate2B','validate3B']:
             verified = func(filename,*args, **kwargs)
         elif is_gzip(filename): #pass compressed files directly to 2B or 3B validate functions
             verified = func(filename, *args, **kwargs)
@@ -1449,7 +1555,7 @@ def verifyChallenge(challenge, predfiles, vcf):
     return "Valid"
 
  
-def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
+def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0, rnd=1e-50):
     
     
     
@@ -1584,9 +1690,11 @@ def scoreChallenge(challenge, predfiles, truthfiles, vcf, sample_fraction=1.0):
             # mem('3A DOT')
 
     if challenge in ['2A']:
-        return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None)
+        return challengeMapping[challenge]['score_func'](*tpout, add_pseudo=True, pseudo_counts=None, rnd=rnd)
+    if challenge in ['2B']:
+        return challengeMapping[challenge]['score_func'](*(pout + tout), rnd=rnd)
     if challenge in ['3A']:
-        return challengeMapping[challenge]['score_func'](*tpout)
+        return challengeMapping[challenge]['score_func'](*tpout, rnd=rnd)
 
     return challengeMapping[challenge]['score_func'](*(pout + tout))
 
@@ -1643,6 +1751,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='store_true', default=False)
     parser.add_argument('--approx', nargs=2, type=float, metavar=('sample_fraction', 'iterations'), help='sample_fraction ex. [0.45, 0.8] | iterations ex. [4, 20, 100]')
     parser.add_argument('--approx_seed', nargs=1, type=int, default=[75])
+    parser.add_argument('--rnd', nargs=1, type=float, default=[1e-50])
     args = parser.parse_args()
 
     if args.pred_config is not None and args.truth_config is not None:
@@ -1675,7 +1784,7 @@ if __name__ == '__main__':
                 if args.v:
                     res = verifyChallenge(challenge, predfile, vcf)
                 else:
-                    res = scoreChallenge(challenge, predfile, truthfiles, vcf)
+                    res = scoreChallenge(challenge, predfile, truthfiles, vcf, rnd=args.rnd[0])
                 out[challenge] = res
         with open(args.outputfile, "w") as handle:
             jtxt = json.dumps(out)
@@ -1699,7 +1808,7 @@ if __name__ == '__main__':
                 resample = True
                 while (resample):
                     try:
-                        res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, sample_fraction)
+                        res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, sample_fraction, rnd=args.rnd[0])
                         print('Score[%d] -> %.5f' % (i + 1, res))
                         results.append(res)
                         resample = False
@@ -1726,7 +1835,7 @@ if __name__ == '__main__':
         # REAL SCORE
         else:
             print('Running Challenge %s' % args.challenge)
-            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf)
+            res = scoreChallenge(args.challenge, args.predfiles, args.truthfiles, args.vcf, rnd=args.rnd[0])
             print res
             #print('SCORE -> %.16f' % res)
 
